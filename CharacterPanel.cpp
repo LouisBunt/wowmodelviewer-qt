@@ -7,13 +7,16 @@
 #include <QFontDatabase>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QLineEdit>
 #include <QVBoxLayout>
 
 #include "CharDetails.h"
 #include "CharDetailsEvent.h"
 #include "Game.h"
 #include "GameDatabase.h"
+#include "WoWItem.h"
 #include "WoWModel.h"
+#include "database.h"
 
 namespace {
 const char* kText = "#e8eaee";
@@ -89,6 +92,35 @@ CharacterPanel::CharacterPanel(QWidget* parent) : QWidget(parent)
   rows_ = new QVBoxLayout;
   rows_->setSpacing(10);
   col->addLayout(rows_);
+
+  equipHeader_ = new QLabel;
+  equipHeader_->setFont(hf);
+  equipHeader_->setStyleSheet(QString("color:%1; background:transparent;").arg(kDim));
+  equipHeader_->setText(QString::fromUtf8("AUSRÜSTUNG"));
+  col->addWidget(equipHeader_);
+
+  // Equipping by item id is the lowest common denominator: the armory importer,
+  // a wowhead item link and manual entry all end up handing over an id.
+  itemInput_ = new QLineEdit;
+  itemInput_->setPlaceholderText(QString::fromUtf8("Item-ID anlegen …"));
+  itemInput_->setFont(QFont(uiFamily(), 8));
+  itemInput_->setStyleSheet(QString(
+    "QLineEdit { background:%1; border:1px solid %2; border-radius:6px;"
+    " padding:4px 8px; color:%3; }").arg(kCard).arg(kBord).arg(kText));
+  connect(itemInput_, &QLineEdit::returnPressed, this, [this]() {
+    bool ok = false;
+    const int id = itemInput_->text().trimmed().toInt(&ok);
+    if (ok && id > 0) {
+      equipById(id);
+      itemInput_->clear();
+    }
+  });
+  col->addWidget(itemInput_);
+
+  equipRows_ = new QVBoxLayout;
+  equipRows_->setSpacing(6);
+  col->addLayout(equipRows_);
+
   col->addStretch(1);
 
   header_->setText(QString::fromUtf8("ANPASSUNG"));
@@ -128,6 +160,7 @@ void CharacterPanel::setModel(WoWModel* model)
   model_->cd.reset(model_);
 
   rebuild();
+  buildEquipment();
 }
 
 void CharacterPanel::rebuild()
@@ -241,6 +274,129 @@ void CharacterPanel::rebuild()
   updating_ = false;
 
   header_->setText(QString::fromUtf8("ANPASSUNG · %1").arg(combos_.size()));
+}
+
+namespace {
+// The slots the design's equipment grid shows, in its order.
+const struct { CharSlots slot; const char* label; } kSlots[] = {
+  { CS_HEAD,       "Kopf" },     { CS_SHOULDER, "Schulter" },
+  { CS_CHEST,      "Brust" },    { CS_GLOVES,   "Hände" },
+  { CS_BELT,       "Gürtel" },   { CS_PANTS,    "Beine" },
+  { CS_BOOTS,      "Füße" },     { CS_CAPE,     "Umhang" },
+  { CS_HAND_RIGHT, "Waffe" },    { CS_HAND_LEFT, "Schildhand" },
+  { CS_SHIRT,      "Hemd" },     { CS_TABARD,   "Wappenrock" },
+  { CS_BRACERS,    "Armschienen" }
+};
+
+// Item quality -> the colours WoW itself uses, matching the mock-up's grid.
+const char* qualityColour(int quality)
+{
+  switch (quality) {
+    case 0:  return "#9d9d9d";   // poor
+    case 1:  return "#e8eaee";   // common
+    case 2:  return "#1eff00";   // uncommon
+    case 3:  return "#0070dd";   // rare
+    case 4:  return "#a335ee";   // epic
+    case 5:  return "#ff8000";   // legendary
+    case 6:  return "#e6cc80";   // artifact
+    case 7:  return "#00ccff";   // heirloom
+    default: return "#7d8693";
+  }
+}
+}
+
+void CharacterPanel::buildEquipment()
+{
+  slotLabels_.clear();
+  while (QLayoutItem* item = equipRows_->takeAt(0)) {
+    if (QWidget* w = item->widget())
+      w->deleteLater();
+    delete item;
+  }
+
+  if (!model_)
+    return;
+
+  for (const auto& s : kSlots) {
+    auto* row = new QWidget;
+    row->setStyleSheet("background:transparent;");
+    auto* rr = new QHBoxLayout(row);
+    rr->setContentsMargins(0, 0, 0, 0);
+    rr->setSpacing(8);
+
+    auto* slotName = new QLabel(QString::fromUtf8(s.label).toUpper());
+    QFont sf(uiFamily(), 7);
+    sf.setLetterSpacing(QFont::AbsoluteSpacing, 0.7);
+    slotName->setFont(sf);
+    slotName->setFixedWidth(88);
+    slotName->setStyleSheet(QString("color:%1; background:transparent;").arg(kDim));
+    rr->addWidget(slotName);
+
+    auto* itemName = new QLabel(QString::fromUtf8("—"));
+    itemName->setFont(QFont(uiFamily(), 8));
+    itemName->setMinimumWidth(1);
+    itemName->setStyleSheet(QString("color:%1; background:transparent;").arg(kDim));
+    rr->addWidget(itemName, 1);
+
+    equipRows_->addWidget(row);
+    slotLabels_.push_back(itemName);
+  }
+
+  refreshEquipment();
+}
+
+void CharacterPanel::refreshEquipment()
+{
+  if (!model_)
+    return;
+
+  int i = 0;
+  for (const auto& s : kSlots) {
+    if (i >= (int)slotLabels_.size())
+      break;
+    QLabel* lbl = slotLabels_[i++];
+
+    WoWItem* item = model_->getItem(s.slot);
+    if (!item || item->id() == 0) {
+      lbl->setText(QString::fromUtf8("—"));
+      lbl->setStyleSheet(QString("color:%1; background:transparent;").arg(kDim));
+      continue;
+    }
+
+    const QString name = item->name();
+    lbl->setText(name.isEmpty() ? QString::number(item->id()) : name);
+    lbl->setStyleSheet(QString("color:%1; background:transparent;")
+                         .arg(qualityColour(item->quality())));
+  }
+
+  int worn = 0;
+  for (const auto& s : kSlots) {
+    WoWItem* it = model_->getItem(s.slot);
+    if (it && it->id() != 0)
+      ++worn;
+  }
+  equipHeader_->setText(QString::fromUtf8("AUSRÜSTUNG · %1").arg(worn));
+}
+
+void CharacterPanel::equipById(int itemId)
+{
+  if (!model_ || itemId <= 0)
+    return;
+
+  // Same route the wx control took: look the record up, let it name its own slot.
+  ItemRecord rec = items.getById(itemId);
+  const int slot = rec.slot();
+  if (slot < 0 || slot >= NUM_CHAR_SLOTS)
+    return;
+
+  if (WoWItem* item = model_->getItem((CharSlots)slot)) {
+    item->setId(itemId);
+    // setId only records the choice; the attachments and the composite skin are
+    // rebuilt by refresh(). Without it the item is "worn" but nothing is drawn.
+    model_->refresh();
+    refreshEquipment();
+    emit customizationChanged();
+  }
 }
 
 void CharacterPanel::onEvent(Event* e)

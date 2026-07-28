@@ -10,6 +10,7 @@
 class WoWModel;
 class QComboBox;
 class QLabel;
+class QLineEdit;
 class QVBoxLayout;
 
 // The character customization column.
@@ -32,18 +33,28 @@ public:
   void setModel(WoWModel* model);
   void onEvent(Event* e) override;
 
+  // Public so a headless run can exercise the same path the id field uses.
+  void equip(int itemId) { equipById(itemId); }
+
 signals:
   void customizationChanged();
 
 private:
   void rebuild();
   void clearRows();
+  void buildEquipment();
+  void refreshEquipment();
+  void equipById(int itemId);
 
   WoWModel* model_ = nullptr;
   QVBoxLayout* rows_ = nullptr;
+  QVBoxLayout* equipRows_ = nullptr;
   QLabel* header_ = nullptr;
   QLabel* subHeader_ = nullptr;
+  QLabel* equipHeader_ = nullptr;
+  QLineEdit* itemInput_ = nullptr;
   std::vector<QComboBox*> combos_;
+  std::vector<QLabel*> slotLabels_;   // one per CharSlots entry we show
   bool updating_ = false;      // guards against reacting to our own writes
 };
 

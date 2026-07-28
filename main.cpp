@@ -30,6 +30,7 @@
 #include "WoWDatabase.h"
 #include "WoWFolder.h"
 #include "WoWModel.h"
+#include "database.h"
 
 // Append a stage marker to a file. The window never appears while the game data
 // is loading, so this is the only way to see which call blocks.
@@ -148,6 +149,23 @@ int main(int argc, char** argv)
   RaceInfos::init();
   trace("RaceInfos::init done");
 
+  // The item table. items.getById() is what maps an id to its slot, so without this
+  // every equip attempt resolves to slot -1 and silently does nothing.
+  {
+    sqlResult r = GAMEDATABASE.sqlQuery(
+      "SELECT Item.ID, ItemSparse.Display_Lang, Item.InventoryType, Item.ClassID, "
+      "Item.SubclassID, Item.SheathType FROM Item "
+      "LEFT JOIN ItemSparse ON Item.ID = ItemSparse.ID "
+      "WHERE Item.InventoryType != 0 AND ItemSparse.Display_Lang != \"\"");
+    if (r.valid && !r.empty()) {
+      for (int i = 0, imax = r.values.size(); i < imax; i++)
+        items.items.push_back(ItemRecord(r.values[i]));
+      trace(QString("item database: %1 entries").arg(items.items.size()));
+    } else {
+      trace("WARNING: item query returned nothing -- equipping will not work");
+    }
+  }
+
   trace("before getFile");
   GameFile* file = GAMEDIRECTORY.getFile(fileId);
   trace("getFile returned");
@@ -207,6 +225,21 @@ int main(int argc, char** argv)
 
   if (win->characterPanel())
     win->characterPanel()->setModel(model->infos.raceID != -1 ? model : nullptr);
+
+  // --equip <id>[,<id>...] drives the same path as the panel's id field, so the
+  // equipment grid is verifiable without typing into it.
+  for (int i = 1; i < argc - 1; ++i) {
+    if (QString(argv[i]) != "--equip")
+      continue;
+    for (const QString& s : QString::fromLocal8Bit(argv[i + 1]).split(',')) {
+      bool ok = false;
+      const int id = s.trimmed().toInt(&ok);
+      if (ok && id > 0 && win->characterPanel()) {
+        win->characterPanel()->equip(id);
+        trace(QString("equipped item %1").arg(id));
+      }
+    }
+  }
 
   win->show();
 
