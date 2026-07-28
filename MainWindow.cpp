@@ -5,6 +5,8 @@
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QMouseEvent>
+#include <QSizeGrip>
 #include <QLineEdit>
 #include <QTreeView>
 #include <QResizeEvent>
@@ -113,6 +115,11 @@ MainWindow::MainWindow()
   setWindowTitle("WoW Model Viewer");
   resize(1480, 900);
 
+  // The design has its own title bar, so the native frame goes away. On Windows this
+  // costs Aero Snap and edge resizing, which the frame provided for free -- dragging
+  // is reimplemented on the title bar below and a size grip sits in the corner.
+  setWindowFlags(Qt::Window | Qt::FramelessWindowHint);
+
   auto* col = new QVBoxLayout(this);
   col->setContentsMargins(0, 0, 0, 0);
   col->setSpacing(0);
@@ -195,12 +202,25 @@ QWidget* MainWindow::buildTitleBar()
   pr->addWidget(buildLabel_);
   row->addWidget(pill);
 
-  for (const char* c : {"#2a3038", "#2a3038", "#3a2a2a"}) {
+  // Window buttons. The dots from the mock-up, now actually wired up.
+  const struct { const char* colour; int action; } buttons[] = {
+    { "#2a3038", 0 },   // minimise
+    { "#2a3038", 1 },   // maximise / restore
+    { "#3a2a2a", 2 }    // close
+  };
+  for (const auto& b : buttons) {
     auto* d = new QLabel;
     d->setFixedSize(11, 11);
-    d->setStyleSheet(QString("background:%1; border:none; border-radius:5px;").arg(c));
+    d->setCursor(Qt::PointingHandCursor);
+    d->setStyleSheet(QString("background:%1; border:none; border-radius:5px;").arg(b.colour));
+    d->setProperty("windowAction", b.action);
+    d->installEventFilter(this);
     row->addWidget(d);
   }
+
+  // Dragging the bar moves the window, since there is no native caption to grab.
+  w->installEventFilter(this);
+  w->setProperty("isTitleBar", true);
   return w;
 }
 
@@ -368,7 +388,38 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* e)
       setCategory(idx.toInt());
       return true;
     }
+    const QVariant act = obj->property("windowAction");
+    if (act.isValid()) {
+      switch (act.toInt()) {
+        case 0: showMinimized(); break;
+        case 1: isMaximized() ? showNormal() : showMaximized(); break;
+        case 2: close(); break;
+      }
+      return true;
+    }
   }
+
+  // Frameless drag: remember the grab offset on press, move the window on drag.
+  if (obj->property("isTitleBar").isValid()) {
+    if (e->type() == QEvent::MouseButtonPress) {
+      dragOffset_ = static_cast<QMouseEvent*>(e)->globalPos() - frameGeometry().topLeft();
+      dragging_ = !isMaximized();
+      return false;
+    }
+    if (e->type() == QEvent::MouseMove && dragging_) {
+      move(static_cast<QMouseEvent*>(e)->globalPos() - dragOffset_);
+      return false;
+    }
+    if (e->type() == QEvent::MouseButtonRelease) {
+      dragging_ = false;
+      return false;
+    }
+    if (e->type() == QEvent::MouseButtonDblClick) {
+      isMaximized() ? showNormal() : showMaximized();
+      return true;
+    }
+  }
+
   return QWidget::eventFilter(obj, e);
 }
 
@@ -603,5 +654,9 @@ QWidget* MainWindow::buildStatusBar()
   r->addWidget(statusPathLabel_);
   r->addStretch(1);
   r->addWidget(mk(QString::fromUtf8("FBX · OBJ · glTF"), monoF(), 7, tok::kDim));
+  // Without a native frame there is no resize edge, so give the status bar a grip.
+  auto* grip = new QSizeGrip(w);
+  grip->setFixedSize(14, 14);
+  r->addWidget(grip, 0, Qt::AlignBottom | Qt::AlignRight);
   return w;
 }

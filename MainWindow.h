@@ -3,6 +3,7 @@
 
 #include <vector>
 
+#include <QPoint>
 #include <QWidget>
 
 class CharacterPanel;
@@ -66,6 +67,8 @@ private:
   QTreeView* tree_ = nullptr;
   FileTreeModel* treeModel_ = nullptr;
   std::vector<QLabel*> catChips_;
+  QPoint dragOffset_;
+  bool dragging_ = false;
 };
 
 #endif

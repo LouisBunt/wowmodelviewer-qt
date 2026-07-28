@@ -8,9 +8,11 @@
 #include "metaclasses/Observer.h"
 
 class WoWModel;
+class QCheckBox;
 class QComboBox;
 class QLabel;
 class QLineEdit;
+class QSpinBox;
 class QVBoxLayout;
 
 // The character customization column.
@@ -43,6 +45,7 @@ private:
   void rebuild();
   void clearRows();
   void buildEquipment();
+  void buildTabard();
   void refreshEquipment();
   void equipById(int itemId);
 
@@ -52,6 +55,10 @@ private:
   QLabel* header_ = nullptr;
   QLabel* subHeader_ = nullptr;
   QLabel* equipHeader_ = nullptr;
+  QLabel* tabardHeader_ = nullptr;
+  QCheckBox* dhMode_ = nullptr;
+  QVBoxLayout* tabardRows_ = nullptr;
+  std::vector<QSpinBox*> tabardSpins_;
   QLineEdit* itemInput_ = nullptr;
   std::vector<QComboBox*> combos_;
   std::vector<QLabel*> slotLabels_;   // one per CharSlots entry we show

@@ -1,5 +1,6 @@
 #include "CharacterPanel.h"
 
+#include <QCheckBox>
 #include <QComboBox>
 #include <QDateTime>
 #include <QFile>
@@ -11,6 +12,7 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
+#include <QSpinBox>
 #include <QVBoxLayout>
 
 #include "logger/Logger.h"
@@ -19,6 +21,7 @@
 #include "Game.h"
 #include "GameDatabase.h"
 #include "WoWItem.h"
+#include "TabardDetails.h"
 #include "WoWModel.h"
 #include "database.h"
 
@@ -28,6 +31,7 @@ const char* kSoft = "#b6bdc8";
 const char* kDim  = "#5f6874";
 const char* kCard = "#14181e";
 const char* kBord = "#23282f";
+const char* kAccent = "#c8a15a";
 
 // ChrCustomizationChoice.SwatchColor is packed 0xAARRGGBB. Build the same little
 // swatch the wx panel drew: a solid fill, a left/right split for dual-colour
@@ -134,6 +138,35 @@ CharacterPanel::CharacterPanel(QWidget* parent) : QWidget(parent)
   equipRows_->setSpacing(6);
   col->addLayout(equipRows_);
 
+  // Demon hunter mode: only Night Elves and Blood Elves have the extra geosets
+  // (blindfold, horns, tattoos), so the toggle stays disabled for everyone else.
+  dhMode_ = new QCheckBox(QString::fromUtf8("Dämonenjäger"));
+  dhMode_->setFont(QFont(uiFamily(), 8));
+  dhMode_->setStyleSheet(QString(
+    "QCheckBox { color:%1; background:transparent; spacing:7px; }"
+    "QCheckBox::indicator { width:13px; height:13px; border-radius:3px;"
+    " border:1px solid %2; background:%3; }"
+    "QCheckBox::indicator:checked { background:%4; border-color:%4; }"
+    "QCheckBox:disabled { color:#414852; }").arg(kSoft).arg(kBord).arg(kCard).arg(kAccent));
+  connect(dhMode_, &QCheckBox::toggled, this, [this](bool on) {
+    if (updating_ || !model_)
+      return;
+    model_->cd.setDemonHunterMode(on);
+    emit customizationChanged();
+  });
+  col->addWidget(dhMode_);
+
+  // Guild tabard. Five indices into the tabard tables; the model composes the
+  // texture from them.
+  tabardHeader_ = new QLabel(QString::fromUtf8("WAPPENROCK"));
+  tabardHeader_->setFont(hf);
+  tabardHeader_->setStyleSheet(QString("color:%1; background:transparent;").arg(kDim));
+  col->addWidget(tabardHeader_);
+
+  tabardRows_ = new QVBoxLayout;
+  tabardRows_->setSpacing(6);
+  col->addLayout(tabardRows_);
+
   col->addStretch(1);
 
   header_->setText(QString::fromUtf8("ANPASSUNG"));
@@ -186,6 +219,14 @@ void CharacterPanel::setModel(WoWModel* model)
 
   rebuild();
   buildEquipment();
+  buildTabard();
+
+  // Only night elves and blood elves have demon hunter geosets.
+  const int r = model_->infos.raceID;
+  updating_ = true;
+  dhMode_->setEnabled(r == RACE_NIGHTELF || r == RACE_BLOODELF);
+  dhMode_->setChecked(model_->cd.isDemonHunter());
+  updating_ = false;
 }
 
 void CharacterPanel::rebuild()
@@ -328,6 +369,72 @@ const char* qualityColour(int quality)
     default: return "#7d8693";
   }
 }
+}
+
+void CharacterPanel::buildTabard()
+{
+  tabardSpins_.clear();
+  while (QLayoutItem* item = tabardRows_->takeAt(0)) {
+    if (QWidget* w = item->widget())
+      w->deleteLater();
+    delete item;
+  }
+  if (!model_)
+    return;
+
+  TabardDetails& td = model_->td;
+
+  // label, current value, max, setter
+  const struct { const char* label; int value; int max; int which; } parts[] = {
+    { "Emblem",        td.getIcon(),        td.GetMaxIcon(),                        0 },
+    { "Emblemfarbe",   td.getIconColor(),   td.GetMaxIconColor(td.getIcon()),       1 },
+    { "Rand",          td.getBorder(),      td.GetMaxBorder(),                      2 },
+    { "Randfarbe",     td.getBorderColor(), td.GetMaxBorderColor(td.getBorder()),   3 },
+    { "Hintergrund",   td.getBackground(),  td.GetMaxBackground(),                  4 }
+  };
+
+  updating_ = true;
+  for (const auto& p : parts) {
+    auto* row = new QWidget;
+    row->setStyleSheet("background:transparent;");
+    auto* rr = new QHBoxLayout(row);
+    rr->setContentsMargins(0, 0, 0, 0);
+    rr->setSpacing(8);
+
+    auto* name = new QLabel(QString::fromUtf8(p.label));
+    name->setFont(QFont(uiFamily(), 8));
+    name->setFixedWidth(88);
+    name->setStyleSheet(QString("color:%1; background:transparent;").arg(kSoft));
+    rr->addWidget(name);
+
+    auto* spin = new QSpinBox;
+    spin->setRange(0, p.max > 0 ? p.max : 0);
+    spin->setValue(p.value);
+    spin->setFont(QFont(uiFamily(), 8));
+    spin->setStyleSheet(QString(
+      "QSpinBox { background:%1; border:1px solid %2; border-radius:6px;"
+      " padding:2px 6px; color:%3; }").arg(kCard).arg(kBord).arg(kText));
+    const int which = p.which;
+    connect(spin, QOverload<int>::of(&QSpinBox::valueChanged), this, [this, which](int v) {
+      if (updating_ || !model_)
+        return;
+      TabardDetails& t = model_->td;
+      switch (which) {
+        case 0: t.setIcon(v); break;
+        case 1: t.setIconColor(v); break;
+        case 2: t.setBorder(v); break;
+        case 3: t.setBorderColor(v); break;
+        case 4: t.setBackground(v); break;
+      }
+      model_->refresh();
+      buildTabard();      // the colour ranges depend on the chosen emblem/border
+      emit customizationChanged();
+    });
+    rr->addWidget(spin, 1);
+    tabardRows_->addWidget(row);
+    tabardSpins_.push_back(spin);
+  }
+  updating_ = false;
 }
 
 void CharacterPanel::buildEquipment()
