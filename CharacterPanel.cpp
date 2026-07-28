@@ -1,6 +1,9 @@
 #include "CharacterPanel.h"
 
 #include <QComboBox>
+#include <QIcon>
+#include <QPainter>
+#include <QPixmap>
 #include <QFontDatabase>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -18,6 +21,38 @@ const char* kSoft = "#b6bdc8";
 const char* kDim  = "#5f6874";
 const char* kCard = "#14181e";
 const char* kBord = "#23282f";
+
+// ChrCustomizationChoice.SwatchColor is packed 0xAARRGGBB. Build the same little
+// swatch the wx panel drew: a solid fill, a left/right split for dual-colour
+// choices, or a crossed-out box for "no colour".
+QIcon makeSwatch(unsigned int c0, unsigned int c1)
+{
+  const int w = 34, h = 14;
+  QPixmap pm(w, h);
+  pm.fill(Qt::transparent);
+
+  QPainter p(&pm);
+  p.setRenderHint(QPainter::Antialiasing, false);
+  auto toCol = [](unsigned int c) {
+    return QColor((c >> 16) & 0xFF, (c >> 8) & 0xFF, c & 0xFF);
+  };
+
+  if (c0 == 0 && c1 == 0) {                 // "none"
+    p.fillRect(0, 0, w, h, QColor("#1c222a"));
+    p.setPen(QColor("#5f6874"));
+    p.drawLine(0, h - 1, w - 1, 0);
+  } else if (c1 != 0) {                     // dual colour
+    p.fillRect(0, 0, w / 2, h, toCol(c0));
+    p.fillRect(w / 2, 0, w - w / 2, h, toCol(c1));
+  } else {                                  // single colour
+    p.fillRect(0, 0, w, h, toCol(c0));
+  }
+  p.setPen(QColor("#23282f"));
+  p.drawRect(0, 0, w - 1, h - 1);
+  p.end();
+
+  return QIcon(pm);
+}
 
 QString uiFamily()
 {
@@ -161,18 +196,34 @@ void CharacterPanel::rebuild()
     const uint current = model_->cd.get(optionId);
     int currentIndex = 0;
     for (size_t i = 0; i < choices.size(); ++i) {
-      auto nameQuery = GAMEDATABASE.sqlQuery(
-        QString("SELECT Name_Lang FROM ChrCustomizationChoice WHERE ID = %1").arg(choices[i]));
-      QString choiceName;
-      if (nameQuery.valid && !nameQuery.values.empty())
-        choiceName = nameQuery.values[0][0];
-      if (choiceName.isEmpty())
-        choiceName = QString::number(i + 1);   // many choices are unnamed colours
+      auto q = GAMEDATABASE.sqlQuery(
+        QString("SELECT Name_Lang, SwatchColor1, SwatchColor2 FROM ChrCustomizationChoice WHERE ID = %1")
+          .arg(choices[i]));
 
-      combo->addItem(choiceName, choices[i]);
+      QString choiceName;
+      unsigned int c0 = 0, c1 = 0;
+      if (q.valid && !q.values.empty()) {
+        choiceName = q.values[0][0];
+        // Stored signed; reinterpret the bits rather than clamping at zero.
+        if (q.values[0].size() > 2) {
+          c0 = (unsigned int)q.values[0][1].toInt();
+          c1 = (unsigned int)q.values[0][2].toInt();
+        }
+      }
+
+      const bool isColour = (c0 != 0 || c1 != 0);
+      if (choiceName.isEmpty())
+        choiceName = isColour ? QString() : QString::number(i + 1);
+
+      if (isColour)
+        combo->addItem(makeSwatch(c0, c1), choiceName, choices[i]);
+      else
+        combo->addItem(choiceName, choices[i]);
+
       if (choices[i] == current)
         currentIndex = (int)i;
     }
+    combo->setIconSize(QSize(34, 14));
     combo->setCurrentIndex(currentIndex);
 
     connect(combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
