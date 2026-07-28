@@ -263,8 +263,14 @@ QWidget* MainWindow::buildBrowser()
   cr->setContentsMargins(12, 0, 12, 10);
   cr->setSpacing(5);
   const char* catNames[] = {"Alle", "Charaktere", "Kreaturen", "Items"};
-  for (int i = 0; i < 4; ++i)
-    cr->addWidget(chip(QString::fromLatin1(catNames[i]), i == 0, uiF(), 8));
+  for (int i = 0; i < 4; ++i) {
+    QLabel* c = chip(QString::fromLatin1(catNames[i]), i == 0, uiF(), 8);
+    c->setCursor(Qt::PointingHandCursor);
+    c->installEventFilter(this);
+    c->setProperty("categoryIndex", i);
+    catChips_.push_back(c);
+    cr->addWidget(c);
+  }
   cr->addStretch(1);
   col->addWidget(cats);
 
@@ -313,9 +319,57 @@ void MainWindow::populateTree()
 {
   if (!treeModel_)
     return;
-  const int n = treeModel_->rebuild("m2", search_ ? search_->text() : QString());
+
+  const QString needle = search_ ? search_->text() : QString();
+  const int n = (treeModel_->category() == FileTreeModel::Characters)
+                  ? treeModel_->buildRaceBrowser(needle)
+                  : treeModel_->rebuild("m2", needle);
+
   if (resultLabel_)
     resultLabel_->setText(QString::fromUtf8("ERGEBNISSE · %1").arg(n));
+
+  // The race browser is small enough to show open; the full tree is not.
+  if (tree_) {
+    if (treeModel_->category() == FileTreeModel::Characters)
+      tree_->expandToDepth(0);
+    else
+      tree_->collapseAll();
+  }
+}
+
+void MainWindow::setCategory(int index)
+{
+  if (!treeModel_ || index < 0 || index >= (int)catChips_.size())
+    return;
+
+  static const FileTreeModel::Category kMap[] = {
+    FileTreeModel::All, FileTreeModel::Characters,
+    FileTreeModel::Creatures, FileTreeModel::Items
+  };
+  treeModel_->setCategory(kMap[index]);
+
+  for (int i = 0; i < (int)catChips_.size(); ++i) {
+    const bool active = (i == index);
+    catChips_[i]->setStyleSheet(active
+      ? QString("color:%1; background:%2; border:1px solid %3; border-radius:9px; padding:3px 10px;")
+          .arg(tok::kAccent).arg(tok::kAccentBg).arg(tok::kAccentBr)
+      : QString("color:%1; background:#12161b; border:1px solid %2; border-radius:9px; padding:3px 10px;")
+          .arg(tok::kMuted).arg(tok::kBorder));
+  }
+
+  populateTree();
+}
+
+bool MainWindow::eventFilter(QObject* obj, QEvent* e)
+{
+  if (e->type() == QEvent::MouseButtonRelease) {
+    const QVariant idx = obj->property("categoryIndex");
+    if (idx.isValid()) {
+      setCategory(idx.toInt());
+      return true;
+    }
+  }
+  return QWidget::eventFilter(obj, e);
 }
 
 void MainWindow::onSearchChanged(const QString&)
@@ -325,8 +379,13 @@ void MainWindow::onSearchChanged(const QString&)
 
 void MainWindow::onTreeActivated(const QModelIndex& index)
 {
-  if (GameFile* f = treeModel_->fileAt(index))
+  if (GameFile* f = treeModel_->fileAt(index)) {
     emit fileActivated(f);
+    return;
+  }
+  // Race-browser leaves carry a FileDataID instead of a GameFile.
+  if (const int id = treeModel_->fileIdAt(index))
+    emit fileIdActivated(id);
 }
 
 QWidget* MainWindow::buildViewport()

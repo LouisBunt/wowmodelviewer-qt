@@ -9,6 +9,7 @@
 
 #include "Game.h"
 #include "GameFile.h"
+#include "RaceInfos.h"
 
 FileTreeModel::FileTreeModel(QObject* parent)
   : QAbstractItemModel(parent), root_(new Node)
@@ -35,6 +36,7 @@ int FileTreeModel::rebuild(const QString& extensionFilter, const QString& search
   std::set<GameFile*> files;
   GAMEDIRECTORY.getFilteredFiles(files, const_cast<QString&>(pattern));
 
+  int kept = 0;
   for (GameFile* f : files) {
     if (!f)
       continue;
@@ -44,6 +46,14 @@ int FileTreeModel::rebuild(const QString& extensionFilter, const QString& search
     const QStringList parts = full.split('/', QString::SkipEmptyParts);
     if (parts.isEmpty())
       continue;
+
+    // Category narrows by top-level folder. "Characters" is handled separately by
+    // buildRaceBrowser(), so it never reaches here.
+    if (category_ == Creatures && !full.startsWith("creature/", Qt::CaseInsensitive))
+      continue;
+    if (category_ == Items && !full.startsWith("item/", Qt::CaseInsensitive))
+      continue;
+    ++kept;
 
     Node* cur = root_;
     for (int i = 0; i < parts.size() - 1; ++i) {
@@ -72,7 +82,65 @@ int FileTreeModel::rebuild(const QString& extensionFilter, const QString& search
   sortRecursive(root_);
 
   endResetModel();
-  return (int)files.size();
+  return kept;
+}
+
+int FileTreeModel::buildRaceBrowser(const QString& search)
+{
+  beginResetModel();
+
+  delete root_;
+  root_ = new Node;
+
+  auto* playable = new Node;
+  playable->name = QString::fromUtf8("Spielbar");
+  playable->parent = root_;
+  auto* npc = new Node;
+  npc->name = QString::fromUtf8("NPC");
+  npc->parent = root_;
+
+  const QString needle = search.trimmed().toLower();
+  int count = 0;
+
+  for (const auto& e : RaceInfos::getRaceMenu()) {
+    const QString raceName = QString::fromStdString(e.name);
+    if (!needle.isEmpty() && !raceName.toLower().contains(needle))
+      continue;
+
+    Node* group = e.isNPC ? npc : playable;
+    auto* race = new Node;
+    race->name = raceName.isEmpty() ? QString("Rasse %1").arg(e.raceID) : raceName;
+    race->parent = group;
+    group->children.push_back(race);
+
+    // One leaf per sex, each pointing at that model's FileDataID.
+    const struct { int id; const char* label; } sexes[] = {
+      { e.maleFileID, "Männlich" }, { e.femaleFileID, "Weiblich" }
+    };
+    for (const auto& s : sexes) {
+      if (s.id <= 0)
+        continue;
+      auto* leaf = new Node;
+      leaf->name = QString::fromUtf8(s.label);
+      leaf->fileId = s.id;
+      leaf->parent = race;
+      race->children.push_back(leaf);
+      ++count;
+    }
+  }
+
+  // Drop an empty group rather than showing a dead heading.
+  if (!playable->children.empty())
+    root_->children.push_back(playable);
+  else
+    delete playable;
+  if (!npc->children.empty())
+    root_->children.push_back(npc);
+  else
+    delete npc;
+
+  endResetModel();
+  return count;
 }
 
 void FileTreeModel::sortRecursive(Node* n)
@@ -97,6 +165,12 @@ GameFile* FileTreeModel::fileAt(const QModelIndex& index) const
 {
   Node* n = nodeFor(index);
   return n ? n->file : nullptr;
+}
+
+int FileTreeModel::fileIdAt(const QModelIndex& index) const
+{
+  Node* n = nodeFor(index);
+  return n ? n->fileId : 0;
 }
 
 QModelIndex FileTreeModel::index(int row, int column, const QModelIndex& parent) const

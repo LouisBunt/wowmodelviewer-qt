@@ -1,6 +1,8 @@
 #ifndef MAINWINDOW_H
 #define MAINWINDOW_H
 
+#include <vector>
+
 #include <QWidget>
 
 class CharacterPanel;
@@ -31,10 +33,15 @@ public:
 
   // Fill the browser from the game directory once CASC is mounted.
   void populateTree();
+  void setCategory(int index);
   CharacterPanel* characterPanel() const { return charPanel_; }
 
 signals:
   void fileActivated(GameFile* file);
+  void fileIdActivated(int fileDataId);
+
+protected:
+  bool eventFilter(QObject* obj, QEvent* e) override;
 
 private slots:
   void onTreeActivated(const QModelIndex& index);
@@ -58,6 +65,7 @@ private:
   QLineEdit* search_ = nullptr;
   QTreeView* tree_ = nullptr;
   FileTreeModel* treeModel_ = nullptr;
+  std::vector<QLabel*> catChips_;
 };
 
 #endif

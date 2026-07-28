@@ -212,6 +212,20 @@ int main(int argc, char** argv)
   win->populateTree();
   trace("populateTree returned");
 
+  // --category <0..3> selects a browser tab headlessly (0 all, 1 characters,
+  // 2 creatures, 3 items).
+  for (int i = 1; i < argc - 1; ++i) {
+    if (QString(argv[i]) == "--category") {
+      win->setCategory(QString::fromLocal8Bit(argv[i + 1]).toInt());
+      trace(QString("category set to %1").arg(argv[i + 1]));
+    }
+  }
+
+  QObject::connect(win, &MainWindow::fileIdActivated, [win](int id) {
+    if (GameFile* f = GAMEDIRECTORY.getFile((uint)id))
+      emit win->fileActivated(f);
+  });
+
   QObject::connect(win, &MainWindow::fileActivated, [win, host](GameFile* picked) {
     if (!picked)
       return;
