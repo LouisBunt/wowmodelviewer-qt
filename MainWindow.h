@@ -3,8 +3,12 @@
 
 #include <QWidget>
 
+class FileTreeModel;
 class GLHost;
+class GameFile;
 class QLabel;
+class QLineEdit;
+class QTreeView;
 
 // The shell from the "WoW Model Viewer Redesign" mock-up, with the real GL canvas
 // where the prototype had a placeholder.
@@ -24,6 +28,16 @@ public:
   void setBuildLabel(const QString& text);
   void setPathLabel(const QString& text);
 
+  // Fill the browser from the game directory once CASC is mounted.
+  void populateTree();
+
+signals:
+  void fileActivated(GameFile* file);
+
+private slots:
+  void onTreeActivated(const QModelIndex& index);
+  void onSearchChanged(const QString& text);
+
 private:
   QWidget* buildTitleBar();
   QWidget* buildToolBar();
@@ -37,6 +51,10 @@ private:
   QLabel* buildLabel_ = nullptr;
   QLabel* pathLabel_ = nullptr;
   QLabel* statusPathLabel_ = nullptr;
+  QLabel* resultLabel_ = nullptr;
+  QLineEdit* search_ = nullptr;
+  QTreeView* tree_ = nullptr;
+  FileTreeModel* treeModel_ = nullptr;
 };
 
 #endif

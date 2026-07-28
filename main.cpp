@@ -173,6 +173,18 @@ int main(int argc, char** argv)
   win->setBuildLabel(QString("CASC · %1").arg(config.version));
   win->setPathLabel(file->fullname());
 
+  // Fill the browser and make picking a row load that model.
+  trace("before populateTree");
+  win->populateTree();
+  trace("populateTree returned");
+
+  QObject::connect(win, &MainWindow::fileActivated, [win, host](GameFile* picked) {
+    if (!picked)
+      return;
+    host->setModel(new WoWModel(picked, false));
+    win->setPathLabel(picked->fullname());
+  });
+
   win->show();
 
   // The GL context is set up in GLHost::showEvent, i.e. after show(). If it did

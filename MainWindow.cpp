@@ -6,11 +6,13 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
+#include <QTreeView>
 #include <QResizeEvent>
 #include <QScrollArea>
 #include <QSlider>
 #include <QVBoxLayout>
 
+#include "FileTreeModel.h"
 #include "GLHost.h"
 
 namespace tok {
@@ -243,6 +245,8 @@ QWidget* MainWindow::buildBrowser()
   auto* sw = new QHBoxLayout(searchWrap);
   sw->setContentsMargins(12, 12, 12, 8);
   auto* search = new QLineEdit;
+  search_ = search;
+  connect(search, &QLineEdit::returnPressed, this, [this]() { populateTree(); });
   search->setPlaceholderText(QString::fromUtf8("Modelle, Items, NPCs …"));
   search->setFixedHeight(32);
   search->setFont(QFont(uiF(), 9));
@@ -268,65 +272,60 @@ QWidget* MainWindow::buildBrowser()
   auto* lr = new QVBoxLayout(listHost);
   lr->setContentsMargins(8, 0, 8, 8);
   lr->setSpacing(2);
-  auto* hdr = mk(QString::fromUtf8("ERGEBNISSE"), uiF(), 7, tok::kDim, false, 1.3);
-  hdr->setContentsMargins(6, 6, 6, 8);
-  lr->addWidget(hdr);
+  resultLabel_ = mk(QString::fromUtf8("ERGEBNISSE"), uiF(), 7, tok::kDim, false, 1.3);
+  resultLabel_->setContentsMargins(6, 6, 6, 8);
+  lr->addWidget(resultLabel_);
 
-  // Placeholder rows -- Phase 4 replaces this with a QAbstractItemModel over the
-  // real listfile tree.
-  const struct { const char* n; const char* m; const char* g; const char* q; } rows[] = {
-    {"Orc Male HD", "917 116 · M2 · Charakter", "O", "#e8eaee"},
-    {"Sword 2H Maw C 01", "3 734 213 · M2 · Waffe", "S", "#ff8000"},
-    {"Frostwyrm", "31 040 · M2 · Kreatur", "F", "#e8eaee"}
-  };
-  int idx = 0;
-  for (const auto& r : rows) {
-    const bool sel = (idx == 1);
-    auto* row = new QFrame;
-    row->setStyleSheet(sel
-      ? QString("QFrame { background:#181510; border:1px solid %1; border-radius:7px; }").arg(tok::kAccentBr)
-      : QString("QFrame { background:transparent; border:1px solid transparent; border-radius:7px; }"));
-    auto* rr = new QHBoxLayout(row);
-    rr->setContentsMargins(8, 8, 8, 8);
-    rr->setSpacing(10);
-
-    auto* thumb = new QLabel(QString::fromLatin1(r.g));
-    thumb->setFixedSize(32, 32);
-    thumb->setAlignment(Qt::AlignCenter);
-    thumb->setFont(QFont(dispF(), 9));
-    thumb->setStyleSheet(QString(
-      "background: qlineargradient(x1:0,y1:0,x2:1,y2:1, stop:0 #232b36, stop:1 #131820);"
-      "border:1px solid %1; border-radius:6px; color:#7b8494;")
-      .arg(sel ? "#4a3f28" : "#252c36"));
-    rr->addWidget(thumb);
-
-    auto* tc = new QVBoxLayout;
-    tc->setSpacing(2);
-    auto* n = new ElidedLabel(QString::fromUtf8(r.n));
-    n->setFont(QFont(uiF(), 9));
-    n->setStyleSheet(QString("color:%1; background:transparent; border:none;").arg(r.q));
-    auto* m = new ElidedLabel(QString::fromUtf8(r.m));
-    m->setFont(QFont(monoF(), 7));
-    m->setStyleSheet(QString("color:%1; background:transparent; border:none;").arg(tok::kDim));
-    tc->addWidget(n);
-    tc->addWidget(m);
-    rr->addLayout(tc, 1);
-    lr->addWidget(row);
-    ++idx;
-  }
-  lr->addStretch(1);
+  // The real tree. No lazy expansion, no freeze/thaw: the view only asks the model
+  // about rows it is about to paint.
+  treeModel_ = new FileTreeModel(this);
+  tree_ = new QTreeView;
+  tree_->setModel(treeModel_);
+  tree_->setHeaderHidden(true);
+  tree_->setUniformRowHeights(true);      // lets the view skip per-row size queries
+  tree_->setFont(QFont(uiF(), 8));
+  tree_->setStyleSheet(QString(
+    "QTreeView { background:transparent; border:none; outline:none; }"
+    "QTreeView::item { padding:3px 2px; border-radius:4px; }"
+    "QTreeView::item:hover { background:#181d23; }"
+    "QTreeView::item:selected { background:#181510; color:%1; }"
+    "QScrollBar:vertical { background:transparent; width:10px; }"
+    "QScrollBar::handle:vertical { background:#262c35; border-radius:5px; min-height:30px; }"
+    "QScrollBar::add-line, QScrollBar::sub-line { height:0; }").arg(tok::kAccent));
+  connect(tree_, &QTreeView::activated, this, &MainWindow::onTreeActivated);
+  lr->addWidget(tree_, 1);
   col->addWidget(listHost, 1);
 
-  auto* foot = new QWidget;
-  styled(foot);
-  foot->setStyleSheet(QString("background:transparent; border-top:1px solid %1;").arg(tok::kBorder2));
-  auto* fr = new QHBoxLayout(foot);
-  fr->setContentsMargins(14, 10, 14, 10);
-  fr->addWidget(mk("Datenquelle", uiF(), 8, tok::kDim));
-  fr->addStretch(1);
-  fr->addWidget(mk("listfile", monoF(), 8, tok::kMuted));
-  col->addWidget(foot);
+  auto* foot0 = new QWidget;
+  styled(foot0);
+  foot0->setStyleSheet(QString("background:transparent; border-top:1px solid %1;").arg(tok::kBorder2));
+  auto* fr0 = new QHBoxLayout(foot0);
+  fr0->setContentsMargins(14, 10, 14, 10);
+  fr0->addWidget(mk("Datenquelle", uiF(), 8, tok::kDim));
+  fr0->addStretch(1);
+  fr0->addWidget(mk("listfile", monoF(), 8, tok::kMuted));
+  col->addWidget(foot0);
   return w;
+}
+
+void MainWindow::populateTree()
+{
+  if (!treeModel_)
+    return;
+  const int n = treeModel_->rebuild("m2", search_ ? search_->text() : QString());
+  if (resultLabel_)
+    resultLabel_->setText(QString::fromUtf8("ERGEBNISSE · %1").arg(n));
+}
+
+void MainWindow::onSearchChanged(const QString&)
+{
+  populateTree();
+}
+
+void MainWindow::onTreeActivated(const QModelIndex& index)
+{
+  if (GameFile* f = treeModel_->fileAt(index))
+    emit fileActivated(f);
 }
 
 QWidget* MainWindow::buildViewport()
