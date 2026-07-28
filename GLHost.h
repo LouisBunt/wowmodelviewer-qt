@@ -7,6 +7,7 @@
 #include "OrbitCamera.h"
 #include "SceneLighting.h"   // Light, MAX_LIGHTS -- widget-free since Phase 0
 
+class Attachment;
 class WoWModel;
 class QTimer;
 
@@ -58,6 +59,9 @@ private:
   bool initVideo();
   void render();
 
+  // Equipped items become CHILD attachments of the model's attachment, so drawing
+  // model_->draw() alone would never show them. The wx canvas keeps the same root.
+  Attachment* root_ = nullptr;
   WoWModel* model_ = nullptr;
   QTimer* timer_ = nullptr;
   bool videoReady_ = false;

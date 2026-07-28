@@ -188,7 +188,7 @@ int main(int argc, char** argv)
     trace("GL init error: " + host->lastError());
 
   trace("before WoWModel construction");
-  auto* model = new WoWModel(file, false);
+  auto* model = new WoWModel(file, true);
   trace("WoWModel constructed");
   host->setModel(model);
 
@@ -215,7 +215,7 @@ int main(int argc, char** argv)
   QObject::connect(win, &MainWindow::fileActivated, [win, host](GameFile* picked) {
     if (!picked)
       return;
-    auto* m = new WoWModel(picked, false);
+    auto* m = new WoWModel(picked, true);
     host->setModel(m);
     win->setPathLabel(picked->fullname());
     // Character models need their CharDetails set up before they render complete;

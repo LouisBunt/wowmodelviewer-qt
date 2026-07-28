@@ -1,6 +1,9 @@
 #include "CharacterPanel.h"
 
 #include <QComboBox>
+#include <QDateTime>
+#include <QFile>
+#include <QTextStream>
 #include <QIcon>
 #include <QPainter>
 #include <QPixmap>
@@ -10,6 +13,7 @@
 #include <QLineEdit>
 #include <QVBoxLayout>
 
+#include "logger/Logger.h"
 #include "CharDetails.h"
 #include "CharDetailsEvent.h"
 #include "Game.h"
@@ -55,6 +59,15 @@ QIcon makeSwatch(unsigned int c0, unsigned int c1)
   p.end();
 
   return QIcon(pm);
+}
+
+// The app configures no log sink (the wx front-end does that via LOGGER.addChild),
+// so LOG_INFO goes nowhere. Write diagnostics where they are actually readable.
+void note(const QString& s)
+{
+  QFile f("C:/Users/braun/wmv-qt/phase1-trace.txt");
+  if (f.open(QIODevice::Append | QIODevice::Text))
+    QTextStream(&f) << QDateTime::currentDateTime().toString("HH:mm:ss.zzz") << "  " << s << "\n";
 }
 
 QString uiFamily()
@@ -158,6 +171,18 @@ void CharacterPanel::setModel(WoWModel* model)
   // batches internally -- set() would otherwise trigger a full model refresh per
   // option, which on models with dozens of options is a multi-second freeze.
   model_->cd.reset(model_);
+
+  // A WoWModel has no item slots of its own -- the front-end creates one WoWItem per
+  // slot and adds it as a child (modelviewer.cpp does this right after loading a
+  // character). Without them getItem() returns null for every slot and equipping is
+  // a silent no-op.
+  if (model_->begin() == model_->end()) {
+    for (const auto& s : { CS_SHIRT, CS_HEAD, CS_SHOULDER, CS_PANTS, CS_BOOTS,
+                           CS_CHEST, CS_TABARD, CS_BELT, CS_BRACERS, CS_GLOVES,
+                           CS_HAND_RIGHT, CS_HAND_LEFT, CS_CAPE, CS_QUIVER })
+      model_->addChild(new WoWItem(s));
+    note("created item slots for the model");
+  }
 
   rebuild();
   buildEquipment();
@@ -386,10 +411,17 @@ void CharacterPanel::equipById(int itemId)
   // Same route the wx control took: look the record up, let it name its own slot.
   ItemRecord rec = items.getById(itemId);
   const int slot = rec.slot();
-  if (slot < 0 || slot >= NUM_CHAR_SLOTS)
-    return;
+  note(QString("equipById %1 -> type=%2 slot=%3").arg(itemId).arg(rec.type).arg(slot));
 
-  if (WoWItem* item = model_->getItem((CharSlots)slot)) {
+  if (slot < 0 || slot >= NUM_CHAR_SLOTS) {
+    note(QString("equipById: item %1 resolved to slot %2 -- not equipped").arg(itemId).arg(slot));
+    return;
+  }
+
+  WoWItem* probe = model_->getItem((CharSlots)slot);
+  note(QString("equipById: getItem(%1) -> %2").arg(slot).arg(probe ? "ok" : "NULL"));
+
+  if (WoWItem* item = probe) {
     item->setId(itemId);
     // setId only records the choice; the attachments and the composite skin are
     // rebuilt by refresh(). Without it the item is "worn" but nothing is drawn.

@@ -15,6 +15,7 @@
 
 #include "glm/gtc/type_ptr.hpp"
 
+#include "Attachment.h"
 #include "SceneLighting.h"
 #include "video.h"
 #include "WoWModel.h"
@@ -42,8 +43,17 @@ GLHost::~GLHost()
 
 void GLHost::setModel(WoWModel* model)
 {
+  if (!root_)
+    root_ = new Attachment(nullptr, nullptr, -1, -1);
+
+  root_->delChildren();
+  root_->setModel(nullptr);
   delete model_;
+
   model_ = model;
+  if (model_)
+    root_->addChild(model_, 0, -1);
+
   camera_.reset(model_);   // frame the camera on the new model
   update();
 }
@@ -201,8 +211,10 @@ void GLHost::render()
   const glm::mat4 view = camera_.getViewMatrix();
   glMultMatrixf(glm::value_ptr(view));
 
-  if (model_)
-    model_->draw();
+  // Draw the attachment tree, not the model directly: equipped items, shoulders,
+  // weapons and the like hang off it as children.
+  if (root_)
+    root_->draw();
 
   // Read back BEFORE swapping: after a buffer swap the back buffer's contents are
   // undefined.
