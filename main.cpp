@@ -20,6 +20,7 @@
 #include <QVBoxLayout>
 
 #include "GLHost.h"
+#include "MainWindow.h"
 
 #include "Game.h"
 #include "GameFile.h"
@@ -48,21 +49,10 @@ int main(int argc, char** argv)
                                       : QStringLiteral("C:/Program Files (x86)/World of Warcraft");
   const uint fileId = argc > 2 ? QString::fromLocal8Bit(argv[2]).toUInt() : 1000001u;
 
-  auto* win = new QWidget;
-  win->setWindowTitle("WMV Qt - Phase 1");
-  win->resize(1100, 760);
-  win->setStyleSheet("background:#0b0d10; color:#e8eaee;");
-  auto* col = new QVBoxLayout(win);
-  col->setContentsMargins(0, 0, 0, 0);
-  col->setSpacing(0);
-
+  auto* win = new MainWindow;
+  GLHost* host = win->canvas();
+  // Kept so the existing failure paths below still have somewhere to report to.
   auto* status = new QLabel;
-  status->setContentsMargins(12, 8, 12, 8);
-  status->setStyleSheet("background:#0f1216; color:#8a93a0; font-family:Consolas;");
-  col->addWidget(status);
-
-  auto* host = new GLHost;
-  col->addWidget(host, 1);
 
   // --- game init: identical to what modelviewer.cpp does, minus the wx wrapping
   // CASCFolder builds the build-info path as "<folder>\..\.build.info", so the
@@ -180,8 +170,8 @@ int main(int argc, char** argv)
       }
     }
   }
-  status->setText(QString("data: %1   |   fileDataId: %2   |   %3")
-                    .arg(dataFolder).arg(fileId).arg(file->fullname()));
+  win->setBuildLabel(QString("CASC · %1").arg(config.version));
+  win->setPathLabel(file->fullname());
 
   win->show();
 
