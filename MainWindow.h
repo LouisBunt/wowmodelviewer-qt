@@ -3,6 +3,7 @@
 
 #include <QWidget>
 
+class CharacterPanel;
 class FileTreeModel;
 class GLHost;
 class GameFile;
@@ -30,6 +31,7 @@ public:
 
   // Fill the browser from the game directory once CASC is mounted.
   void populateTree();
+  CharacterPanel* characterPanel() const { return charPanel_; }
 
 signals:
   void fileActivated(GameFile* file);
@@ -48,6 +50,7 @@ private:
   QWidget* buildStatusBar();
 
   GLHost* canvas_ = nullptr;
+  CharacterPanel* charPanel_ = nullptr;
   QLabel* buildLabel_ = nullptr;
   QLabel* pathLabel_ = nullptr;
   QLabel* statusPathLabel_ = nullptr;

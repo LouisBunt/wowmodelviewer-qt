@@ -12,6 +12,7 @@
 #include <QSlider>
 #include <QVBoxLayout>
 
+#include "CharacterPanel.h"
 #include "FileTreeModel.h"
 #include "GLHost.h"
 
@@ -509,35 +510,10 @@ QWidget* MainWindow::buildInspector()
   auto* bc = new QVBoxLayout(body);
   bc->setContentsMargins(16, 16, 16, 24);
   bc->setSpacing(20);
-  bc->addWidget(mk(QString::fromUtf8("ANPASSUNG"), uiF(), 7, tok::kDim, false, 1.4));
 
-  // Placeholder sliders -- Phase 5 binds these to CharDetails.
-  const struct { const char* l; const char* v; int p; } sl[] = {
-    {"Hautfarbe", "04", 38}, {"Gesicht", "07", 62}, {"Frisur", "11", 84}
-  };
-  for (const auto& s : sl) {
-    auto* rw = new QWidget;
-    rw->setStyleSheet("background:transparent;");
-    auto* rc = new QVBoxLayout(rw);
-    rc->setContentsMargins(0, 0, 0, 0);
-    rc->setSpacing(6);
-    auto* hd = new QHBoxLayout;
-    hd->addWidget(mk(QString::fromLatin1(s.l), uiF(), 9, tok::kTextSoft));
-    hd->addStretch(1);
-    hd->addWidget(mk(QString::fromLatin1(s.v), monoF(), 8, "#7d8693"));
-    rc->addLayout(hd);
-    auto* q = new QSlider(Qt::Horizontal);
-    q->setRange(0, 100);
-    q->setValue(s.p);
-    q->setFixedHeight(12);
-    q->setStyleSheet(
-      "QSlider::groove:horizontal { height:4px; border-radius:2px; background:#1c222a; }"
-      "QSlider::sub-page:horizontal { height:4px; border-radius:2px; background:#6f7f92; }"
-      "QSlider::handle:horizontal { width:12px; height:12px; margin:-4px 0; border-radius:6px;"
-      "background:#cdd3dc; border:2px solid #0e1114; }");
-    rc->addWidget(q);
-    bc->addWidget(rw);
-  }
+  // The real customization pickers, bound to CharDetails.
+  charPanel_ = new CharacterPanel;
+  bc->addWidget(charPanel_);
   bc->addStretch(1);
 
   auto* scroll = new QScrollArea;

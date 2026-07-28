@@ -20,10 +20,13 @@
 #include <QVBoxLayout>
 
 #include "GLHost.h"
+#include "CharacterPanel.h"
 #include "MainWindow.h"
 
 #include "Game.h"
 #include "GameFile.h"
+#include "CharTexture.h"
+#include "RaceInfos.h"
 #include "WoWDatabase.h"
 #include "WoWFolder.h"
 #include "WoWModel.h"
@@ -132,6 +135,19 @@ int main(int argc, char** argv)
   GAMEDIRECTORY.initFromListfile("../../../listfile.csv");
   trace("initFromListfile returned");
 
+  // The database, texture regions and race registry. Without these WoWModel cannot
+  // resolve a model file to a race, infos.raceID stays -1, and character models draw
+  // as a handful of untextured geosets -- which is exactly what Phase 1 produced.
+  trace("before GAMEDATABASE.initFromXML");
+  if (!GAMEDATABASE.initFromXML("database.xml"))
+    trace("WARNING: database.xml init failed -- character data will be empty");
+  else
+    trace("database.xml loaded");
+
+  CharTexture::initRegions();
+  RaceInfos::init();
+  trace("RaceInfos::init done");
+
   trace("before getFile");
   GameFile* file = GAMEDIRECTORY.getFile(fileId);
   trace("getFile returned");
@@ -181,9 +197,16 @@ int main(int argc, char** argv)
   QObject::connect(win, &MainWindow::fileActivated, [win, host](GameFile* picked) {
     if (!picked)
       return;
-    host->setModel(new WoWModel(picked, false));
+    auto* m = new WoWModel(picked, false);
+    host->setModel(m);
     win->setPathLabel(picked->fullname());
+    // Character models need their CharDetails set up before they render complete;
+    // creatures and props resolve raceID == -1 and are left alone.
+    win->characterPanel()->setModel(m->infos.raceID != -1 ? m : nullptr);
   });
+
+  if (win->characterPanel())
+    win->characterPanel()->setModel(model->infos.raceID != -1 ? model : nullptr);
 
   win->show();
 
