@@ -11,12 +11,14 @@
 #include <QTreeView>
 #include <QResizeEvent>
 #include <QScrollArea>
+#include <QStackedWidget>
 #include <QSlider>
 #include <QVBoxLayout>
 
 #include "CharacterPanel.h"
 #include "FileTreeModel.h"
 #include "GLHost.h"
+#include "InspectorTabs.h"
 #include "TimelinePanel.h"
 
 namespace tok {
@@ -49,6 +51,22 @@ static QString dispF() { static QString f = pick({"Cinzel", "Georgia"}, "serif")
 static QString iconF() { static QString f = pick({"Segoe UI Symbol", "Segoe UI"}, "sans-serif"); return f; }
 
 static void styled(QWidget* w) { w->setAttribute(Qt::WA_StyledBackground, true); }
+
+// Every inspector page scrolls; they are all longer than the column.
+static QWidget* wrapScroll(QWidget* body)
+{
+  auto* s = new QScrollArea;
+  s->setWidget(body);
+  s->setWidgetResizable(true);
+  s->setFrameShape(QFrame::NoFrame);
+  s->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+  s->setStyleSheet(
+    "QScrollArea { background:transparent; border:none; }"
+    "QScrollBar:vertical { background:#0e1114; width:10px; }"
+    "QScrollBar::handle:vertical { background:#262c35; border-radius:5px; min-height:30px; }"
+    "QScrollBar::add-line, QScrollBar::sub-line { height:0; }");
+  return s;
+}
 
 // A HUD element floating over the GL canvas. GLHost is a native child window, so
 // ordinary sibling widgets are painted UNDER it by the compositor. Making the HUD
@@ -393,6 +411,11 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* e)
       emit exportRequested();
       return true;
     }
+    const QVariant tab = obj->property("inspectorTab");
+    if (tab.isValid()) {
+      setInspectorTab(tab.toInt());
+      return true;
+    }
     const QVariant act = obj->property("windowAction");
     if (act.isValid()) {
       switch (act.toInt()) {
@@ -544,13 +567,13 @@ QWidget* MainWindow::buildInspector()
   w->setFixedWidth(324);
   w->setStyleSheet(QString(
     "QWidget { background:%1; }"
-    "QLabel { background:transparent; border:none; }"
-    "QFrame#card { background:%2; border:1px solid %3; border-radius:8px; }")
-    .arg(tok::kPanel).arg(tok::kCard).arg(tok::kBorder));
+    "QLabel { background:transparent; border:none; }")
+    .arg(tok::kPanel));
   auto* col = new QVBoxLayout(w);
   col->setContentsMargins(0, 0, 0, 0);
   col->setSpacing(0);
 
+  // Tab strip. The labels drive a QStackedWidget below.
   auto* tabs = new QWidget;
   tabs->setStyleSheet("background:transparent;");
   auto* tr = new QHBoxLayout(tabs);
@@ -561,39 +584,69 @@ QWidget* MainWindow::buildInspector()
     auto* t = new QLabel(QString::fromLatin1(names[i]));
     t->setFixedHeight(38);
     t->setAlignment(Qt::AlignCenter);
-    t->setFont(QFont(uiF(), 9, i == 0 ? QFont::DemiBold : QFont::Normal));
-    t->setStyleSheet(i == 0
-      ? QString("color:%1; background:transparent; border:none; border-bottom:2px solid %2;")
-          .arg(tok::kText).arg(tok::kAccent)
-      : QString("color:#7d8693; background:transparent; border:none; border-bottom:1px solid %1;")
-          .arg(tok::kBorder2));
+    t->setCursor(Qt::PointingHandCursor);
+    t->setProperty("inspectorTab", i);
+    t->installEventFilter(this);
+    inspectorTabs_.push_back(t);
     tr->addWidget(t, 1);
   }
   col->addWidget(tabs);
 
-  auto* body = new QWidget;
-  body->setStyleSheet("background:transparent;");
-  auto* bc = new QVBoxLayout(body);
-  bc->setContentsMargins(16, 16, 16, 24);
-  bc->setSpacing(20);
+  inspectorStack_ = new QStackedWidget;
+  inspectorStack_->setStyleSheet("background:transparent;");
 
-  // The real customization pickers, bound to CharDetails.
+  // Page 0 -- character
+  auto* charBody = new QWidget;
+  charBody->setStyleSheet("background:transparent;");
+  auto* cb = new QVBoxLayout(charBody);
+  cb->setContentsMargins(16, 16, 16, 24);
   charPanel_ = new CharacterPanel;
-  bc->addWidget(charPanel_);
-  bc->addStretch(1);
+  cb->addWidget(charPanel_);
+  cb->addStretch(1);
+  inspectorStack_->addWidget(wrapScroll(charBody));
 
-  auto* scroll = new QScrollArea;
-  scroll->setWidget(body);
-  scroll->setWidgetResizable(true);
-  scroll->setFrameShape(QFrame::NoFrame);
-  scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-  scroll->setStyleSheet(
-    "QScrollArea { background:transparent; border:none; }"
-    "QScrollBar:vertical { background:#0e1114; width:10px; }"
-    "QScrollBar::handle:vertical { background:#262c35; border-radius:5px; min-height:30px; }"
-    "QScrollBar::add-line, QScrollBar::sub-line { height:0; }");
-  col->addWidget(scroll, 1);
+  // Page 1 -- material
+  auto* matBody = new QWidget;
+  matBody->setStyleSheet("background:transparent;");
+  auto* mb = new QVBoxLayout(matBody);
+  mb->setContentsMargins(16, 16, 16, 24);
+  materialTab_ = new MaterialTab;
+  mb->addWidget(materialTab_);
+  mb->addStretch(1);
+  inspectorStack_->addWidget(wrapScroll(matBody));
+
+  // Page 2 -- export (filled in by main once the exporters are loaded)
+  auto* expBody = new QWidget;
+  expBody->setStyleSheet("background:transparent;");
+  auto* eb = new QVBoxLayout(expBody);
+  eb->setContentsMargins(16, 16, 16, 24);
+  exportHost_ = new QWidget;
+  auto* eh = new QVBoxLayout(exportHost_);
+  eh->setContentsMargins(0, 0, 0, 0);
+  exportHost_->setStyleSheet("background:transparent;");
+  eb->addWidget(exportHost_);
+  eb->addStretch(1);
+  inspectorStack_->addWidget(wrapScroll(expBody));
+
+  col->addWidget(inspectorStack_, 1);
+  setInspectorTab(0);
   return w;
+}
+
+void MainWindow::setInspectorTab(int index)
+{
+  if (!inspectorStack_ || index < 0 || index >= (int)inspectorTabs_.size())
+    return;
+  inspectorStack_->setCurrentIndex(index);
+  for (int i = 0; i < (int)inspectorTabs_.size(); ++i) {
+    const bool active = (i == index);
+    inspectorTabs_[i]->setFont(QFont(uiF(), 9, active ? QFont::DemiBold : QFont::Normal));
+    inspectorTabs_[i]->setStyleSheet(active
+      ? QString("color:%1; background:transparent; border:none; border-bottom:2px solid %2;")
+          .arg(tok::kText).arg(tok::kAccent)
+      : QString("color:#7d8693; background:transparent; border:none; border-bottom:1px solid %1;")
+          .arg(tok::kBorder2));
+  }
 }
 
 QWidget* MainWindow::buildStatusBar()

@@ -23,6 +23,7 @@
 #include "GLHost.h"
 #include "CharacterPanel.h"
 #include "ExportController.h"
+#include "InspectorTabs.h"
 #include "TimelinePanel.h"
 #include "MainWindow.h"
 
@@ -239,6 +240,7 @@ int main(int argc, char** argv)
     // creatures and props resolve raceID == -1 and are left alone.
     win->characterPanel()->setModel(m->infos.raceID != -1 ? m : nullptr);
     win->timeline()->setModel(m);
+    win->materialTab()->setModel(m);
   });
 
   if (win->characterPanel())
@@ -251,6 +253,12 @@ int main(int argc, char** argv)
   auto* exporters = new ExportController(win);
   const int nExporters = exporters->loadPlugins();
   trace(QString("exporters loaded: %1").arg(nExporters));
+
+  // The Export tab lives in the inspector; main owns the controller, so it is
+  // installed here rather than in MainWindow's constructor.
+  auto* exportTab = new ExportTab(exporters, host);
+  exportTab->refreshFormats();
+  win->exportHost()->layout()->addWidget(exportTab);
   for (const auto& f : exporters->formats())
     trace("  exporter: " + f.label);
 

@@ -14,6 +14,8 @@ class QLabel;
 class QLineEdit;
 class QTreeView;
 class TimelinePanel;
+class MaterialTab;
+class QStackedWidget;
 
 // The shell from the "WoW Model Viewer Redesign" mock-up, with the real GL canvas
 // where the prototype had a placeholder.
@@ -36,6 +38,9 @@ public:
   // Fill the browser from the game directory once CASC is mounted.
   void populateTree();
   void setCategory(int index);
+  void setInspectorTab(int index);
+  MaterialTab* materialTab() const { return materialTab_; }
+  QWidget* exportHost() const { return exportHost_; }
   CharacterPanel* characterPanel() const { return charPanel_; }
   TimelinePanel* timeline() const { return timeline_; }
 
@@ -71,6 +76,10 @@ private:
   QTreeView* tree_ = nullptr;
   FileTreeModel* treeModel_ = nullptr;
   std::vector<QLabel*> catChips_;
+  std::vector<QLabel*> inspectorTabs_;
+  QStackedWidget* inspectorStack_ = nullptr;
+  MaterialTab* materialTab_ = nullptr;
+  QWidget* exportHost_ = nullptr;
   QPoint dragOffset_;
   bool dragging_ = false;
 };
