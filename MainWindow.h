@@ -13,6 +13,7 @@ class GameFile;
 class QLabel;
 class QLineEdit;
 class QTreeView;
+class TimelinePanel;
 
 // The shell from the "WoW Model Viewer Redesign" mock-up, with the real GL canvas
 // where the prototype had a placeholder.
@@ -36,6 +37,7 @@ public:
   void populateTree();
   void setCategory(int index);
   CharacterPanel* characterPanel() const { return charPanel_; }
+  TimelinePanel* timeline() const { return timeline_; }
 
 signals:
   void fileActivated(GameFile* file);
@@ -59,6 +61,7 @@ private:
 
   GLHost* canvas_ = nullptr;
   CharacterPanel* charPanel_ = nullptr;
+  TimelinePanel* timeline_ = nullptr;
   QLabel* buildLabel_ = nullptr;
   QLabel* pathLabel_ = nullptr;
   QLabel* statusPathLabel_ = nullptr;

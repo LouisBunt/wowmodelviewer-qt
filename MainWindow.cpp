@@ -17,6 +17,7 @@
 #include "CharacterPanel.h"
 #include "FileTreeModel.h"
 #include "GLHost.h"
+#include "TimelinePanel.h"
 
 namespace tok {
 const char* kApp      = "#0b0d10";
@@ -525,60 +526,8 @@ QWidget* MainWindow::buildViewport()
 
 QWidget* MainWindow::buildTimeline()
 {
-  auto* w = new QWidget;
-  styled(w);
-  w->setFixedHeight(104);
-  w->setStyleSheet(QString("background:%1; border-top:1px solid %2;").arg(tok::kPanel).arg(tok::kBorder2));
-  auto* col = new QVBoxLayout(w);
-  col->setContentsMargins(16, 12, 16, 14);
-  col->setSpacing(11);
-
-  auto* top = new QHBoxLayout;
-  top->setSpacing(14);
-
-  auto* transport = new QWidget;
-  transport->setStyleSheet("background:transparent;");
-  auto* tr = new QHBoxLayout(transport);
-  tr->setContentsMargins(0, 0, 0, 0);
-  tr->setSpacing(4);
-  tr->addWidget(icon(QString::fromUtf8("⏮"), 28, "#98a1ae", "transparent"));
-  auto* play = icon(QString::fromUtf8("⏸"), 34, tok::kOnAccent, tok::kAccent);
-  play->setStyleSheet(QString("color:%1; background:%2; border:none; border-radius:8px;")
-                      .arg(tok::kOnAccent).arg(tok::kAccent));
-  tr->addWidget(play);
-  tr->addWidget(icon(QString::fromUtf8("⏭"), 28, "#98a1ae", "transparent"));
-  tr->addWidget(icon(QString::fromUtf8("↻"), 28, tok::kAccent, "transparent"));
-  top->addWidget(transport);
-
-  auto* anim = new QFrame;
-  anim->setFixedHeight(28);
-  anim->setMinimumWidth(190);
-  anim->setStyleSheet(QString("QFrame { background:%1; border:1px solid %2; border-radius:6px; }")
-                      .arg(tok::kCard).arg(tok::kBorder));
-  auto* anr = new QHBoxLayout(anim);
-  anr->setContentsMargins(10, 0, 10, 0);
-  anr->setSpacing(8);
-  anr->addWidget(mk("ANIM", uiF(), 7, tok::kDim, false, 1.2));
-  anr->addWidget(mk("Stand [0]", uiF(), 9, tok::kText, true));
-  anr->addStretch(1);
-  anr->addWidget(mk(QString::fromUtf8("▾"), uiF(), 8, "#6f7885"));
-  top->addWidget(anim);
-  top->addStretch(1);
-  top->addWidget(mk("Tempo", uiF(), 8, tok::kDim));
-  auto* speeds = new QHBoxLayout;
-  speeds->setSpacing(3);
-  const char* sp[] = {"0.25x", "0.5x", "1x", "2x"};
-  for (int i = 0; i < 4; ++i)
-    speeds->addWidget(chip(QString::fromLatin1(sp[i]), i == 2, monoF(), 8));
-  top->addLayout(speeds);
-  col->addLayout(top);
-
-  auto* track = new QFrame;
-  track->setFixedHeight(40);
-  track->setStyleSheet(QString("QFrame { background:#0a0d10; border:1px solid %1; border-radius:6px; }")
-                       .arg(tok::kBorder2));
-  col->addWidget(track);
-  return w;
+  timeline_ = new TimelinePanel;
+  return timeline_;
 }
 
 QWidget* MainWindow::buildInspector()

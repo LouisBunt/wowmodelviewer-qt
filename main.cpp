@@ -21,6 +21,7 @@
 
 #include "GLHost.h"
 #include "CharacterPanel.h"
+#include "TimelinePanel.h"
 #include "MainWindow.h"
 
 #include "Game.h"
@@ -235,10 +236,19 @@ int main(int argc, char** argv)
     // Character models need their CharDetails set up before they render complete;
     // creatures and props resolve raceID == -1 and are left alone.
     win->characterPanel()->setModel(m->infos.raceID != -1 ? m : nullptr);
+    win->timeline()->setModel(m);
   });
 
   if (win->characterPanel())
     win->characterPanel()->setModel(model->infos.raceID != -1 ? model : nullptr);
+  if (win->timeline())
+    win->timeline()->setModel(model);
+
+  // Keep the scrubber and frame counter in step with playback. The canvas advances
+  // the animation itself; this only reads it back.
+  auto* uiTick = new QTimer(win);
+  QObject::connect(uiTick, &QTimer::timeout, [win]() { win->timeline()->tick(); });
+  uiTick->start(60);
 
   // --equip <id>[,<id>...] drives the same path as the panel's id field, so the
   // equipment grid is verifiable without typing into it.
