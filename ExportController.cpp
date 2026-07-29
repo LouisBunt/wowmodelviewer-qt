@@ -1,0 +1,79 @@
+#include "ExportController.h"
+
+#include <QFileDialog>
+#include <QFileInfo>
+
+#include "ExporterPlugin.h"
+#include "PluginManager.h"
+#include "WoWModel.h"
+
+ExportController::ExportController(QObject* parent) : QObject(parent)
+{
+}
+
+int ExportController::loadPlugins()
+{
+  formats_.clear();
+
+  PLUGINMANAGER.init("./plugins");
+
+  for (auto it = PLUGINMANAGER.begin(); it != PLUGINMANAGER.end(); ++it) {
+    auto* exporter = dynamic_cast<ExporterPlugin*>(*it);
+    if (!exporter)
+      continue;
+
+    Format f;
+    // menuLabel() is something like "OBJ..." -- strip the ellipsis for a button.
+    f.label = QString::fromStdWString(exporter->menuLabel());
+    while (f.label.endsWith('.'))
+      f.label.chop(1);
+    f.filter = QString::fromStdWString(exporter->fileSaveFilter());
+    f.plugin = exporter;
+    formats_.push_back(f);
+  }
+
+  return (int)formats_.size();
+}
+
+QString ExportController::exportModel(WoWModel* model, int formatIndex, QWidget* parent)
+{
+  if (!model)
+    return QObject::tr("Kein Modell geladen.");
+  if (formatIndex < 0 || formatIndex >= (int)formats_.size())
+    return QObject::tr("Kein Exportformat gewählt.");
+
+  Format& f = formats_[formatIndex];
+
+  const QString suggested = QFileInfo(model->name()).baseName();
+  const QString path = QFileDialog::getSaveFileName(
+    parent, QString::fromStdWString(f.plugin->fileSaveTitle()), suggested, f.filter);
+  if (path.isEmpty())
+    return QString();          // cancelled -- not an error
+
+  return exportTo(model, formatIndex, path);
+}
+
+QString ExportController::exportTo(WoWModel* model, int formatIndex, const QString& path)
+{
+  if (!model)
+    return QObject::tr("Kein Modell geladen.");
+  if (formatIndex < 0 || formatIndex >= (int)formats_.size())
+    return QObject::tr("Kein Exportformat gewählt.");
+  if (path.isEmpty())
+    return QObject::tr("Kein Zielpfad angegeben.");
+
+  Format& f = formats_[formatIndex];
+
+  // Mesh and skinning on, skeleton and animation off: the animation path needs the
+  // clip picker the wx front-end shows, which is not ported. Exporting the current
+  // pose is the useful default until then.
+  f.plugin->setExportOptions(true, false, true, false);
+  f.plugin->setAnimationsToExport(std::vector<int>());
+
+  if (!f.plugin->exportModel(model, path.toStdWString())) {
+    const QString why = QString::fromStdWString(f.plugin->lastError());
+    return why.isEmpty() ? QObject::tr("Export fehlgeschlagen (kein Grund gemeldet).") : why;
+  }
+
+  return QString();
+}

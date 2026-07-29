@@ -389,6 +389,10 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* e)
       setCategory(idx.toInt());
       return true;
     }
+    if (obj->property("exportButton").isValid()) {
+      emit exportRequested();
+      return true;
+    }
     const QVariant act = obj->property("windowAction");
     if (act.isValid()) {
       switch (act.toInt()) {
@@ -482,8 +486,11 @@ QWidget* MainWindow::buildViewport()
   auto* exp = new QLabel("Exportieren");
   exp->setFont(QFont(uiF(), 9, QFont::DemiBold));
   exp->setAlignment(Qt::AlignCenter);
+  exp->setCursor(Qt::PointingHandCursor);
   exp->setStyleSheet(QString("background:%1; border:1px solid #d9b678; border-radius:7px;"
                              "color:%2; padding:8px 14px;").arg(tok::kAccent).arg(tok::kOnAccent));
+  exp->setProperty("exportButton", true);
+  exp->installEventFilter(this);
   ar->addWidget(exp);
   g->addWidget(actions, 0, 2, Qt::AlignTop | Qt::AlignRight);
   asOverlay(actions);

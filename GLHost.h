@@ -30,6 +30,7 @@ public:
 
   QString lastError() const { return error_; }
   bool isReady() const { return videoReady_; }
+  WoWModel* model() const { return model_; }
 
   // Grab the rendered frame off the GL back buffer after `frames` have been drawn,
   // write it to `path` and quit. Verification path -- there is no other way to prove

@@ -15,12 +15,14 @@
 #include <QLabel>
 #include <QTextStream>
 #include <QTimer>
+#include <QInputDialog>
 #include <QMessageBox>
 #include <QString>
 #include <QVBoxLayout>
 
 #include "GLHost.h"
 #include "CharacterPanel.h"
+#include "ExportController.h"
 #include "TimelinePanel.h"
 #include "MainWindow.h"
 
@@ -243,6 +245,54 @@ int main(int argc, char** argv)
     win->characterPanel()->setModel(model->infos.raceID != -1 ? model : nullptr);
   if (win->timeline())
     win->timeline()->setModel(model);
+
+  // Exporters. The plugin API in core is already Qt, so this is just loading the
+  // directory and hooking the button up.
+  auto* exporters = new ExportController(win);
+  const int nExporters = exporters->loadPlugins();
+  trace(QString("exporters loaded: %1").arg(nExporters));
+  for (const auto& f : exporters->formats())
+    trace("  exporter: " + f.label);
+
+  QObject::connect(win, &MainWindow::exportRequested, [win, host, exporters]() {
+    if (exporters->formats().empty()) {
+      QMessageBox::warning(win, "Export",
+                           QString::fromUtf8("Keine Exporter gefunden. Liegt der Ordner "
+                                             "\"plugins\" neben der Anwendung?"));
+      return;
+    }
+
+    QStringList labels;
+    for (const auto& f : exporters->formats())
+      labels << f.label;
+
+    bool ok = false;
+    const QString chosen = QInputDialog::getItem(win, "Export", QString::fromUtf8("Format:"),
+                                                 labels, 0, false, &ok);
+    if (!ok)
+      return;
+
+    const QString err = exporters->exportModel(host->model(), labels.indexOf(chosen), win);
+    if (!err.isEmpty())
+      QMessageBox::warning(win, "Export", err);
+  });
+
+  // --export <Format>,<Pfad> runs an export without the dialog, so it is verifiable
+  // headlessly rather than merely assumed to work.
+  for (int i = 1; i < argc - 1; ++i) {
+    if (QString(argv[i]) != "--export")
+      continue;
+    const QStringList a = QString::fromLocal8Bit(argv[i + 1]).split(',');
+    if (a.size() != 2)
+      continue;
+    int idx = -1;
+    for (int k = 0; k < (int)exporters->formats().size(); ++k)
+      if (exporters->formats()[k].label.compare(a[0], Qt::CaseInsensitive) == 0)
+        idx = k;
+    const QString err = exporters->exportTo(host->model(), idx, a[1]);
+    trace(err.isEmpty() ? QString("export OK -> %1").arg(a[1])
+                        : QString("export FAILED: %1").arg(err));
+  }
 
   // Keep the scrubber and frame counter in step with playback. The canvas advances
   // the animation itself; this only reads it back.

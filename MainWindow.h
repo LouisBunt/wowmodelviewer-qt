@@ -42,6 +42,7 @@ public:
 signals:
   void fileActivated(GameFile* file);
   void fileIdActivated(int fileDataId);
+  void exportRequested();
 
 protected:
   bool eventFilter(QObject* obj, QEvent* e) override;
