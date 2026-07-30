@@ -1,0 +1,108 @@
+better Model Viewer 0.1.0-beta
+=============================
+
+Was das ist
+-----------
+Ein neues Frontend fuer WoW Model Viewer auf Qt statt wxWidgets. Die Modell-,
+Render- und Datenschicht ist unveraendert dieselbe wie im Original: core.dll und
+wow.dll werden so weiterbenutzt, wie sie sind. Umgebaut ist ausschliesslich die
+Oberflaeche.
+
+Diese Version ersetzt die wxWidgets-Ausgabe (WoW Model Viewer Midnight). Beim
+Einrichten werden deren Programmdateien entfernt; die Spieldaten-Hilfsdateien
+bleiben erhalten.
+
+Beta heisst Beta: mehrere Bereiche der alten Oberflaeche sind noch nicht
+portiert. Was fehlt, steht weiter unten.
+
+
+Start
+-----
+Ueber den Startmenue-Eintrag. Ohne Argumente wird
+
+    C:\Program Files (x86)\World of Warcraft
+
+als WoW-Installation angenommen. Liegt dein WoW woanders, muss der Ordner beim
+Aufruf mitgegeben werden -- eine Auswahl in der Oberflaeche gibt es noch nicht:
+
+    WoWModelViewer-Qt.exe "<WoW-Ordner>" [FileDataID] [Optionen]
+    WoWModelViewer-Qt.exe "D:\World of Warcraft" 917116
+
+Der erste Parameter ist das Installationsverzeichnis, nicht der Data-Ordner --
+den haengt die Anwendung selbst an. Der zweite ist das Modell, das beim Start
+geladen wird; 917116 ist der maennliche Ork.
+
+Findet die Anwendung dort keine WoW-Installation, meldet sie das und beendet
+sich nach drei Sekunden.
+
+Der erste Start dauert laenger als die folgenden: die Datenbank wird einmal aus
+den DB2-Dateien aufgebaut und danach als wowdb.sqlite zwischengespeichert. Der
+Cache wird automatisch verworfen, wenn sich der WoW-Build aendert.
+
+Weitere Optionen, vor allem zum Pruefen ohne Mausbedienung:
+
+    --view <gier>,<nick>     Kamerawinkel setzen, z.B. --view 0,80
+    --equip <id>[,<id>...]   Items anlegen, z.B. --equip 180900,190735
+    --category <0..3>        Browser-Kategorie: 0 Alle, 1 Charaktere,
+                             2 Kreaturen, 3 Items
+    --export <format>,<datei>  ohne Dialog exportieren
+    --shot <datei.png>       nach ~1,5 s das GL-Bild speichern und beenden
+
+
+Bedienung
+---------
+    Linke Maustaste ziehen    drehen
+    Rechte Maustaste ziehen   verschieben
+    Mittlere Maustaste / Rad  zoomen
+    Umschalt                  feinere Schritte
+    R                         Kamera auf das Modell zuruecksetzen
+
+Doppelklick auf einen Eintrag im Dateibaum laedt das Modell. Unter "Charaktere"
+steht statt des rohen character/-Ordners eine Rassenauswahl.
+
+Rechts im Inspector: Charakter (Anpassung, Ausruestung per Item-ID, Daemonen-
+jaeger-Schalter, Wappenrock), Material (Geosets ein- und ausblenden) und Export
+(Format, Optionen, Zielpfad).
+
+Unten die Zeitleiste: Animationsauswahl, Abspielsteuerung und Scrubber.
+
+Fenster: Die Titelleiste ist selbstgezeichnet. Ziehen verschiebt, Doppelklick
+maximiert, die drei Punkte rechts sind Minimieren / Maximieren / Schliessen.
+Groessenaenderung geht ueber den Griff rechts unten.
+
+
+Was funktioniert
+----------------
+- Laden und Rendern von Modellen ueber FileDataID oder Dateibaum
+- Kamera: Drehen, Verschieben, Zoomen, Zuruecksetzen
+- Dateibaum ueber das Listfile, mit Suche und Kategorien
+- Charakteranpassung, Ausruestung inklusive Darstellung, Wappenrock
+- Animationsauswahl mit Abspielsteuerung und Scrubber
+- Geosets ein- und ausblenden
+- Export nach OBJ und FBX
+
+
+Was noch fehlt
+--------------
+- Auswahl des WoW-Ordners in der Oberflaeche (bisher nur ueber die Befehlszeile)
+- Animationsexport: der Clip-Auswahldialog ist nicht portiert, exportiert wird
+  die aktuelle Pose
+- Der FBX-Export laeuft im selben Prozess. Die wx-Ausgabe kapselt ihn bewusst in
+  einen Kindprozess, weil das FBX-SDK nicht threadsicher ist; stuerzt er hier ab,
+  reisst er die Anwendung mit
+- Einstellungen, Lichtsteuerung, Modellbank, Item- und NPC-Import,
+  Bildsequenz und AVI, Uebersetzungen
+- Karten- und ADT-Ansicht ist bewusst weggelassen
+- Aero Snap und Groessenaenderung an den Fensterkanten fehlen, weil der native
+  Rahmen entfaellt
+
+Fuer diese Punkte ist die wxWidgets-Ausgabe weiterhin die vollstaendigere
+Anwendung.
+
+
+Lizenz und Quellcode
+--------------------
+GNU General Public License Version 3. Der vollstaendige Text liegt als
+LICENSE.txt bei.
+
+    https://github.com/LouisBunt/wowmodelviewer-qt

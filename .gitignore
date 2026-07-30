@@ -12,3 +12,7 @@ phase*-trace.txt
 # Editor / OS noise
 *.bak
 .vs/
+
+# Release artefacts. stage.ps1 rebuilds the payload, ISCC rebuilds the setup.
+installer/stage/
+installer/dist/
