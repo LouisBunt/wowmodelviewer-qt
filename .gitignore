@@ -1,3 +1,14 @@
-﻿build/
+# Build output
+build/
+
+# Local build logs and traces. The phase history lives in the commit messages.
+build-log.txt
+phase*-trace.txt
+*.log
+
+# Phase screenshots -- large, and only meaningful next to their commit.
 *.png
-*.txt
+
+# Editor / OS noise
+*.bak
+.vs/
