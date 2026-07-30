@@ -1,18 +1,21 @@
-// Phase 1: prove the WMV render pipeline runs under Qt.
+// Entry point. Links core.dll/wow.dll unchanged, initialises CASC the same way the
+// wx front-end does, then hands the mounted game data to MainWindow.
 //
-// Links core.dll/wow.dll unchanged, initialises CASC the same way the wx front-end
-// does, loads one M2 by FileDataID and draws it. No UI beyond a window.
-//
-//   phase1.exe <wow-data-folder> <fileDataId>
+//   WoWModelViewer-Qt.exe [<wow-install-folder>] [<fileDataId>] [options]
 //
 // Example:
-//   phase1.exe "C:\Program Files (x86)\World of Warcraft" 1000001
+//   WoWModelViewer-Qt.exe "C:\Program Files (x86)\World of Warcraft" 1000001
+//
+// Both arguments are optional: the install folder is remembered between runs, and
+// the user is asked for it when it cannot be found.
 
 #include <QApplication>
 #include <QDateTime>
 #include <QDir>
 #include <QFile>
+#include <QFileDialog>
 #include <QLabel>
+#include <QSettings>
 #include <QTextStream>
 #include <QTimer>
 #include <QInputDialog>
@@ -40,11 +43,119 @@
 // is loading, so this is the only way to see which call blocks.
 static void trace(const QString& stage)
 {
-  QFile f("C:/Users/braun/wmv-qt/phase1-trace.txt");
+  // Was a hardcoded path under the development checkout, which meant the trace
+  // silently went nowhere on any other machine -- exactly where it would be useful.
+  static bool dirReady = false;
+  if (!dirReady) {
+    QDir().mkpath("userSettings");
+    dirReady = true;
+  }
+  QFile f("userSettings/qt-frontend-trace.txt");
   if (f.open(QIODevice::Append | QIODevice::Text)) {
     QTextStream(&f) << QDateTime::currentDateTime().toString("HH:mm:ss.zzz")
                     << "  " << stage << "\n";
   }
+}
+
+// --- locating the WoW installation ------------------------------------------
+//
+// The wx front-end asks through ClientChoiceDialog. This is the smaller equivalent:
+// remember the folder, and ask only when we cannot find one.
+
+// A separate file from the wx front-end's Config.ini on purpose. That one is written
+// by wx's own config machinery; rewriting it through QSettings would reformat keys
+// this build does not own.
+static const char* kSettingsFile = "userSettings/qt-frontend.ini";
+static const char* kFolderKey    = "game/installFolder";
+
+static const char* kDefaultFolder = "C:/Program Files (x86)/World of Warcraft";
+
+// CASCFolder appends "Data" to whatever it is given and then reads
+// "<install>/.build.info". Testing for that file is the cheapest way to tell a real
+// installation from a wrong folder, and it has to happen BEFORE Game::init(): that
+// call takes ownership of the WoWFolder, so there is no second attempt to be had.
+static bool looksLikeWoWInstall(const QString& folder)
+{
+  return !folder.isEmpty() && QFile::exists(folder + "/.build.info");
+}
+
+// Empty return means the user gave up.
+static QString askForWoWFolder(const QString& tried)
+{
+  QString start = tried;
+  for (;;) {
+    const QString picked = QFileDialog::getExistingDirectory(
+      nullptr,
+      QString::fromUtf8("WoW-Installationsordner wählen"),
+      start,
+      QFileDialog::ShowDirsOnly);
+
+    if (picked.isEmpty())
+      return QString();          // cancelled
+
+    if (looksLikeWoWInstall(picked))
+      return picked;
+
+    // Naming the file we looked for beats "invalid folder": it tells the user both
+    // what is wrong and that the Data subfolder is not what we want.
+    if (QMessageBox::warning(
+          nullptr,
+          QString::fromUtf8("Keine WoW-Installation"),
+          QString::fromUtf8("In\n\n%1\n\nliegt keine .build.info. Bitte den Ordner "
+                            "wählen, in dem WoW installiert ist -- nicht den "
+                            "Data-Unterordner.").arg(QDir::toNativeSeparators(picked)),
+          QMessageBox::Retry | QMessageBox::Cancel,
+          QMessageBox::Retry) == QMessageBox::Cancel)
+      return QString();
+
+    start = picked;
+  }
+}
+
+// The two positional arguments -- install folder, then FileDataID -- are the ones
+// before the first --flag. Both are optional, so "--shot out.png" must not be read
+// as a folder and a model id.
+static QStringList positionalArgs(int argc, char** argv)
+{
+  QStringList out;
+  for (int i = 1; i < argc; ++i) {
+    const QString a = QString::fromLocal8Bit(argv[i]);
+    if (a.startsWith("--"))
+      break;
+    out << a;
+  }
+  return out;
+}
+
+static QString resolveGameFolder(int argc, char** argv)
+{
+  // An explicit folder on the command line is taken as given and never second-guessed
+  // with a dialog: --shot and --export are used from scripts, and a modal dialog there
+  // would hang the run instead of failing it.
+  const QStringList positional = positionalArgs(argc, argv);
+  if (!positional.isEmpty())
+    return positional.first();
+
+  QSettings settings(QString::fromLatin1(kSettingsFile), QSettings::IniFormat);
+  const QString remembered = settings.value(QString::fromLatin1(kFolderKey)).toString();
+  if (looksLikeWoWInstall(remembered)) {
+    trace("game folder from settings: " + remembered);
+    return remembered;
+  }
+
+  QString folder = QString::fromLatin1(kDefaultFolder);
+  if (!looksLikeWoWInstall(folder)) {
+    trace("no installation at the default path -- asking");
+    folder = askForWoWFolder(remembered.isEmpty() ? QString() : remembered);
+    if (folder.isEmpty())
+      return QString();          // caller exits
+  }
+
+  QDir().mkpath("userSettings");
+  settings.setValue(QString::fromLatin1(kFolderKey), folder);
+  settings.sync();
+  trace("game folder remembered: " + folder);
+  return folder;
 }
 
 int main(int argc, char** argv)
@@ -53,9 +164,17 @@ int main(int argc, char** argv)
   QApplication app(argc, argv);
   trace("QApplication constructed");
 
-  const QString dataFolder = argc > 1 ? QString::fromLocal8Bit(argv[1])
-                                      : QStringLiteral("C:/Program Files (x86)/World of Warcraft");
-  const uint fileId = argc > 2 ? QString::fromLocal8Bit(argv[2]).toUInt() : 1000001u;
+  const QString dataFolder = resolveGameFolder(argc, argv);
+  if (dataFolder.isEmpty()) {
+    trace("no game folder chosen -- exiting");
+    return 0;
+  }
+  const QStringList positional = positionalArgs(argc, argv);
+  // 1000001 was the Phase 1 probe id. It no longer resolves in current clients, so a
+  // plain double-click landed on "FileDataID not found" and stayed there. 917116 is
+  // the male orc -- the model the readme uses as its example.
+  const bool modelRequested = positional.size() > 1;
+  const uint fileId = modelRequested ? positional.at(1).toUInt() : 917116u;
 
   auto* win = new MainWindow;
   GLHost* host = win->canvas();
@@ -173,11 +292,16 @@ int main(int argc, char** argv)
   trace("before getFile");
   GameFile* file = GAMEDIRECTORY.getFile(fileId);
   trace("getFile returned");
-  if (!file) {
+  // An id the user asked for and did not get is worth stopping on. The default one
+  // failing is not: the browser is right there, so come up with an empty viewport and
+  // let them pick, instead of dead-ending on a message.
+  if (!file && modelRequested) {
     status->setText(QString("FileDataID %1 not found in CASC").arg(fileId));
     win->show();
     return app.exec();
   }
+  if (!file)
+    trace(QString("default model %1 not in this client -- starting empty").arg(fileId));
 
   // The model must be built only AFTER the GL context exists: WoWModel uploads its
   // textures during construction, and without a current context those uploads fail
@@ -192,9 +316,10 @@ int main(int argc, char** argv)
     trace("GL init error: " + host->lastError());
 
   trace("before WoWModel construction");
-  auto* model = new WoWModel(file, true);
-  trace("WoWModel constructed");
-  host->setModel(model);
+  WoWModel* model = file ? new WoWModel(file, true) : nullptr;
+  trace(model ? "WoWModel constructed" : "starting without a model");
+  if (model)
+    host->setModel(model);
 
   for (int i = 1; i < argc - 1; ++i) {
     const QString arg(argv[i]);
@@ -209,7 +334,8 @@ int main(int argc, char** argv)
     }
   }
   win->setBuildLabel(QString("CASC · %1").arg(config.version));
-  win->setPathLabel(file->fullname());
+  win->setPathLabel(file ? file->fullname()
+                         : QString::fromUtf8("Kein Modell geladen — links im Baum eines wählen"));
 
   // Fill the browser and make picking a row load that model.
   trace("before populateTree");
@@ -244,7 +370,7 @@ int main(int argc, char** argv)
   });
 
   if (win->characterPanel())
-    win->characterPanel()->setModel(model->infos.raceID != -1 ? model : nullptr);
+    win->characterPanel()->setModel(model && model->infos.raceID != -1 ? model : nullptr);
   if (win->timeline())
     win->timeline()->setModel(model);
 
@@ -331,7 +457,7 @@ int main(int argc, char** argv)
   QTimer::singleShot(2500, [host]() {
     if (host->isReady())
       return;
-    QFile f("C:/Users/braun/wmv-qt/phase1-error.txt");
+    QFile f("userSettings/qt-frontend-error.txt");
     if (f.open(QIODevice::WriteOnly | QIODevice::Text)) {
       QTextStream out(&f);
       out << (host->lastError().isEmpty()

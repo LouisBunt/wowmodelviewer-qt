@@ -18,22 +18,26 @@ portiert. Was fehlt, steht weiter unten.
 
 Start
 -----
-Ueber den Startmenue-Eintrag. Ohne Argumente wird
+Ueber den Startmenue-Eintrag. Beim ersten Start wird
 
     C:\Program Files (x86)\World of Warcraft
 
-als WoW-Installation angenommen. Liegt dein WoW woanders, muss der Ordner beim
-Aufruf mitgegeben werden -- eine Auswahl in der Oberflaeche gibt es noch nicht:
+geprueft. Liegt dein WoW woanders, fragt die Anwendung einmal nach dem Ordner
+und merkt sich die Antwort in userSettings\qt-frontend.ini -- danach faellt die
+Frage weg.
+
+Gewaehlt wird das Installationsverzeichnis, nicht der Data-Unterordner: gesucht
+wird die Datei .build.info, und die liegt eine Ebene darueber.
+
+Beides laesst sich auch mitgeben, etwa fuer Skripte:
 
     WoWModelViewer-Qt.exe "<WoW-Ordner>" [FileDataID] [Optionen]
     WoWModelViewer-Qt.exe "D:\World of Warcraft" 917116
 
-Der erste Parameter ist das Installationsverzeichnis, nicht der Data-Ordner --
-den haengt die Anwendung selbst an. Der zweite ist das Modell, das beim Start
-geladen wird; 917116 ist der maennliche Ork.
-
-Findet die Anwendung dort keine WoW-Installation, meldet sie das und beendet
-sich nach drei Sekunden.
+Der zweite Parameter ist das Modell, das beim Start geladen wird; 917116 ist der
+maennliche Ork und zugleich der Standard. Wird ein Ordner auf der Befehlszeile
+angegeben, erscheint nie ein Dialog -- ein Skript soll fehlschlagen, nicht
+haengen bleiben.
 
 Der erste Start dauert laenger als die folgenden: die Datenbank wird einmal aus
 den DB2-Dateien aufgebaut und danach als wowdb.sqlite zwischengespeichert. Der
@@ -84,7 +88,6 @@ Was funktioniert
 
 Was noch fehlt
 --------------
-- Auswahl des WoW-Ordners in der Oberflaeche (bisher nur ueber die Befehlszeile)
 - Animationsexport: der Clip-Auswahldialog ist nicht portiert, exportiert wird
   die aktuelle Pose
 - Der FBX-Export laeuft im selben Prozess. Die wx-Ausgabe kapselt ihn bewusst in

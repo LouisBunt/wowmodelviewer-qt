@@ -58,7 +58,8 @@ missing, rather than surfacing it as compile errors later.
 The executable resolves `database.xml`, the listfile and `.\plugins` **relative to the
 working directory**, not to itself. Running it straight out of `build\Release` finds
 none of them. Either stage a package (below) or run it from a directory that already
-has that data:
+has that data. Both positional arguments are optional -- the install folder is
+remembered in `userSettings\qt-frontend.ini` and asked for once if it cannot be found:
 
 ```
 build\Release\WoWModelViewer-Qt.exe "C:\Program Files (x86)\World of Warcraft" 917116
