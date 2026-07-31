@@ -20,6 +20,11 @@ param(
   # parameter binding under Windows PowerShell 5.1.
   [string] $Root       = "",
   [string] $StageDir   = "",
+  # Which upstream build tree core.dll, wow.dll and the plugins come from. Named rather
+  # than hardcoded because a CMake cache records the absolute path it was created at: a
+  # tree configured on another machine cannot be reconfigured in place, so a working
+  # build often lives BESIDE the stale one instead of replacing it.
+  [string] $UpstreamBuild = "build-x64",
   [string] $QtDir      = "C:/Qt/Qt5.13.2/5.13.2/msvc2017_64",
   [string] $FbxDir     = "C:/Program Files/Autodesk/FBX/FBX SDK/2020.3.9/lib/x64/release",
   [string] $VcRedist   = "C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/VC/Redist/MSVC/14.44.35112/x64/Microsoft.VC143.CRT",
@@ -37,7 +42,7 @@ if (-not $StageDir) { $StageDir = Join-Path $here "stage" }
 
 $build    = Join-Path $Root "build\Release"
 $upstream = Join-Path $Root "upstream"
-$ubuild   = Join-Path $upstream "build-x64\Source"
+$ubuild   = Join-Path $upstream "$UpstreamBuild\Source"
 $support  = Join-Path $upstream "bin_support"
 if (-not $Listfile) { $Listfile = Join-Path $support "wow\listfile.csv" }
 

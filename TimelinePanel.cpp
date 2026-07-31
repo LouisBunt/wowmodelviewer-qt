@@ -1,5 +1,7 @@
 #include "TimelinePanel.h"
 
+#include <map>
+
 #include <QComboBox>
 #include <QEvent>
 #include <QFontDatabase>
@@ -183,18 +185,51 @@ void TimelinePanel::rebuildAnimations()
     return;
   }
 
-  // getAnimsMap() is keyed by the model's animation index and carries the readable
-  // name from AnimationData.
-  for (const auto& a : model_->getAnimsMap())
-    animList_->addItem(QString::fromStdWString(a.second), a.first);
+  // A loaded model rests in its bind pose until the user asks for an animation. The
+  // neutral entry carries no item data, which is what applyAnimation() treats as "stop".
+  // Auto-playing clip 0 on every load meant a model was never still -- you could not
+  // look at a pose, and a screenshot caught whatever frame the clock happened to be on.
+  animList_->addItem(QString::fromUtf8("keine — Ruhepose"));
 
-  if (animList_->count() == 0)
-    animList_->addItem(QString::fromUtf8("keine Animationen"));
+  // Built from anims[] rather than from getAnimsMap(), because AnimManager::SetAnim uses
+  // its id parameter as an INDEX into model.anims[] (see model.anims[id].length there),
+  // while getAnimsMap() is keyed by AnimationData.ID -- a database id that runs well past
+  // the end of that array. Enumerating anims[] keeps the stored index and the displayed
+  // name attached to the same entry by construction.
+  //
+  // getAnimsMap() is still the source for the readable names; it collapses entries that
+  // share an AnimationData.ID, which is why it cannot be the source for the indices.
+  const std::map<int, std::wstring> names = model_->getAnimsMap();
+  std::map<int, int> seen;                       // animID -> how often already listed
+  for (size_t i = 0; i < model_->anims.size(); ++i) {
+    const int animId = model_->anims[i].animID;
+    const auto nameIt = names.find(animId);
+    QString label = (nameIt != names.end()) ? QString::fromStdWString(nameIt->second)
+                                            : QString("Animation %1").arg(animId);
+    // Models carry several variations of the same animation; without this they all show
+    // up under one identical name and there is no way to tell which row is which.
+    const int n = ++seen[animId];
+    if (n > 1)
+      label += QString(" (%1)").arg(n);
+    animList_->addItem(label, (int)i);
+  }
 
+  animList_->setCurrentIndex(0);
   updating_ = false;
 
-  if (animList_->count() > 0)
-    applyAnimation(0);
+  applyAnimation(0);        // parks the model in the rest pose
+}
+
+bool TimelinePanel::playAnimation(int animIndex)
+{
+  for (int i = 0; i < animList_->count(); ++i) {
+    const QVariant id = animList_->itemData(i);
+    if (id.isValid() && id.toInt() == animIndex) {
+      animList_->setCurrentIndex(i);      // drives applyAnimation via the signal
+      return true;
+    }
+  }
+  return false;
 }
 
 void TimelinePanel::applyAnimation(int index)
@@ -202,22 +237,48 @@ void TimelinePanel::applyAnimation(int index)
   if (!model_ || !model_->animManager || index < 0)
     return;
 
-  const QVariant id = animList_->itemData(index);
-  if (!id.isValid())
-    return;
+  AnimManager* am = model_->animManager;
 
-  model_->animManager->SetAnim(0, (unsigned int)index, 0);
-  model_->animManager->Play();
+  // The neutral row (no item data): hold the bind pose.
+  const QVariant id = animList_->itemData(index);
+  if (!id.isValid()) {
+    am->Pause(true);
+    am->SetFrame(0);
+    scrubber_->setRange(0, 0);
+    scrubber_->setValue(0);
+    if (playButton_)
+      playButton_->setText(QString::fromUtf8("▶"));
+    return;
+  }
+
+  // The anims[] index stored with the row. Passing the combo ROW (as this did originally)
+  // drifted as soon as getAnimsMap() collapsed two variations into one name, so the list
+  // named one clip and played another.
+  const int animIndex = id.toInt();
+  if (animIndex < 0 || animIndex >= (int)model_->anims.size())
+    return;                                     // SetAnim would index anims[] out of range
+  am->SetAnim(0, (unsigned int)animIndex, 0);
+  am->Play();
   if (playButton_)
     playButton_->setText(QString::fromUtf8("⏸"));
 
-  scrubber_->setRange(0, (int)model_->animManager->GetFrameCount());
+  scrubber_->setRange(0, (int)am->GetFrameCount());
 }
 
 void TimelinePanel::tick()
 {
   if (!model_ || !model_->animManager)
     return;
+
+  // With no clip selected the AnimManager still reports whatever frame it was
+  // constructed holding -- it read "2304 / 2467" next to a model that was standing
+  // perfectly still. Report the rest pose as what it is instead.
+  if (!animList_->itemData(animList_->currentIndex()).isValid()) {
+    if (!scrubber_->isSliderDown())
+      scrubber_->setValue(0);
+    timeLabel_->setText(QString::fromUtf8("— / —"));
+    return;
+  }
 
   const size_t frame = model_->animManager->GetFrame();
   const size_t total = model_->animManager->GetFrameCount();
@@ -256,6 +317,14 @@ bool TimelinePanel::eventFilter(QObject* obj, QEvent* e)
         am->SetFrame(0);
         break;
       case 1:                                   // play / pause
+        // Pressing play while the neutral row is selected has nothing to play, so take
+        // it as "start the first real clip" rather than silently resuming whatever was
+        // last loaded.
+        if (!animList_->itemData(animList_->currentIndex()).isValid()) {
+          if (animList_->count() > 1)
+            animList_->setCurrentIndex(1);
+          break;
+        }
         am->Pause();
         playButton_->setText(am->IsPaused() ? QString::fromUtf8("▶")
                                             : QString::fromUtf8("⏸"));

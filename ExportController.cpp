@@ -64,11 +64,14 @@ QString ExportController::exportTo(WoWModel* model, int formatIndex, const QStri
 
   Format& f = formats_[formatIndex];
 
-  // Mesh and skinning on, skeleton and animation off: the animation path needs the
-  // clip picker the wx front-end shows, which is not ported. Exporting the current
-  // pose is the useful default until then.
-  f.plugin->setExportOptions(true, false, true, false);
-  f.plugin->setAnimationsToExport(std::vector<int>());
+  // Was hardcoded to (mesh, no skeleton, skinning, no animation), which made the four
+  // checkboxes in the Export tab decoration. Now it is whatever was actually chosen.
+  //
+  // Note that "no skeleton" never really held: the FBX exporter forces skeleton on when
+  // skinning is requested, so the armature was being written regardless of the flag.
+  f.plugin->setExportOptions(options_.mesh, options_.skeleton,
+                             options_.skinning, options_.animation);
+  f.plugin->setAnimationsToExport(options_.clips);
 
   if (!f.plugin->exportModel(model, path.toStdWString())) {
     const QString why = QString::fromStdWString(f.plugin->lastError());

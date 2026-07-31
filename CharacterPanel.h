@@ -38,8 +38,30 @@ public:
   // Public so a headless run can exercise the same path the id field uses.
   void equip(int itemId) { equipById(itemId); }
 
+  // Re-read everything from the model. Needed after something OTHER than this panel
+  // changed it -- loading a character file, an armory import, clearing equipment.
+  void refresh();
+
+  void clearEquipment();
+  void randomise();
+
+  // Public so the armory import can run the same check: it applies customizations
+  // through CharDetails directly rather than through this panel's pickers.
+  //
+  // CAUTION: on a match this emits postureModelRequested, whose handler REPLACES the
+  // model -- deleting the current one. Call it only when nothing is still holding a
+  // WoWModel pointer.
+  void checkPostureVariant(uint choiceId);
+
+  WoWModel* model() const { return model_; }
+
 signals:
   void customizationChanged();
+
+  // A customization choice that needs a DIFFERENT model file than the one loaded --
+  // the orc's upright posture is the only one in the game data. The panel cannot load
+  // models itself, so it names the file and lets the owner do the swap.
+  void postureModelRequested(const QString& modelPath);
 
 private:
   void rebuild();
