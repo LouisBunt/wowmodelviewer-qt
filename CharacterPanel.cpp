@@ -3,6 +3,7 @@
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDateTime>
+#include <QDir>
 #include <QFile>
 #include <QTextStream>
 #include <QIcon>
@@ -20,6 +21,7 @@
 #include "CharDetailsEvent.h"
 #include "Game.h"
 #include "GameDatabase.h"
+#include "GameFile.h"
 #include "WoWItem.h"
 #include "TabardDetails.h"
 #include "WoWModel.h"
@@ -69,7 +71,14 @@ QIcon makeSwatch(unsigned int c0, unsigned int c1)
 // so LOG_INFO goes nowhere. Write diagnostics where they are actually readable.
 void note(const QString& s)
 {
-  QFile f("C:/Users/braun/wmv-qt/phase1-trace.txt");
+  // Was a hardcoded path under the development checkout, so on any other machine the
+  // trace went nowhere -- exactly where it would be useful. Same location main() uses.
+  static bool dirReady = false;
+  if (!dirReady) {
+    QDir().mkpath("userSettings");
+    dirReady = true;
+  }
+  QFile f("userSettings/qt-frontend-trace.txt");
   if (f.open(QIODevice::Append | QIODevice::Text))
     QTextStream(&f) << QDateTime::currentDateTime().toString("HH:mm:ss.zzz") << "  " << s << "\n";
 }
@@ -227,6 +236,11 @@ void CharacterPanel::setModel(WoWModel* model)
   dhMode_->setEnabled(r == RACE_NIGHTELF || r == RACE_BLOODELF);
   dhMode_->setChecked(model_->cd.isDemonHunter());
   updating_ = false;
+
+  // CharControl::UpdateModel ends the same way. The item slots created above are new
+  // and empty, and cd.reset() ran while they did not exist yet, so the model has to be
+  // composed once now that it is fully set up.
+  model_->refresh();
 }
 
 void CharacterPanel::rebuild()
@@ -329,8 +343,10 @@ void CharacterPanel::rebuild()
             [this, combo, optionId](int idx) {
               if (updating_ || !model_ || idx < 0)
                 return;
-              model_->cd.set(optionId, combo->itemData(idx).toUInt());
+              const uint choiceId = combo->itemData(idx).toUInt();
+              model_->cd.set(optionId, choiceId);
               emit customizationChanged();
+              checkPostureVariant(choiceId);
             });
 
     rc->addWidget(combo);
@@ -538,6 +554,92 @@ void CharacterPanel::equipById(int itemId)
   }
 }
 
+void CharacterPanel::refresh()
+{
+  if (!model_)
+    return;
+
+  rebuild();
+  refreshEquipment();
+  buildTabard();
+
+  updating_ = true;
+  dhMode_->setChecked(model_->cd.isDemonHunter());
+  updating_ = false;
+}
+
+void CharacterPanel::clearEquipment()
+{
+  if (!model_)
+    return;
+
+  for (int slot = 0; slot < NUM_CHAR_SLOTS; ++slot)
+    if (WoWItem* item = model_->getItem((CharSlots)slot))
+      item->setId(0);
+
+  model_->refresh();
+  refreshEquipment();
+  emit customizationChanged();
+}
+
+void CharacterPanel::randomise()
+{
+  if (!model_)
+    return;
+
+  // randomise() batches internally, exactly like reset() -- the pickers are rebuilt
+  // once afterwards rather than per option.
+  model_->cd.randomise();
+  refresh();
+  emit customizationChanged();
+}
+
+// Conditional-model customizations: a choice that does not change the current model but
+// replaces it. There are exactly two in the game data -- ChrCustomizationElement has two
+// rows with ChrCustomizationCondModelID != 0, both the male orc's upright posture (Orc and
+// Mag'har) -- and wow.dll has never implemented them, which is why switching the posture
+// did nothing at all.
+//
+// ChrCustomizationCondModel itself has no definition in database.xml and no .dbd, so the
+// id cannot be resolved to a file through the database. The target is derived from the
+// current model's own name instead and then checked against the archive, so a wrong guess
+// declines to act rather than loading something arbitrary.
+void CharacterPanel::checkPostureVariant(uint choiceId)
+{
+  if (!model_ || !model_->gamefile)
+    return;
+
+  auto r = GAMEDATABASE.sqlQuery(
+    QString("SELECT ChrCustomizationCondModelID FROM ChrCustomizationElement "
+            "WHERE ChrCustomizationChoiceID = %1").arg(choiceId));
+  const bool wantsVariant = r.valid && !r.values.empty() && r.values[0][0].toInt() != 0;
+
+  const QString current = model_->gamefile->fullname();
+  const QString kVariant = "upright.m2";
+  const QString kBase = "_hd.m2";
+
+  QString wanted;
+  if (wantsVariant) {
+    if (current.endsWith(kVariant, Qt::CaseInsensitive))
+      return;                                   // already on it
+    if (!current.endsWith(kBase, Qt::CaseInsensitive))
+      return;                                   // not a shape we know how to transform
+    wanted = current.left(current.length() - kBase.length()) + kVariant;
+  } else {
+    if (!current.endsWith(kVariant, Qt::CaseInsensitive))
+      return;                                   // already on the base model
+    wanted = current.left(current.length() - kVariant.length()) + kBase;
+  }
+
+  if (!GAMEDIRECTORY.getFile(wanted)) {
+    note(QString("posture: %1 does not exist -- staying on %2").arg(wanted).arg(current));
+    return;
+  }
+
+  note(QString("posture: %1 -> %2").arg(current).arg(wanted));
+  emit postureModelRequested(wanted);
+}
+
 void CharacterPanel::onEvent(Event* e)
 {
   if (!e || !model_)
@@ -549,4 +651,18 @@ void CharacterPanel::onEvent(Event* e)
   if (e->type() == CharDetailsEvent::CHOICE_LIST_CHANGED ||
       e->type() == CharDetailsEvent::DH_MODE_CHANGED)
     rebuild();
+
+  // And the MODEL has to be rebuilt too. CharDetails::set() deliberately does not do
+  // that itself -- it fires this event and expects the listener to, which is what
+  // CharControl::onEvent does under wx. Without it a customization change updated
+  // cd.textures but never re-composed the character's skin texture, so picking a skin
+  // colour, face or hairstyle changed nothing on screen -- and an armory import, which
+  // sets a dozen options in a row, left the character with a stale composite: armour
+  // drawn, body and head untextured.
+  //
+  // reset()/randomise() apply a choice to EVERY option in one batched pass and refresh
+  // exactly once at the end; refreshing per event during a batch would redo every
+  // texture, geoset and item per option and defeat that.
+  if (!model_->cd.isBatching())
+    model_->refresh();
 }

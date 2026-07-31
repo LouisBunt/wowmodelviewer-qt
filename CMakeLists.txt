@@ -46,10 +46,16 @@ add_executable(WoWModelViewer-Qt WIN32
   GLHost.h
   MainWindow.cpp
   MainWindow.h
+  MenuController.cpp
+  MenuController.h
   CharacterPanel.cpp
   CharacterPanel.h
   InspectorTabs.cpp
   InspectorTabs.h
+  ItemBrowser.cpp
+  ItemBrowser.h
+  LightPanel.cpp
+  LightPanel.h
   ExportController.cpp
   ExportController.h
   TimelinePanel.cpp

@@ -8,6 +8,7 @@
 #include <QMouseEvent>
 #include <QSizeGrip>
 #include <QLineEdit>
+#include <QMenuBar>
 #include <QTreeView>
 #include <QResizeEvent>
 #include <QScrollArea>
@@ -19,6 +20,8 @@
 #include "FileTreeModel.h"
 #include "GLHost.h"
 #include "InspectorTabs.h"
+#include "ItemBrowser.h"
+#include "LightPanel.h"
 #include "TimelinePanel.h"
 
 namespace tok {
@@ -130,7 +133,27 @@ static QLabel* icon(const QString& glyph, int size, const char* colour, const ch
 MainWindow::MainWindow()
 {
   styled(this);
-  setStyleSheet(QString("QWidget { background:%1; } QLabel { border:none; }").arg(tok::kApp));
+  // The universal QWidget rule is what gives the whole window its background -- but a
+  // stylesheet set on a window also applies to every DIALOG parented to it, and a
+  // stylesheet background beats the palette. Without the QDialog rules below, the input
+  // field of an armory import came up with a near-black background from this very rule and
+  // the platform's default black text on top of it.
+  setStyleSheet(QString(
+    "QWidget { background:%1; } QLabel { border:none; }"
+    "QDialog { background:%2; }"
+    "QDialog QLabel { color:%3; background:transparent; }"
+    "QDialog QLineEdit, QDialog QComboBox, QDialog QAbstractSpinBox,"
+    " QDialog QPlainTextEdit, QDialog QTextEdit {"
+    " background:%4; color:%3; border:1px solid %5; border-radius:5px; padding:4px 7px;"
+    " selection-background-color:%6; selection-color:%7; }"
+    "QDialog QAbstractItemView { background:%4; color:%3; border:1px solid %5;"
+    " selection-background-color:%6; selection-color:%7; }"
+    "QDialog QPushButton { background:#1c2229; color:%3; border:1px solid %5;"
+    " border-radius:5px; padding:5px 15px; min-width:74px; }"
+    "QDialog QPushButton:hover { background:#232a33; }"
+    "QDialog QPushButton:default { border-color:%6; }")
+    .arg(tok::kApp).arg(tok::kPanel).arg(tok::kText).arg("#0f1216")
+    .arg(tok::kBorder).arg(tok::kAccent).arg(tok::kOnAccent));
   setWindowTitle("WoW Model Viewer");
   resize(1480, 900);
 
@@ -198,14 +221,31 @@ QWidget* MainWindow::buildTitleBar()
   brand->addWidget(mk("MODEL VIEWER", dispF(), 9, "#d7c39a", true, 1.3));
   row->addLayout(brand);
 
-  auto* menu = new QHBoxLayout;
-  menu->setSpacing(2);
-  for (const char* m : {"Datei", "Ansicht", "Charakter", "Export", "Hilfe"}) {
-    auto* l = mk(QString::fromLatin1(m), uiF(), 9, "#99a2af");
-    l->setStyleSheet("color:#99a2af; background:transparent; border:none; padding:4px 9px;");
-    menu->addWidget(l);
-  }
-  row->addLayout(menu);
+  // A real QMenuBar rather than the mock-up's five labels: it brings hover states,
+  // Alt mnemonics, keyboard navigation and window-wide shortcuts with it. The menus
+  // themselves are filled in by MenuController, which needs objects main() only has
+  // once the game data and the plugins are loaded.
+  //
+  // setNativeMenuBar(false) keeps it inside our own title bar on platforms that would
+  // otherwise lift it into a system menu bar.
+  menuBar_ = new QMenuBar;
+  menuBar_->setNativeMenuBar(false);
+  menuBar_->setFont(QFont(uiF(), 9));
+  menuBar_->setStyleSheet(QString(
+    "QMenuBar { background:transparent; border:none; color:#99a2af; }"
+    "QMenuBar::item { background:transparent; padding:5px 9px; margin:0 1px;"
+    " border-radius:5px; }"
+    "QMenuBar::item:selected { background:#1c2229; color:%1; }"
+    "QMenuBar::item:pressed { background:%2; color:%3; }"
+    "QMenu { background:%4; border:1px solid %5; padding:5px; color:#cdd3dc; }"
+    "QMenu::item { padding:5px 30px 5px 24px; border-radius:5px; }"
+    "QMenu::item:selected { background:%2; color:%3; }"
+    "QMenu::item:disabled { color:#4c545e; background:transparent; }"
+    "QMenu::separator { height:1px; background:%5; margin:5px 8px; }"
+    "QMenu::indicator { width:12px; height:12px; left:7px; }")
+    .arg(tok::kText).arg(tok::kAccentBg).arg(tok::kAccent)
+    .arg(tok::kCard).arg(tok::kBorder));
+  row->addWidget(menuBar_);
   row->addStretch(1);
 
   auto* pill = new QFrame;
@@ -251,18 +291,28 @@ QWidget* MainWindow::buildToolBar()
   w->setStyleSheet(QString("background:#0f1216; border-bottom:1px solid %1;").arg(tok::kBorder2));
   auto* row = new QHBoxLayout(w);
   row->setContentsMargins(12, 0, 12, 0);
-  row->setSpacing(6);
+  row->setSpacing(4);
 
-  const char* labels[] = {"Modell", "Charakter", "Licht", "Kamera", "Hintergrund", "Effekte"};
-  for (int i = 0; i < 6; ++i) {
-    auto* item = new QWidget;
-    item->setStyleSheet("background:transparent;");
-    auto* ir = new QHBoxLayout(item);
-    ir->setContentsMargins(9, 0, 9, 0);
-    ir->setSpacing(6);
-    ir->addWidget(mk(QString("Alt+%1").arg(i + 1), monoF(), 8, "#6d7683"));
-    ir->addWidget(mk(QString::fromLatin1(labels[i]), uiF(), 8, "#9aa3b0"));
-    row->addWidget(item);
+  // The mock-up showed six "Alt+n Label" pairs. The shortcut hints were invented -- no
+  // Alt+n binding ever existed -- so they are gone, and the labels are now buttons that
+  // actually go somewhere. "Effekte" is dropped: this front-end has no effects panel to
+  // send anyone to, and a button to nowhere is worse than no button.
+  const struct { const char* label; int action; } kItems[] = {
+    { "Modell",      ToolModel      },
+    { "Charakter",   ToolCharacter  },
+    { "Licht",       ToolLight      },
+    { "Kamera",      ToolCamera     },
+    { "Hintergrund", ToolBackground }
+  };
+  for (const auto& it : kItems) {
+    auto* b = new QLabel(QString::fromUtf8(it.label));
+    b->setFont(QFont(uiF(), 8));
+    b->setCursor(Qt::PointingHandCursor);
+    b->setStyleSheet("color:#9aa3b0; background:transparent; border:none;"
+                     " padding:5px 10px; border-radius:5px;");
+    b->setProperty("toolButton", it.action);
+    b->installEventFilter(this);
+    row->addWidget(b);
   }
   row->addStretch(1);
   pathLabel_ = mk("", monoF(), 8, tok::kDim);
@@ -281,6 +331,7 @@ QWidget* MainWindow::buildBrowser()
   col->setSpacing(0);
 
   auto* searchWrap = new QWidget;
+  searchWrap_ = searchWrap;
   searchWrap->setStyleSheet("background:transparent;");
   auto* sw = new QHBoxLayout(searchWrap);
   sw->setContentsMargins(12, 12, 12, 8);
@@ -340,7 +391,16 @@ QWidget* MainWindow::buildBrowser()
     "QScrollBar::add-line, QScrollBar::sub-line { height:0; }").arg(tok::kAccent));
   connect(tree_, &QTreeView::activated, this, &MainWindow::onTreeActivated);
   lr->addWidget(tree_, 1);
-  col->addWidget(listHost, 1);
+
+  // Items get their own browser rather than a page of the file tree. The tree lists model
+  // FILES, and most armour has none of its own -- it is a texture layer on a character --
+  // so the only way to find a chest piece is through the item database.
+  browserStack_ = new QStackedWidget;
+  browserStack_->setStyleSheet("background:transparent;");
+  browserStack_->addWidget(listHost);
+  itemBrowser_ = new ItemBrowser;
+  browserStack_->addWidget(itemBrowser_);
+  col->addWidget(browserStack_, 1);
 
   auto* foot0 = new QWidget;
   styled(foot0);
@@ -387,6 +447,14 @@ void MainWindow::setCategory(int index)
   };
   treeModel_->setCategory(kMap[index]);
 
+  // "Items" swaps the whole column over to the database browser, which brings its own
+  // search box -- the tree's would filter nothing there.
+  const bool itemMode = (index == 3);
+  if (browserStack_)
+    browserStack_->setCurrentIndex(itemMode ? 1 : 0);
+  if (searchWrap_)
+    searchWrap_->setVisible(!itemMode);
+
   for (int i = 0; i < (int)catChips_.size(); ++i) {
     const bool active = (i == index);
     catChips_[i]->setStyleSheet(active
@@ -396,7 +464,45 @@ void MainWindow::setCategory(int index)
           .arg(tok::kMuted).arg(tok::kBorder));
   }
 
-  populateTree();
+  if (!itemMode)      // the item browser runs its own query
+    populateTree();
+}
+
+void MainWindow::updateStats()
+{
+  if (!fpsLabel_ || !canvas_)
+    return;
+  const float f = canvas_->fps();
+  fpsLabel_->setText(f > 0.0f ? QString("%1 FPS").arg(qRound(f))
+                              : QString::fromUtf8("– FPS"));
+}
+
+void MainWindow::setExportFormats(const QStringList& labels)
+{
+  if (formatsLabel_)
+    formatsLabel_->setText(labels.isEmpty() ? QString::fromUtf8("kein Exporter")
+                                            : labels.join(QString::fromUtf8(" · ")));
+}
+
+void MainWindow::setGridIndicator(bool on)
+{
+  if (railButtons_.size() <= RailGrid)
+    return;
+  railButtons_[RailGrid]->setStyleSheet(
+    QString("color:%1; background:%2; border:none; border-radius:6px;")
+      .arg(on ? tok::kAccent : tok::kMuted).arg(on ? "#22282f" : "transparent"));
+}
+
+void MainWindow::setActiveCameraPreset(int index)
+{
+  for (int i = 0; i < (int)camPresets_.size(); ++i) {
+    const bool active = (i == index);
+    camPresets_[i]->setStyleSheet(active
+      ? QString("background: rgba(40,32,14,235); border:1px solid #4a3f28; border-radius:6px;"
+                "color:%1; padding:6px 11px;").arg(tok::kAccent)
+      : QString("background: rgba(14,17,20,220); border:1px solid %1; border-radius:6px;"
+                "color:#98a1ae; padding:6px 11px;").arg(tok::kBorder));
+  }
 }
 
 bool MainWindow::eventFilter(QObject* obj, QEvent* e)
@@ -409,6 +515,36 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* e)
     }
     if (obj->property("exportButton").isValid()) {
       emit exportRequested();
+      return true;
+    }
+    if (obj->property("screenshotButton").isValid()) {
+      emit screenshotRequested();
+      return true;
+    }
+    const QVariant tool = obj->property("toolButton");
+    if (tool.isValid()) {
+      switch (tool.toInt()) {
+        case ToolModel:      setInspectorTab(TabMaterial); break;
+        case ToolCharacter:  setInspectorTab(TabCharacter); break;
+        case ToolLight:      setInspectorTab(TabLight); break;
+        case ToolCamera:     emit cameraMenuRequested(); break;
+        case ToolBackground: emit backgroundRequested(); break;
+      }
+      return true;
+    }
+    const QVariant rail = obj->property("railButton");
+    if (rail.isValid()) {
+      switch (rail.toInt()) {
+        case RailFit:   emit fitCameraRequested(); break;
+        case RailGrid:  emit gridToggleRequested(); break;
+        case RailLight: setInspectorTab(TabLight); break;
+      }
+      return true;
+    }
+    const QVariant preset = obj->property("cameraPreset");
+    if (preset.isValid()) {
+      setActiveCameraPreset(preset.toInt());
+      emit cameraPresetRequested(preset.toInt());
       return true;
     }
     const QVariant tab = obj->property("inspectorTab");
@@ -486,11 +622,23 @@ QWidget* MainWindow::buildViewport()
   auto* rl = new QVBoxLayout(rail);
   rl->setContentsMargins(6, 6, 6, 6);
   rl->setSpacing(6);
-  const char* glyphs[] = {"◎", "✥", "⤢", "▦", "☀"};
-  for (int i = 0; i < 5; ++i)
-    rl->addWidget(icon(QString::fromUtf8(glyphs[i]), 30,
-                       i == 0 ? tok::kAccent : tok::kMuted,
-                       i == 0 ? "#22282f" : "transparent"));
+  // Three tools, not five decorative glyphs. The mock-up's pan and zoom icons are gone:
+  // panning is the right mouse button and zooming is the wheel, so a button that only
+  // says "you can drag" earns nothing.
+  const struct { const char* glyph; int action; const char* tip; } kTools[] = {
+    { "◎", RailFit,   "Auf das Modell einpassen" },
+    { "▦", RailGrid,  "Gitter ein/aus" },
+    { "☀", RailLight, "Licht" }
+  };
+  for (const auto& t : kTools) {
+    QLabel* b = icon(QString::fromUtf8(t.glyph), 30, tok::kMuted, "transparent");
+    b->setCursor(Qt::PointingHandCursor);
+    b->setToolTip(QString::fromUtf8(t.tip));
+    b->setProperty("railButton", t.action);
+    b->installEventFilter(this);
+    railButtons_.push_back(b);
+    rl->addWidget(b);
+  }
   g->addWidget(rail, 0, 0, Qt::AlignTop | Qt::AlignLeft);
   asOverlay(rail);
 
@@ -505,6 +653,9 @@ QWidget* MainWindow::buildViewport()
   auto* sl = new QHBoxLayout(shot);
   sl->setContentsMargins(12, 6, 12, 6);
   sl->addWidget(mk("Screenshot", uiF(), 9, "#cdd3dc"));
+  shot->setCursor(Qt::PointingHandCursor);
+  shot->setProperty("screenshotButton", true);
+  shot->installEventFilter(this);
   ar->addWidget(shot);
   auto* exp = new QLabel("Exportieren");
   exp->setFont(QFont(uiF(), 9, QFont::DemiBold));
@@ -524,7 +675,11 @@ QWidget* MainWindow::buildViewport()
   auto* sr = new QHBoxLayout(stats);
   sr->setContentsMargins(12, 6, 12, 6);
   sr->setSpacing(16);
-  for (const char* s : {"60 FPS", "M2", "GL 4.6"})
+  // "60 FPS" was a hardcoded string that happened to look plausible. It is measured now;
+  // updateStats() is driven from the same timer that drives the timeline.
+  fpsLabel_ = mk(QString::fromUtf8("– FPS"), monoF(), 8, "#7d8693");
+  sr->addWidget(fpsLabel_);
+  for (const char* s : {"M2", "GL 4.6"})
     sr->addWidget(mk(QString::fromUtf8(s), monoF(), 8, "#7d8693"));
   g->addWidget(stats, 2, 0, Qt::AlignBottom | Qt::AlignLeft);
   asOverlay(stats);
@@ -539,13 +694,15 @@ QWidget* MainWindow::buildViewport()
     auto* c = new QLabel(QString::fromLatin1(presets[i]));
     c->setAlignment(Qt::AlignCenter);
     c->setFont(QFont(uiF(), 8));
-    c->setStyleSheet(i == 1
-      ? QString("background: rgba(40,32,14,235); border:1px solid #4a3f28; border-radius:6px;"
-                "color:%1; padding:6px 11px;").arg(tok::kAccent)
-      : QString("background: rgba(14,17,20,220); border:1px solid %1; border-radius:6px;"
-                "color:#98a1ae; padding:6px 11px;").arg(tok::kBorder));
+    c->setCursor(Qt::PointingHandCursor);
+    c->setProperty("cameraPreset", i);
+    c->installEventFilter(this);
+    camPresets_.push_back(c);
     cr->addWidget(c);
   }
+  // The mock-up highlighted "3/4" for looks. The camera actually starts where
+  // OrbitCamera::reset() puts it, which is the front view -- so highlight that.
+  setActiveCameraPreset(0);
   g->addWidget(cams, 2, 2, Qt::AlignBottom | Qt::AlignRight);
   asOverlay(cams);
 
@@ -579,8 +736,8 @@ QWidget* MainWindow::buildInspector()
   auto* tr = new QHBoxLayout(tabs);
   tr->setContentsMargins(0, 0, 0, 0);
   tr->setSpacing(0);
-  const char* names[] = {"Charakter", "Material", "Export"};
-  for (int i = 0; i < 3; ++i) {
+  const char* names[] = {"Charakter", "Material", "Licht", "Export"};
+  for (int i = 0; i < 4; ++i) {
     auto* t = new QLabel(QString::fromLatin1(names[i]));
     t->setFixedHeight(38);
     t->setAlignment(Qt::AlignCenter);
@@ -615,7 +772,18 @@ QWidget* MainWindow::buildInspector()
   mb->addStretch(1);
   inspectorStack_->addWidget(wrapScroll(matBody));
 
-  // Page 2 -- export (filled in by main once the exporters are loaded)
+  // Page 2 -- lighting. The four scene lights were configurable in principle since
+  // Phase 0 (SceneLighting is widget-free) but had no UI at all.
+  auto* lightBody = new QWidget;
+  lightBody->setStyleSheet("background:transparent;");
+  auto* lb = new QVBoxLayout(lightBody);
+  lb->setContentsMargins(16, 16, 16, 24);
+  lightPanel_ = new LightPanel(canvas_);
+  lb->addWidget(lightPanel_);
+  lb->addStretch(1);
+  inspectorStack_->addWidget(wrapScroll(lightBody));
+
+  // Page 3 -- export (filled in by main once the exporters are loaded)
   auto* expBody = new QWidget;
   expBody->setStyleSheet("background:transparent;");
   auto* eb = new QVBoxLayout(expBody);
@@ -662,7 +830,11 @@ QWidget* MainWindow::buildStatusBar()
   statusPathLabel_ = mk("", monoF(), 7, tok::kDim);
   r->addWidget(statusPathLabel_);
   r->addStretch(1);
-  r->addWidget(mk(QString::fromUtf8("FBX · OBJ · glTF"), monoF(), 7, tok::kDim));
+  // Was the literal "FBX · OBJ · glTF". There is no glTF exporter -- only the fbx and obj
+  // plugins exist -- so the text promised a format the build cannot produce. main() fills
+  // this in from the exporters that actually loaded.
+  formatsLabel_ = mk(QString(), monoF(), 7, tok::kDim);
+  r->addWidget(formatsLabel_);
   // Without a native frame there is no resize edge, so give the status bar a grip.
   auto* grip = new QSizeGrip(w);
   grip->setFixedSize(14, 14);

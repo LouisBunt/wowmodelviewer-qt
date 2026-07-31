@@ -5,9 +5,15 @@ replacing the wxWidgets one. The model, render and data layers are not touched:
 `core.dll` and `wow.dll` are linked and used exactly as upstream builds them. Only the
 GUI is new.
 
-Released as **0.1.0-beta** — several areas of the old interface are not ported yet.
-See [LIESMICH.txt](installer/LIESMICH.txt) for the current feature list, and
-[MIGRATION.md](MIGRATION.md) for why the port is shaped the way it is.
+Released as **1.5.0-beta** (test state) — several areas of the old interface are not
+ported yet. See [LIESMICH.txt](installer/LIESMICH.txt) for the current feature list,
+and [MIGRATION.md](MIGRATION.md) for why the port is shaped the way it is.
+
+One exception to "the engine is untouched" as of 1.5.0: `WoWModel::initAnimated` in the
+upstream submodule discarded a variant skeleton's own animations and inherited the base
+skeleton's instead, which made variant models (the upright orc) behave identically to the
+model they vary. That is fixed in `upstream/Source/games/wow/WoWModel.cpp` and has to be
+carried across upstream merges.
 
 ## Why this exists
 

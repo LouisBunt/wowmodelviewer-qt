@@ -10,8 +10,11 @@ class CharacterPanel;
 class FileTreeModel;
 class GLHost;
 class GameFile;
+class ItemBrowser;
+class LightPanel;
 class QLabel;
 class QLineEdit;
+class QMenuBar;
 class QTreeView;
 class TimelinePanel;
 class MaterialTab;
@@ -20,9 +23,13 @@ class QStackedWidget;
 // The shell from the "WoW Model Viewer Redesign" mock-up, with the real GL canvas
 // where the prototype had a placeholder.
 //
-// The browser column and the inspector are still static mock content -- they become
-// real in Phases 4 and 5. What is real here is the frame, the theming and the
-// viewport.
+// The window owns the chrome only: the frame, the theming, the browser tree and the
+// inspector host. What goes INTO the menu bar comes from MenuController, and what the
+// inspector's Export tab shows comes from main() -- both need the game data and the
+// plugins, which do not exist yet while this constructor runs.
+//
+// The toolbar row under the title bar is still mock-up content: its six "Alt+n" items
+// have no counterpart in this front-end yet.
 class MainWindow : public QWidget
 {
   Q_OBJECT
@@ -44,10 +51,36 @@ public:
   CharacterPanel* characterPanel() const { return charPanel_; }
   TimelinePanel* timeline() const { return timeline_; }
 
+  // Empty when the window is built; MenuController fills it in once main() has the
+  // game data and the plugins.
+  QMenuBar* menuBar() const { return menuBar_; }
+  ItemBrowser* itemBrowser() const { return itemBrowser_; }
+
+  // Move the highlight in the viewport's camera-preset row. Called from the menu too,
+  // so the two ways of switching view do not drift apart.
+  void setActiveCameraPreset(int index);
+
+  // Inspector page order, so the toolbar and the rail cannot address the wrong one.
+  enum InspectorTab { TabCharacter = 0, TabMaterial, TabLight, TabExport };
+
+  // Read the measured frame rate off the canvas. Driven by main()'s UI timer.
+  void updateStats();
+
+  // Fill the status bar's format list from what actually loaded.
+  void setExportFormats(const QStringList& labels);
+
+  void setGridIndicator(bool on);
+
 signals:
   void fileActivated(GameFile* file);
   void fileIdActivated(int fileDataId);
   void exportRequested();
+  void screenshotRequested();
+  void cameraPresetRequested(int index);
+  void cameraMenuRequested();
+  void backgroundRequested();
+  void fitCameraRequested();
+  void gridToggleRequested();
 
 protected:
   bool eventFilter(QObject* obj, QEvent* e) override;
@@ -75,7 +108,20 @@ private:
   QLineEdit* search_ = nullptr;
   QTreeView* tree_ = nullptr;
   FileTreeModel* treeModel_ = nullptr;
+  // Toolbar and viewport-rail button ids, matched in eventFilter.
+  enum ToolAction { ToolModel = 0, ToolCharacter, ToolLight, ToolCamera, ToolBackground };
+  enum RailAction { RailFit = 0, RailGrid, RailLight };
+
+  QMenuBar* menuBar_ = nullptr;
+  LightPanel* lightPanel_ = nullptr;
+  ItemBrowser* itemBrowser_ = nullptr;
+  QStackedWidget* browserStack_ = nullptr;
+  QWidget* searchWrap_ = nullptr;
+  QLabel* fpsLabel_ = nullptr;
+  QLabel* formatsLabel_ = nullptr;
   std::vector<QLabel*> catChips_;
+  std::vector<QLabel*> camPresets_;
+  std::vector<QLabel*> railButtons_;
   std::vector<QLabel*> inspectorTabs_;
   QStackedWidget* inspectorStack_ = nullptr;
   MaterialTab* materialTab_ = nullptr;

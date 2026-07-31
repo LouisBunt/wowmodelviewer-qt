@@ -11,6 +11,8 @@
 
 #include <QApplication>
 #include <QDateTime>
+#include <QPalette>
+#include <QStyleFactory>
 #include <QDir>
 #include <QFile>
 #include <QFileDialog>
@@ -27,6 +29,8 @@
 #include "CharacterPanel.h"
 #include "ExportController.h"
 #include "InspectorTabs.h"
+#include "ItemBrowser.h"
+#include "MenuController.h"
 #include "TimelinePanel.h"
 #include "MainWindow.h"
 
@@ -158,10 +162,49 @@ static QString resolveGameFolder(int argc, char** argv)
   return folder;
 }
 
+// The window paints itself with stylesheets, but the standard dialogs (input, message,
+// file, colour) are built by the style from the PALETTE. MainWindow's stylesheet cascades
+// into any dialog parented to it and darkens the background, while the text colour stays
+// whatever the platform default is -- which on Windows is black. That is how the armory
+// import ended up as black text on a black field.
+//
+// Fusion plus an explicit dark palette fixes every dialog at once instead of patching them
+// one at a time, and keeps the custom-drawn UI looking as it did.
+static void applyDarkPalette(QApplication& app)
+{
+  app.setStyle(QStyleFactory::create("Fusion"));
+
+  const QColor bg("#0f1216"), panel("#14181e"), text("#e8eaee"), dim("#5f6874");
+  const QColor accent("#c8a15a"), onAccent("#17130a");
+
+  QPalette p;
+  p.setColor(QPalette::Window,          panel);
+  p.setColor(QPalette::WindowText,      text);
+  p.setColor(QPalette::Base,            bg);            // text entry backgrounds
+  p.setColor(QPalette::AlternateBase,   panel);
+  p.setColor(QPalette::Text,            text);          // and the text in them
+  p.setColor(QPalette::Button,          QColor("#1c2229"));
+  p.setColor(QPalette::ButtonText,      text);
+  p.setColor(QPalette::BrightText,      QColor("#ff6b6b"));
+  p.setColor(QPalette::ToolTipBase,     panel);
+  p.setColor(QPalette::ToolTipText,     text);
+  p.setColor(QPalette::Highlight,       accent);
+  p.setColor(QPalette::HighlightedText, onAccent);
+  p.setColor(QPalette::Link,            accent);
+  p.setColor(QPalette::PlaceholderText, dim);
+
+  p.setColor(QPalette::Disabled, QPalette::Text,       dim);
+  p.setColor(QPalette::Disabled, QPalette::WindowText, dim);
+  p.setColor(QPalette::Disabled, QPalette::ButtonText, dim);
+
+  app.setPalette(p);
+}
+
 int main(int argc, char** argv)
 {
   trace("main entered");
   QApplication app(argc, argv);
+  applyDarkPalette(app);
   trace("QApplication constructed");
 
   const QString dataFolder = resolveGameFolder(argc, argv);
@@ -275,9 +318,12 @@ int main(int argc, char** argv)
   // The item table. items.getById() is what maps an id to its slot, so without this
   // every equip attempt resolves to slot -1 and silently does nothing.
   {
+    // OverallQualityID is the seventh column on purpose: ItemRecord reads it from index 6
+    // and falls back to 0 for queries that omit it. Without it every item was "poor" and
+    // the equipment list rendered in a single colour.
     sqlResult r = GAMEDATABASE.sqlQuery(
       "SELECT Item.ID, ItemSparse.Display_Lang, Item.InventoryType, Item.ClassID, "
-      "Item.SubclassID, Item.SheathType FROM Item "
+      "Item.SubclassID, Item.SheathType, ItemSparse.OverallQualityID FROM Item "
       "LEFT JOIN ItemSparse ON Item.ID = ItemSparse.ID "
       "WHERE Item.InventoryType != 0 AND ItemSparse.Display_Lang != \"\"");
     if (r.valid && !r.empty()) {
@@ -342,6 +388,14 @@ int main(int argc, char** argv)
   win->populateTree();
   trace("populateTree returned");
 
+  // --grid turns the reference grid on, so that draw path is verifiable from a shot.
+  for (int i = 1; i < argc; ++i)
+    if (QString(argv[i]) == "--grid") {
+      host->setGridVisible(true);
+      win->setGridIndicator(true);
+      trace("grid on");
+    }
+
   // --category <0..3> selects a browser tab headlessly (0 all, 1 characters,
   // 2 creatures, 3 items).
   for (int i = 1; i < argc - 1; ++i) {
@@ -356,18 +410,38 @@ int main(int argc, char** argv)
       emit win->fileActivated(f);
   });
 
-  QObject::connect(win, &MainWindow::fileActivated, [win, host](GameFile* picked) {
+  // The one place a model becomes THE model. Everything that wants to show something
+  // -- the browser tree, the menu's character/NPC/armory imports -- routes through
+  // here, so the inspector panels can never be left pointing at the previous model.
+  auto showModel = [win, host](GameFile* picked) {
     if (!picked)
       return;
     auto* m = new WoWModel(picked, true);
+
+    // ModelViewer::LoadModel stamps both of these on a character model and neither was
+    // being carried over. charModelDetails.isChar is the one that matters at render
+    // time: WoWModel::calcBones takes a DIFFERENT path for characters (it animates the
+    // root/key bones first, then lets the rest inherit), so with it left false a
+    // character's mesh is skinned by the generic path -- which is what made an
+    // equipped character look contorted, with the body collapsing while the attached
+    // armour pieces stayed at their bone positions.
+    //
+    // raceID != -1 is the criterion, not upstream's "does the path start with char":
+    // it is the same test the character panel and the item slots already use, so the
+    // three cannot drift apart.
+    const bool isCharacter = (m->infos.raceID != -1);
+    m->modelType = isCharacter ? MT_CHAR : MT_NORMAL;
+    m->charModelDetails.isChar = isCharacter;
+
     host->setModel(m);
     win->setPathLabel(picked->fullname());
     // Character models need their CharDetails set up before they render complete;
     // creatures and props resolve raceID == -1 and are left alone.
-    win->characterPanel()->setModel(m->infos.raceID != -1 ? m : nullptr);
+    win->characterPanel()->setModel(isCharacter ? m : nullptr);
     win->timeline()->setModel(m);
     win->materialTab()->setModel(m);
-  });
+  };
+  QObject::connect(win, &MainWindow::fileActivated, win, showModel);
 
   if (win->characterPanel())
     win->characterPanel()->setModel(model && model->infos.raceID != -1 ? model : nullptr);
@@ -385,31 +459,75 @@ int main(int argc, char** argv)
   auto* exportTab = new ExportTab(exporters, host);
   exportTab->refreshFormats();
   win->exportHost()->layout()->addWidget(exportTab);
-  for (const auto& f : exporters->formats())
+
+  // The status bar used to claim "FBX · OBJ · glTF" regardless of what loaded, and there
+  // is no glTF exporter at all. Say what is actually there.
+  QStringList formatLabels;
+  for (const auto& f : exporters->formats()) {
+    formatLabels << f.label;
     trace("  exporter: " + f.label);
+  }
+  win->setExportFormats(formatLabels);
 
-  QObject::connect(win, &MainWindow::exportRequested, [win, host, exporters]() {
-    if (exporters->formats().empty()) {
-      QMessageBox::warning(win, "Export",
-                           QString::fromUtf8("Keine Exporter gefunden. Liegt der Ordner "
-                                             "\"plugins\" neben der Anwendung?"));
-      return;
+  // The menus in the title bar. Built here rather than in MainWindow because nearly
+  // every entry needs something that only exists at this point: the mounted game data,
+  // the item database, the loaded plugins. It also takes over the viewport's
+  // "Exportieren" and "Screenshot" buttons, so each action has exactly one
+  // implementation.
+  auto* menus = new MenuController(win, host, exporters, win);
+  QObject::connect(menus, &MenuController::loadFileRequested, menus, showModel);
+  menus->build();
+  // Connected after showModel, so by the time the menu re-reads the state the panels
+  // already hold the new model.
+  QObject::connect(win, &MainWindow::fileActivated, menus,
+                   [menus](GameFile*) { menus->modelChanged(); });
+
+  // The orc's upright posture is a different MODEL, not a different setting -- the panel
+  // detects that and names the file, the menu controller performs the swap and carries
+  // the customization and equipment across.
+  QObject::connect(win->characterPanel(), &CharacterPanel::postureModelRequested,
+                   menus, &MenuController::swapModelPreservingState);
+  menus->modelChanged();
+
+  // The item browser queries the item database directly, so it can only be filled once
+  // that database exists.
+  QObject::connect(win->itemBrowser(), &ItemBrowser::itemActivated,
+                   menus, &MenuController::showItem);
+  QObject::connect(win->itemBrowser(), &ItemBrowser::setActivated,
+                   menus, &MenuController::showSet);
+  win->itemBrowser()->initialise();
+  trace("menus and item browser built");
+
+  // --armory <url> runs the armory import without the dialog, so it is verifiable
+  // headlessly (combined with --shot) instead of only by clicking through the menu.
+  // Runs before app.exec(), so a --shot grab afterwards catches the imported character.
+  for (int i = 1; i < argc - 1; ++i) {
+    if (QString(argv[i]) != "--armory")
+      continue;
+    const QString url = QString::fromLocal8Bit(argv[i + 1]);
+    const QString err = menus->importArmory(url, false);
+    trace(err.isEmpty() ? QString("armory import OK: %1").arg(url)
+                        : QString("armory import FAILED: %1").arg(err));
+  }
+
+  // --clips <id>[,<id>...] selects animation clips for the export below, by the same
+  // model animation index the timeline and the Export tab use. Parsed before --export so
+  // the animated path is provable headlessly too, not only by clicking the checkbox.
+  for (int i = 1; i < argc - 1; ++i) {
+    if (QString(argv[i]) != "--clips")
+      continue;
+    ExportController::Options o = exporters->options();
+    o.clips.clear();
+    for (const QString& s : QString::fromLocal8Bit(argv[i + 1]).split(',')) {
+      bool ok = false;
+      const int id = s.trimmed().toInt(&ok);
+      if (ok)
+        o.clips.push_back(id);
     }
-
-    QStringList labels;
-    for (const auto& f : exporters->formats())
-      labels << f.label;
-
-    bool ok = false;
-    const QString chosen = QInputDialog::getItem(win, "Export", QString::fromUtf8("Format:"),
-                                                 labels, 0, false, &ok);
-    if (!ok)
-      return;
-
-    const QString err = exporters->exportModel(host->model(), labels.indexOf(chosen), win);
-    if (!err.isEmpty())
-      QMessageBox::warning(win, "Export", err);
-  });
+    o.animation = !o.clips.empty();
+    exporters->setOptions(o);
+    trace(QString("export clips: %1").arg((int)o.clips.size()));
+  }
 
   // --export <Format>,<Pfad> runs an export without the dialog, so it is verifiable
   // headlessly rather than merely assumed to work.
@@ -431,8 +549,59 @@ int main(int argc, char** argv)
   // Keep the scrubber and frame counter in step with playback. The canvas advances
   // the animation itself; this only reads it back.
   auto* uiTick = new QTimer(win);
-  QObject::connect(uiTick, &QTimer::timeout, [win]() { win->timeline()->tick(); });
+  QObject::connect(uiTick, &QTimer::timeout, [win]() {
+    win->timeline()->tick();
+    win->updateStats();     // the measured frame rate in the viewport overlay
+  });
   uiTick->start(60);
+
+  // --customize <optionId>,<choiceId> applies one customization through the same path
+  // the panel's pickers use, including the conditional-model check. That is what makes
+  // the orc posture verifiable without clicking (and without the armory, which needs a
+  // network round trip through a flaky proxy). Like --anim, this has to run after the
+  // panel has been given the model.
+  for (int i = 1; i < argc - 1; ++i) {
+    if (QString(argv[i]) != "--customize")
+      continue;
+    const QStringList a = QString::fromLocal8Bit(argv[i + 1]).split(',');
+    if (a.size() != 2)
+      continue;
+    WoWModel* cm = win->characterPanel() ? win->characterPanel()->model() : nullptr;
+    if (!cm) {
+      trace("--customize: no character model loaded");
+      continue;
+    }
+    cm->cd.set(a[0].toUInt(), a[1].toUInt());
+    cm->refresh();
+    trace(QString("customize option %1 -> choice %2").arg(a[0]).arg(a[1]));
+    // Last: on a conditional-model match this replaces the model and frees cm.
+    win->characterPanel()->checkPostureVariant(a[1].toUInt());
+  }
+
+  // --item / --item-solo / --set drive the item browser's three actions without the list,
+  // so the mannequin path, the standalone-model path and set loading are all verifiable
+  // from a shot.
+  for (int i = 1; i < argc - 1; ++i) {
+    const QString a(argv[i]);
+    const int id = QString::fromLocal8Bit(argv[i + 1]).toInt();
+    if (a == "--item")
+      menus->showItem(id, false);
+    else if (a == "--item-solo")
+      menus->showItem(id, true);
+    else if (a == "--set")
+      menus->showSet(id);
+  }
+
+  // --anim <index> starts a clip by its index into the model's anims[] array. Needed
+  // because playback is opt-in now: without it there is no way to reach an animated pose
+  // headlessly. Must run AFTER the timeline has been given the model, or there is no
+  // animation list to pick from yet.
+  for (int i = 1; i < argc - 1; ++i)
+    if (QString(argv[i]) == "--anim") {
+      const int idx = QString::fromLocal8Bit(argv[i + 1]).toInt();
+      const bool ok = win->timeline()->playAnimation(idx);
+      trace(QString("anim %1 -> %2").arg(idx).arg(ok ? "playing" : "NOT on this model"));
+    }
 
   // --equip <id>[,<id>...] drives the same path as the panel's id field, so the
   // equipment grid is verifiable without typing into it.
