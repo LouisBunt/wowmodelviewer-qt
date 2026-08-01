@@ -59,6 +59,7 @@ Weitere Optionen, vor allem zum Pruefen ohne Mausbedienung:
     --item <id>                Item auf der Figur anlegen
     --item-solo <id>           Item allein zeigen (nur wenn es ein eigenes Modell hat)
     --set <id>                 Item-Set anlegen
+    --wowhead <url|liste>      Outfit/Transmog-Set abrufen oder Item-Liste anlegen
     --clips <id>[,<id>...]     Animationsclips fuer den Export waehlen
     --export <format>,<datei>  ohne Dialog exportieren
     --armory <url>             Armory-Charakter ohne Dialog importieren
@@ -120,6 +121,11 @@ Neu in 1.5.0
   Qualitaet und Name, oder zeigt die 990 Item-Sets des Spiels. Doppelklick legt
   das Teil an; "Nur Item, ohne Figur" zeigt das eigene Modell, wo es eines gibt.
   Ist kein Charakter geladen, wird eine Figur als Anzeigestaender geladen.
+- Wowhead-Import unter Charakter > "Wowhead-Look importieren": nimmt einen Link
+  auf ein gespeichertes Outfit oder ein Transmog-Set und laedt die Teile, oder
+  eine einfach eingefuegte Liste von Item-IDs. Bei einer Set-Seite wird pro Slot
+  das erste Stueck genommen -- solche Seiten listen mehrere Varianten je Slot.
+  Nicht zuordenbare IDs werden gezaehlt und gemeldet, nicht verschluckt.
 - Qualitaetsfarben: die Ausruestungsliste stand vorher komplett in einer Farbe,
   weil ItemRecord die Qualitaet hart auf 0 setzte und sie nie gelesen hat.
 - Dialoge: Eingabefelder waren schwarz auf schwarz. Die Fensterregel fuer den
@@ -148,6 +154,10 @@ Was noch fehlt
   einen Kindprozess, weil das FBX-SDK nicht threadsicher ist; stuerzt er hier ab,
   reisst er die Anwendung mit.
 - Kein glTF-Exporter. Es gibt nur die Plugins fuer FBX und OBJ.
+- Anprobe-Links (dressing-room) lassen sich nicht importieren. Der Look steckt
+  dort komplett hinter dem '#', und dieser Teil wird nie an Wowhead uebertragen --
+  er ist also nicht abrufbar. In der Anprobe auf "Speichern" klicken, daraus wird
+  ein Outfit mit echter Adresse, und die geht.
 - Keine Farbsuche fuer Items. Die Spieldaten enthalten keine Farbe pro Item; sie
   muesste aus den Texturen berechnet werden.
 - Gesichtsknochen-Varianten (ChrCustomizationBoneSet) sind in wow.dll weiterhin

@@ -12,6 +12,7 @@
 #include <QApplication>
 #include <QDateTime>
 #include <QPalette>
+#include <QRegularExpression>
 #include <QStyleFactory>
 #include <QDir>
 #include <QFile>
@@ -590,6 +591,27 @@ int main(int argc, char** argv)
       menus->showItem(id, true);
     else if (a == "--set")
       menus->showSet(id);
+  }
+
+  // --wowhead <url|liste> runs the Wowhead look import without the dialog: either an
+  // outfit/transmog-set address to fetch, or a plain list of item ids.
+  for (int i = 1; i < argc - 1; ++i) {
+    if (QString(argv[i]) != "--wowhead")
+      continue;
+    const QString arg = QString::fromLocal8Bit(argv[i + 1]);
+    std::vector<int> ids;
+    if (arg.startsWith("http", Qt::CaseInsensitive)) {
+      QString err;
+      ids = menus->fetchWowheadItemIds(arg, &err);
+      trace(ids.empty() ? QString("wowhead fetch FAILED: %1").arg(err)
+                        : QString("wowhead fetch: %1 items").arg((int)ids.size()));
+    } else {
+      for (const QString& p : arg.split(QRegularExpression("[^0-9-]+"), QString::SkipEmptyParts))
+        ids.push_back(p.toInt());
+      trace(QString("wowhead list: %1 entries").arg((int)ids.size()));
+    }
+    if (!ids.empty())
+      menus->applyItemIds(ids, "headless");
   }
 
   // --anim <index> starts a clip by its index into the model's anims[] array. Needed

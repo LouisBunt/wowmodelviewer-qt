@@ -1,7 +1,18 @@
 #include "MenuController.h"
 
+#include <algorithm>
 #include <map>
 #include <utility>
+
+#include <QEventLoop>
+#include <QNetworkAccessManager>
+#include <QNetworkReply>
+#include <QNetworkRequest>
+#include <QRegularExpression>
+#include <QScopedPointer>
+#include <QSslSocket>
+#include <QTimer>
+#include <QUrl>
 
 #include <QAction>
 #include <QColorDialog>
@@ -176,6 +187,8 @@ void MenuController::build()
       &MenuController::importArmoryCharacter);
   add(characterMenu_, tr("NPC von URL importieren …"), QString(),
       &MenuController::importNpcFromUrl);
+  add(characterMenu_, tr("Wowhead-Look importieren …"), QString(),
+      &MenuController::importWowheadLook);
   characterMenu_->addSeparator();
   needsCharacter_.push_back(
     add(characterMenu_, tr("Ausrüstung speichern …"), "F5", &MenuController::saveEquipment));
@@ -482,6 +495,191 @@ void MenuController::showItem(int itemId, bool standalone)
   modelChanged();
   if (!standalone)
     win_->setPathLabel(label);
+}
+
+std::vector<int> MenuController::fetchWowheadItemIds(const QString& url, QString* error) const
+{
+  std::vector<int> ids;
+
+  // Qt loads OpenSSL lazily, so a build without libssl/libcrypto next to it fails every
+  // HTTPS request with a generic transport error that says nothing about the cause. Name
+  // it instead -- this is a packaging problem, not something the user did wrong.
+  if (url.startsWith("https", Qt::CaseInsensitive) && !QSslSocket::supportsSsl()) {
+    *error = tr("Diese Installation kann kein HTTPS: die OpenSSL-Bibliotheken "
+                "(libssl-1_1-x64.dll und libcrypto-1_1-x64.dll) liegen nicht neben der "
+                "Anwendung. Ohne sie funktioniert auch der Armory-Import nicht.");
+    return ids;
+  }
+
+  QNetworkAccessManager net;
+  QNetworkRequest req{QUrl(url)};
+  // Wowhead answers a bare Qt user agent with a challenge page rather than the item list.
+  req.setHeader(QNetworkRequest::UserAgentHeader,
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) betterModelViewer");
+  req.setAttribute(QNetworkRequest::FollowRedirectsAttribute, true);
+
+  QScopedPointer<QNetworkReply> reply(net.get(req));
+
+  // Synchronous on purpose: this runs from a modal action and there is nothing useful to
+  // do meanwhile. The timer means a silent server never hangs the window.
+  QEventLoop loop;
+  QTimer timeout;
+  timeout.setSingleShot(true);
+  connect(&timeout, &QTimer::timeout, &loop, &QEventLoop::quit);
+  connect(reply.data(), &QNetworkReply::finished, &loop, &QEventLoop::quit);
+  timeout.start(15000);
+  loop.exec();
+
+  if (!reply->isFinished()) {
+    reply->abort();
+    *error = tr("Zeitüberschreitung beim Abruf von Wowhead.");
+    return ids;
+  }
+  if (reply->error() != QNetworkReply::NoError) {
+    *error = tr("Abruf fehlgeschlagen: %1").arg(reply->errorString());
+    return ids;
+  }
+
+  const QString html = QString::fromUtf8(reply->readAll());
+
+  // Outfit and transmog-set pages render each piece as an anchor whose element id carries
+  // the item: _item-id-118279_0. That is the whole contract -- no JSON, no API.
+  //
+  // A transmog-set page, though, groups the page by slot and lists EVERY appearance
+  // variant in each group: "Head" alone holds a handful of different hoods. Taking all of
+  // them equips 29 pieces for an eight-slot set and lets whichever comes last win. Where
+  // the page marks its groups, take the first entry of each -- that is the set's own piece.
+  QRegularExpression rx("_item-id-(\\d+)_");
+  const QString marker = "data-inventory-type=";
+
+  if (html.contains(marker)) {
+    const QStringList groups = html.split(marker);
+    for (int g = 1; g < groups.size(); ++g) {          // [0] is everything before the first group
+      auto m = rx.match(groups[g]);
+      if (m.hasMatch())
+        ids.push_back(m.captured(1).toInt());
+    }
+  }
+
+  // An outfit is one concrete set of items with no such grouping -- take them all.
+  if (ids.empty()) {
+    auto it = rx.globalMatch(html);
+    while (it.hasNext())
+      ids.push_back(it.next().captured(1).toInt());
+  }
+
+  // Older layouts only link the items; take those if the icons gave nothing.
+  if (ids.empty()) {
+    QRegularExpression alt("/item=(\\d+)");
+    auto it2 = alt.globalMatch(html);
+    while (it2.hasNext())
+      ids.push_back(it2.next().captured(1).toInt());
+  }
+
+  // Preserve order, drop repeats -- a page mentions the same piece several times.
+  std::vector<int> unique;
+  for (int id : ids)
+    if (id > 0 && std::find(unique.begin(), unique.end(), id) == unique.end())
+      unique.push_back(id);
+
+  if (unique.empty())
+    *error = tr("Auf dieser Seite standen keine Gegenstände. Ist es wirklich ein "
+                "gespeichertes Outfit oder ein Transmog-Set?");
+  return unique;
+}
+
+void MenuController::applyItemIds(const std::vector<int>& ids, const QString& label)
+{
+  WoWModel* m = ensureMannequin();
+  if (!m) {
+    QMessageBox::warning(win_, tr("Import"),
+                         tr("Es konnte keine Figur geladen werden, auf der die Teile "
+                            "dargestellt werden können."));
+    return;
+  }
+
+  win_->characterPanel()->clearEquipment();
+
+  int applied = 0, skipped = 0;
+  for (int id : ids) {
+    if (id <= 0)
+      continue;                       // 0 is how an empty slot is written in a list
+    // getById returns a default record for an unknown id, whose slot resolves to -1 and
+    // equipping silently does nothing -- count those instead of pretending they landed.
+    // Copied because ItemRecord::slot() is not const.
+    ItemRecord rec = items.getById(id);
+    if (rec.slot() < 0) {
+      skipped++;
+      continue;
+    }
+    win_->characterPanel()->equip(id);
+    applied++;
+  }
+
+  modelChanged();
+  trace(QString("item list applied: %1 of %2").arg(applied).arg(applied + skipped));
+  win_->setPathLabel(skipped > 0
+    ? tr("%1 — %2 Teile angelegt, %3 nicht zuordenbar").arg(label).arg(applied).arg(skipped)
+    : tr("%1 — %2 Teile angelegt").arg(label).arg(applied));
+}
+
+void MenuController::importWowheadLook()
+{
+  bool ok = false;
+  const QString entered = QInputDialog::getMultiLineText(
+    win_, tr("Wowhead-Look importieren"),
+    tr("Link zu einem gespeicherten Outfit oder Transmog-Set,\n"
+       "oder einfach eine Liste von Item-IDs:\n\n"
+       "  https://www.wowhead.com/outfit=12345\n"
+       "  https://www.wowhead.com/transmog-set=1922\n"
+       "  113861,186285,0,227493,229618"),
+    QString(), &ok);
+  if (!ok || entered.trimmed().isEmpty())
+    return;
+
+  const QString input = entered.trimmed();
+
+  // The dressing room keeps everything behind the '#', and a fragment is never sent to
+  // the server -- there is nothing to fetch. Say that plainly and name the way around it
+  // instead of failing with a network error the user cannot act on.
+  if (input.contains("dressing-room", Qt::CaseInsensitive)) {
+    QMessageBox::information(
+      win_, tr("Anprobe-Link"),
+      tr("Ein Anprobe-Link trägt den gesamten Look hinter dem '#'. Dieser Teil wird "
+         "nie an Wowhead übertragen, er lässt sich also nicht abrufen.\n\n"
+         "Klick in der Anprobe auf \"Speichern\" — daraus wird ein Outfit mit einer "
+         "echten Adresse, und die kann hier importiert werden."));
+    return;
+  }
+
+  std::vector<int> ids;
+  QString label;
+
+  if (input.startsWith("http", Qt::CaseInsensitive)) {
+    QString error;
+    ids = fetchWowheadItemIds(input, &error);
+    if (ids.empty()) {
+      QMessageBox::warning(win_, tr("Wowhead-Import"), error);
+      return;
+    }
+    label = tr("Wowhead-Import");
+  } else {
+    // A plain list: commas, spaces or newlines, and 0 for an empty slot.
+    for (const QString& part : input.split(QRegularExpression("[^0-9-]+"), QString::SkipEmptyParts)) {
+      bool numeric = false;
+      const int id = part.toInt(&numeric);
+      if (numeric)
+        ids.push_back(id);
+    }
+    if (ids.empty()) {
+      QMessageBox::warning(win_, tr("Wowhead-Import"),
+                           tr("Darin stand weder ein Link noch eine Item-ID."));
+      return;
+    }
+    label = tr("Item-Liste");
+  }
+
+  applyItemIds(ids, label);
 }
 
 void MenuController::showSet(int setId)

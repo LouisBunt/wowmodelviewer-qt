@@ -28,6 +28,11 @@ param(
   [string] $QtDir      = "C:/Qt/Qt5.13.2/5.13.2/msvc2017_64",
   [string] $FbxDir     = "C:/Program Files/Autodesk/FBX/FBX SDK/2020.3.9/lib/x64/release",
   [string] $VcRedist   = "C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/VC/Redist/MSVC/14.44.35112/x64/Microsoft.VC143.CRT",
+  # Qt5Network loads OpenSSL lazily. Without these two next to the exe every HTTPS
+  # request fails with a generic transport error -- which breaks the armory, wowhead
+  # and NPC importers. There is no canonical source on a stock machine: install
+  # openssl through vcpkg, or point this at a folder that has them.
+  [string] $OpenSslDir = "",
   [string] $Listfile   = "",
   # The listfile is ~148 MB and dominates both staging time and installer size.
   # Skip it while iterating on the package layout.
@@ -109,6 +114,23 @@ foreach ($f in @("msvcp140.dll", "msvcp140_1.dll", "msvcp140_2.dll",
   Stage (Join-Path $VcRedist $f) $f
 }
 
+# --- OpenSSL, for the importers ----------------------------------------------
+# Not optional any more: the armory, wowhead and NPC imports all make HTTPS requests.
+if (-not $OpenSslDir) {
+  foreach ($cand in @("$Root/../vcpkg/installed/x64-windows/bin",
+                      "$Root/upstream/bin_support/openssl")) {
+    if (Test-Path (Join-Path $cand "libssl-1_1-x64.dll")) { $OpenSslDir = $cand; break }
+  }
+}
+if ($OpenSslDir -and (Test-Path (Join-Path $OpenSslDir "libssl-1_1-x64.dll"))) {
+  foreach ($f in @("libssl-1_1-x64.dll", "libcrypto-1_1-x64.dll")) {
+    Stage (Join-Path $OpenSslDir $f) $f
+  }
+} else {
+  Write-Warning ("OpenSSL not staged -- no libssl-1_1-x64.dll found. The packaged build " +
+                 "will not be able to import from the armory or Wowhead. Pass -OpenSslDir.")
+}
+
 # --- game data definitions ---------------------------------------------------
 # database.xml and the CSVs come from the tracked bin_support tree, never from a
 # build-staging copy: a stale database.xml silently breaks races and customization.
@@ -134,9 +156,5 @@ Write-Host ("staged {0} files, {1:N1} MB" -f $copied, ($bytes / 1MB))
 
 # Deliberately absent, and why:
 #   jpeg62.dll, libpng16.dll   wxWidgets needed these; nothing here imports them
-#   libcrypto/libssl-1_1-x64   Qt5Network loads OpenSSL lazily for HTTPS. The armory
-#                              and wowhead importers are not reachable from the Qt UI
-#                              yet, so nothing makes an HTTPS request. Add them here
-#                              when those importers get wired up.
 #   wowdb.sqlite               a cache the application builds on first run from dbd\.
 #                              Shipping one only risks serving a stale schema.
