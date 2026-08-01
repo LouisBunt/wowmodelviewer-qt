@@ -80,6 +80,7 @@ private:
   void randomiseCharacter();
   void importArmoryCharacter();   // the dialog wrapper around importArmory()
   void importNpcFromUrl();
+  void importWowheadLook();
 
   // --- Hilfe
   void about();
@@ -101,6 +102,14 @@ public slots:
   // with a note rather than showing nothing.
   void showItem(int itemId, bool standalone);
   void showSet(int setId);
+
+  // Item ids out of a Wowhead outfit or transmog-set page. Those are rendered
+  // server-side, so the list is simply in the HTML. Empty with `error` set on failure.
+  std::vector<int> fetchWowheadItemIds(const QString& url, QString* error) const;
+
+  // Equip a list of item ids on the current character, loading a mannequin if there is
+  // none. Shared by the Wowhead import and the headless --wowhead flag.
+  void applyItemIds(const std::vector<int>& ids, const QString& label);
 
 private:
 
