@@ -29,6 +29,7 @@ public:
     QString name;
     GameFile* file = nullptr;         // null for folders
     int fileId = 0;                   // set on race-browser leaves, which carry no GameFile
+    int rank = 0;                     // top-level ordering; equal ranks sort by name
     Node* parent = nullptr;
     std::vector<Node*> children;      // kept sorted: folders first, then by name
     std::map<QString, Node*> byName;  // lookup while building

@@ -1,16 +1,20 @@
 #include "InspectorTabs.h"
 
+#include <QApplication>
 #include <QCheckBox>
 #include <QComboBox>
 #include <QFontDatabase>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QLineEdit>
 #include <QListWidget>
 #include <QPushButton>
 #include <QVBoxLayout>
 
+#include "BlenderAddonInstaller.h"
 #include "ExportController.h"
 #include "GLHost.h"
+#include "MenuController.h"
 #include "WoWModel.h"
 #include "modelheaders.h"
 
@@ -62,85 +66,229 @@ QLabel* sectionLabel(const QString& text)
 }
 }
 
-// --- Material ---------------------------------------------------------------
+// --- Charakter: Import und Export --------------------------------------------
 
-MaterialTab::MaterialTab(QWidget* parent) : QWidget(parent)
+namespace {
+QLineEdit* urlField(const QString& placeholder)
+{
+  auto* e = new QLineEdit;
+  e->setPlaceholderText(placeholder);
+  e->setFont(QFont(uiFamily(), 8));
+  e->setFixedHeight(28);
+  e->setStyleSheet(QString(
+    "QLineEdit { background:%1; border:1px solid %2; border-radius:6px;"
+    " padding:0 8px; color:%3; }"
+    "QLineEdit:focus { border-color:#3a434f; }").arg(kCard).arg(kBord).arg(kText));
+  return e;
+}
+
+QPushButton* accentButton(const QString& text)
+{
+  auto* b = new QPushButton(text);
+  b->setFont(QFont(uiFamily(), 8));
+  b->setCursor(Qt::PointingHandCursor);
+  b->setStyleSheet(QString(
+    "QPushButton { background:%1; border:none; border-radius:7px;"
+    " color:%2; padding:8px 12px; }"
+    "QPushButton:hover { background:#d9b678; }"
+    "QPushButton:disabled { background:#252b34; color:#5f6874; }")
+    .arg(kAccent).arg(kOnAcc));
+  return b;
+}
+
+QPushButton* quietButton(const QString& text)
+{
+  auto* b = new QPushButton(text);
+  b->setFont(QFont(uiFamily(), 8));
+  b->setCursor(Qt::PointingHandCursor);
+  b->setStyleSheet(QString(
+    "QPushButton { background:%1; border:1px solid %2; border-radius:7px;"
+    " color:%3; padding:8px 12px; }"
+    "QPushButton:hover { border-color:#3a434f; }")
+    .arg(kCard).arg(kBord).arg(kSoft));
+  return b;
+}
+}
+
+CharacterIoTab::CharacterIoTab(MenuController* menus, ExportController* exporters,
+                               GLHost* canvas, QWidget* parent)
+  : QWidget(parent), menus_(menus), exporters_(exporters), canvas_(canvas)
 {
   setAttribute(Qt::WA_StyledBackground, true);
   setStyleSheet("background:transparent;");
 
   auto* col = new QVBoxLayout(this);
   col->setContentsMargins(0, 0, 0, 0);
-  col->setSpacing(12);
+  col->setSpacing(10);
 
-  header_ = sectionLabel(QString::fromUtf8("GEOSETS"));
-  col->addWidget(header_);
+  // --- Wowhead
+  col->addWidget(sectionLabel(QString::fromUtf8("WOWHEAD-ANPROBE")));
+  wowheadUrl_ = urlField(QString::fromUtf8("https://www.wowhead.com/dressing-room#…"));
+  col->addWidget(wowheadUrl_);
+  auto* whHint = new QLabel(QString::fromUtf8(
+    "Der Link muss das '#' enthalten — dahinter steckt der ganze Look."));
+  whHint->setFont(QFont(uiFamily(), 8));
+  whHint->setWordWrap(true);
+  whHint->setStyleSheet(QString("color:%1; background:transparent;").arg(kDim));
+  col->addWidget(whHint);
+  auto* whBtn = accentButton(QString::fromUtf8("Anprobe importieren"));
+  connect(whBtn, &QPushButton::clicked, this, &CharacterIoTab::importWowhead);
+  connect(wowheadUrl_, &QLineEdit::returnPressed, this, &CharacterIoTab::importWowhead);
+  col->addWidget(whBtn);
 
-  rows_ = new QVBoxLayout;
-  rows_->setSpacing(4);
-  col->addLayout(rows_);
+  // --- Armory
+  col->addSpacing(4);
+  col->addWidget(sectionLabel(QString::fromUtf8("ARMORY")));
+  armoryUrl_ = urlField(QString::fromUtf8("https://worldofwarcraft.blizzard.com/…"));
+  col->addWidget(armoryUrl_);
+  auto* amBtn = quietButton(QString::fromUtf8("Armory-Charakter importieren"));
+  connect(amBtn, &QPushButton::clicked, this, &CharacterIoTab::importArmory);
+  connect(armoryUrl_, &QLineEdit::returnPressed, this, &CharacterIoTab::importArmory);
+  col->addWidget(amBtn);
 
-  col->addWidget(sectionLabel(QString::fromUtf8("TEXTUREN")));
-  textureInfo_ = new QLabel;
-  textureInfo_->setFont(QFont(monoFamily(), 8));
-  textureInfo_->setStyleSheet(QString("color:%1; background:transparent;").arg(kSoft));
-  textureInfo_->setWordWrap(true);
-  col->addWidget(textureInfo_);
+  // --- Datei
+  col->addSpacing(4);
+  col->addWidget(sectionLabel(QString::fromUtf8("CHARAKTERDATEI")));
+  auto* fileRow = new QHBoxLayout;
+  fileRow->setSpacing(6);
+  auto* loadBtn = quietButton(QString::fromUtf8("Laden"));
+  auto* saveBtn = quietButton(QString::fromUtf8("Speichern"));
+  connect(loadBtn, &QPushButton::clicked, this, [this]() {
+    if (menus_)
+      menus_->loadCharacter();
+  });
+  connect(saveBtn, &QPushButton::clicked, this, [this]() {
+    if (menus_)
+      menus_->saveCharacter();
+  });
+  fileRow->addWidget(loadBtn, 1);
+  fileRow->addWidget(saveBtn, 1);
+  col->addLayout(fileRow);
+
+  // --- Blender
+  col->addSpacing(4);
+  col->addWidget(sectionLabel(QString::fromUtf8("NACH BLENDER")));
+  auto* blHint = new QLabel(QString::fromUtf8(
+    "Schreibt FBX mit Netz, Skelett und Gewichtung. OBJ kann kein Skelett — für "
+    "Blender ist FBX der Weg. Animationen wählst du im Reiter „Export“."));
+  blHint->setFont(QFont(uiFamily(), 8));
+  blHint->setWordWrap(true);
+  blHint->setStyleSheet(QString("color:%1; background:transparent;").arg(kDim));
+  col->addWidget(blHint);
+  auto* blBtn = accentButton(QString::fromUtf8("Als FBX exportieren"));
+  connect(blBtn, &QPushButton::clicked, this, &CharacterIoTab::exportForBlender);
+  col->addWidget(blBtn);
+
+  // One button instead of "find your addons folder" instructions. Re-running it is the
+  // update path too, so the label says both.
+  auto* addonBtn = quietButton(QString::fromUtf8("Blender-Addon installieren/aktualisieren"));
+  connect(addonBtn, &QPushButton::clicked, this, [this]() {
+    const auto r = BlenderAddonInstaller::install();
+    if (!r.error.isEmpty())
+      setStatus(r.error, true);
+    else
+      setStatus(QString::fromUtf8("Addon in %1 Blender-Version(en) installiert. Einmalig "
+                                  "in Blender aktivieren: Edit → Preferences → Add-ons → "
+                                  "\"WoW Model Viewer FBX\".").arg(r.installedVersions),
+                false);
+  });
+  col->addWidget(addonBtn);
+
+  status_ = new QLabel;
+  status_->setFont(QFont(uiFamily(), 8));
+  status_->setWordWrap(true);
+  status_->setStyleSheet(QString("color:%1; background:transparent;").arg(kDim));
+  col->addWidget(status_);
 
   col->addStretch(1);
-  textureInfo_->setText(QString::fromUtf8("—"));
 }
 
-void MaterialTab::setModel(WoWModel* model)
+void CharacterIoTab::setStatus(const QString& text, bool error)
 {
-  model_ = model;
-  rebuild();
+  if (!status_)
+    return;
+  status_->setStyleSheet(QString("color:%1; background:transparent;")
+                           .arg(error ? "#d98b6a" : kSoft));
+  status_->setText(text);
 }
 
-void MaterialTab::rebuild()
+void CharacterIoTab::importWowhead()
 {
-  while (QLayoutItem* item = rows_->takeAt(0)) {
-    if (QWidget* w = item->widget())
-      w->deleteLater();
-    delete item;
+  if (!menus_)
+    return;
+  const QString url = wowheadUrl_->text().trimmed();
+  if (url.isEmpty()) {
+    setStatus(QString::fromUtf8("Bitte zuerst einen Anprobe-Link einsetzen."), true);
+    return;
   }
+  setStatus(QString::fromUtf8("Importiere …"), false);
+  // The import blocks this thread. Without a paint pass the label never appears and the
+  // window simply freezes until the result is in.
+  QApplication::processEvents();
+  // interactive=false: the tab reports into its own status line, so the extra message
+  // box the menu path shows would only be a second thing to click away.
+  const QString err = menus_->importWowheadDressingRoom(url, false);
+  setStatus(err.isEmpty() ? QString::fromUtf8("Charakter übernommen.") : err, !err.isEmpty());
+}
 
-  if (!model_) {
-    header_->setText(QString::fromUtf8("GEOSETS"));
-    textureInfo_->setText(QString::fromUtf8("Kein Modell geladen."));
+void CharacterIoTab::importArmory()
+{
+  if (!menus_)
+    return;
+  const QString url = armoryUrl_->text().trimmed();
+  if (url.isEmpty()) {
+    setStatus(QString::fromUtf8("Bitte zuerst eine Armory-Adresse einsetzen."), true);
+    return;
+  }
+  setStatus(QString::fromUtf8("Frage die Armory ab …"), false);
+  // Same reason as above, and it matters more here: this one waits on the network.
+  QApplication::processEvents();
+  const QString err = menus_->importArmory(url, false);
+  setStatus(err.isEmpty() ? QString::fromUtf8("Charakter übernommen.") : err, !err.isEmpty());
+}
+
+int CharacterIoTab::fbxFormatIndex() const
+{
+  if (!exporters_)
+    return -1;
+  const auto& formats = exporters_->formats();
+  for (size_t i = 0; i < formats.size(); ++i)
+    if (formats[i].label.contains("fbx", Qt::CaseInsensitive) ||
+        formats[i].filter.contains("fbx", Qt::CaseInsensitive))
+      return (int)i;
+  return -1;
+}
+
+void CharacterIoTab::exportForBlender()
+{
+  if (!exporters_ || !canvas_)
+    return;
+  if (!canvas_->model()) {
+    setStatus(QString::fromUtf8("Kein Modell geladen."), true);
     return;
   }
 
-  updating_ = true;
-  int shown = 0;
-  for (size_t i = 0; i < model_->geosets.size(); ++i) {
-    ModelGeosetHD* g = model_->geosets[i];
-    if (!g)
-      continue;
-
-    auto* cb = new QCheckBox(QString("%1  (%2 Dreiecke)")
-                               .arg(g->id).arg(g->icount / 3));
-    cb->setFont(QFont(uiFamily(), 8));
-    cb->setStyleSheet(checkboxStyle());
-    cb->setChecked(g->display);
-    connect(cb, &QCheckBox::toggled, this, [this, g](bool on) {
-      if (updating_ || !model_)
-        return;
-      g->display = on;
-    });
-    rows_->addWidget(cb);
-    if (g->display)
-      ++shown;
+  const int fbx = fbxFormatIndex();
+  if (fbx < 0) {
+    setStatus(QString::fromUtf8("Der FBX-Exporter fehlt. Liegt der Ordner \"plugins\" "
+                                "neben der Anwendung?"), true);
+    return;
   }
-  updating_ = false;
 
-  header_->setText(QString::fromUtf8("GEOSETS · %1 / %2")
-                     .arg(shown).arg(model_->geosets.size()));
+  // Mesh, skeleton and skinning, no animation: that is what makes a character usable in
+  // Blender straight away. Animation stays out on purpose -- it needs a clip selection,
+  // and that is what the Export tab is for.
+  ExportController::Options o;
+  o.mesh = o.skeleton = o.skinning = true;
+  o.animation = false;
+  exporters_->setOptions(o);
 
-  // textures is private on WoWModel; the render passes are the public view of the
-  // same thing and are what actually matters for material inspection.
-  textureInfo_->setText(QString::fromUtf8("%1 Renderdurchgänge")
-                          .arg(model_->passes.size()));
+  const QString err = exporters_->exportModel(canvas_->model(), fbx, this);
+  setStatus(err.isEmpty()
+              ? QString::fromUtf8("FBX geschrieben. In Blender: Seitenleiste (N) → "
+                                  "Reiter \"WMV\" → \"Letzten WMV-Export importieren\".")
+              : err,
+            !err.isEmpty());
 }
 
 // --- Export -----------------------------------------------------------------

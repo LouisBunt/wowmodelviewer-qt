@@ -7,34 +7,48 @@
 
 class ExportController;
 class GLHost;
+class MenuController;
 class WoWModel;
 class QCheckBox;
 class QComboBox;
 class QLabel;
+class QLineEdit;
 class QListWidget;
 class QVBoxLayout;
 
-// The "Material" tab: the model's geosets with visibility checkboxes, and its
-// texture list.
+// The "Charakter" tool button's tab: where a character comes IN and where he goes OUT.
 //
-// The wx geoset tree expressed visibility through the ROW BACKGROUND COLOUR
-// (*wxGREEN) and toggled it on double-click -- unreadable under a dark theme and
-// undiscoverable in any theme. Checkboxes say the same thing plainly.
-class MaterialTab : public QWidget
+// Everything here already existed in the menu bar, and only there -- a menu is where
+// one looks for a command one already knows about, not where one discovers that this
+// program can read a Wowhead link at all. The import fields are the reason this tab
+// exists; loading, saving and the one-click Blender export follow the same character
+// around and belong next to them.
+//
+// Holds no logic of its own: every button calls the MenuController function the menu
+// entry calls, so the two entry points cannot drift apart.
+class CharacterIoTab : public QWidget
 {
   Q_OBJECT
 public:
-  explicit MaterialTab(QWidget* parent = nullptr);
-  void setModel(WoWModel* model);
+  CharacterIoTab(MenuController* menus, ExportController* exporters, GLHost* canvas,
+                 QWidget* parent = nullptr);
 
 private:
-  void rebuild();
+  void importWowhead();
+  void importArmory();
+  void exportForBlender();
+  void setStatus(const QString& text, bool error);
 
-  WoWModel* model_ = nullptr;
-  QVBoxLayout* rows_ = nullptr;
-  QLabel* header_ = nullptr;
-  QLabel* textureInfo_ = nullptr;
-  bool updating_ = false;
+  // Index into ExportController::formats() of the FBX exporter, or -1 when the plugin
+  // is not there -- then the Blender button says so instead of failing on click.
+  int fbxFormatIndex() const;
+
+  MenuController* menus_ = nullptr;
+  ExportController* exporters_ = nullptr;
+  GLHost* canvas_ = nullptr;
+  QLineEdit* wowheadUrl_ = nullptr;
+  QLineEdit* armoryUrl_ = nullptr;
+  QLabel* status_ = nullptr;
 };
 
 // The "Export" tab: format, options, animation clips, and the button.

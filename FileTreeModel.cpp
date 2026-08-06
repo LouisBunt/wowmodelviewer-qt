@@ -11,6 +11,28 @@
 #include "GameFile.h"
 #include "RaceInfos.h"
 
+namespace {
+// The listfile's top level is the raw folder layout of the game: "character" and
+// "creature" sit in it next to "cameras", "interface", "test" and "particles". Someone
+// looking for a model has to know which of those thirteen names is worth opening.
+//
+// So the ones that hold models people actually look for are named in German and put
+// first, in the order they get used; everything else keeps its real name but moves
+// under "Sonstiges", one fold away instead of in the way.
+const struct { const char* folder; const char* label; int rank; } kTopLevels[] = {
+  { "character",    "Charaktere",           0 },
+  { "creature",     "Kreaturen",            1 },
+  { "item",         "Gegenstände",          2 },
+  { "world",        "Welt und Gebäude",     3 },
+  { "environments", "Umgebung",             4 },
+  { "spells",       "Zauber und Effekte",   5 },
+  { "spell",        "Zauber und Effekte",   5 },
+  { "particles",    "Partikel",             6 },
+};
+
+const int kOtherRank = 9;
+}
+
 FileTreeModel::FileTreeModel(QObject* parent)
   : QAbstractItemModel(parent), root_(new Node)
 {
@@ -30,8 +52,18 @@ int FileTreeModel::rebuild(const QString& extensionFilter, const QString& search
 
   // Same query the wx file control used: a regex over the full path, anchored on
   // the extension.
+  //
+  // A search that is nothing but digits means the FileDataID, not a path fragment --
+  // the ids are no longer printed next to the names, so this is how one stays
+  // reachable. The regex cannot express it (the id is not part of the path), so the
+  // extension filter runs wide and the id is matched per file below.
   const QString needle = search.trimmed().toLower();
-  const QString pattern = "^.*" + QRegularExpression::escape(needle) + ".*\\." + extensionFilter;
+  const bool byFileId = !needle.isEmpty() &&
+                        QRegularExpression("^\\d+$").match(needle).hasMatch();
+  const uint wantedId = byFileId ? needle.toUInt() : 0;
+  const QString pattern = byFileId
+    ? ("^.*\\." + extensionFilter)
+    : ("^.*" + QRegularExpression::escape(needle) + ".*\\." + extensionFilter);
 
   std::set<GameFile*> files;
   GAMEDIRECTORY.getFilteredFiles(files, const_cast<QString&>(pattern));
@@ -53,27 +85,52 @@ int FileTreeModel::rebuild(const QString& extensionFilter, const QString& search
       continue;
     if (category_ == Items && !full.startsWith("item/", Qt::CaseInsensitive))
       continue;
+    if (byFileId && f->fileDataId() != wantedId)
+      continue;
     ++kept;
 
+    const auto childNamed = [](Node* p, const QString& name, int rank) {
+      auto it = p->byName.find(name);
+      if (it != p->byName.end())
+        return it->second;
+      Node* child = new Node;
+      child->name = name;
+      child->rank = rank;
+      child->parent = p;
+      p->children.push_back(child);
+      p->byName[name] = child;
+      return child;
+    };
+
     Node* cur = root_;
-    for (int i = 0; i < parts.size() - 1; ++i) {
-      auto it = cur->byName.find(parts[i]);
-      Node* child;
-      if (it == cur->byName.end()) {
-        child = new Node;
-        child->name = parts[i];
-        child->parent = cur;
-        cur->children.push_back(child);
-        cur->byName[parts[i]] = child;
+
+    // The first path segment is the one that gets renamed or tucked away; everything
+    // below it keeps the game's own names, which are the ones people recognise once
+    // they are in the right branch.
+    int firstPart = 0;
+    if (parts.size() > 1) {
+      const QString top = parts[0].toLower();
+      const auto* known = std::find_if(
+        std::begin(kTopLevels), std::end(kTopLevels),
+        [&top](const auto& e) { return top == QString::fromLatin1(e.folder); });
+
+      if (known != std::end(kTopLevels)) {
+        cur = childNamed(cur, QString::fromUtf8(known->label), known->rank);
+        firstPart = 1;                 // its real name is now the heading
       } else {
-        child = it->second;
+        cur = childNamed(cur, QString::fromUtf8("Sonstiges"), kOtherRank);
       }
-      cur = child;
     }
 
+    for (int i = firstPart; i < parts.size() - 1; ++i)
+      cur = childNamed(cur, parts[i], 0);
+
     Node* leaf = new Node;
-    // Show the file id alongside the name, as the wx tree did.
-    leaf->name = QString("%1  [%2]").arg(parts.last()).arg(f->fileDataId());
+    // Just the file name. The wx tree printed the FileDataID next to it, which put a
+    // number nobody reads in front of every single row; it lives in the tooltip now
+    // and a digits-only search still finds a file by it.
+    leaf->name = parts.last();
+    leaf->fileId = (int)f->fileDataId();
     leaf->file = f;
     leaf->parent = cur;
     cur->children.push_back(leaf);
@@ -146,6 +203,8 @@ int FileTreeModel::buildRaceBrowser(const QString& search)
 void FileTreeModel::sortRecursive(Node* n)
 {
   std::sort(n->children.begin(), n->children.end(), [](const Node* a, const Node* b) {
+    if (a->rank != b->rank)
+      return a->rank < b->rank;           // the curated top level, in its own order
     if (a->isFolder() != b->isFolder())
       return a->isFolder();               // folders first
     return a->name.compare(b->name, Qt::CaseInsensitive) < 0;
@@ -229,6 +288,10 @@ QVariant FileTreeModel::data(const QModelIndex& index, int role) const
   switch (role) {
     case Qt::DisplayRole:
       return n->name;
+    case Qt::ToolTipRole:
+      // Where the FileDataID went when it left the row label. Folders have none.
+      return n->isFolder() ? QVariant()
+                           : QVariant(QString::fromUtf8("FileDataID %1").arg(n->fileId));
     case Qt::ForegroundRole:
       // Folders muted, files in the normal text colour -- the design's hierarchy cue.
       return n->isFolder() ? QColor("#8a93a0") : QColor("#e8eaee");
