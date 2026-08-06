@@ -144,6 +144,11 @@ if ($SkipListfile) {
   Stage $Listfile "listfile.csv"
 }
 
+# --- Blender add-on ----------------------------------------------------------
+# Shipped next to the exe so the in-app installer button (BlenderAddonInstaller) has a
+# source to copy from. Without this the button only worked from a development checkout.
+StageTree (Join-Path $upstream "blender_addon\io_import_wmv_fbx") "blender_addon\io_import_wmv_fbx"
+
 # --- documentation -----------------------------------------------------------
 # GPLv3: the licence travels with the binary, not just with the source.
 Stage (Join-Path $Root "LICENSE") "LICENSE.txt"

@@ -62,6 +62,10 @@ add_executable(WoWModelViewer-Qt WIN32
   TimelinePanel.h
   FileTreeModel.cpp
   FileTreeModel.h
+  WowheadDressingRoom.cpp
+  WowheadDressingRoom.h
+  BlenderAddonInstaller.cpp
+  BlenderAddonInstaller.h
   ${WMV_SRC}/Source/wowmodelviewer/OrbitCamera.cpp)
 
 set_target_properties(WoWModelViewer-Qt PROPERTIES OUTPUT_NAME "WoWModelViewer-Qt")
