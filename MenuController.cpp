@@ -1104,15 +1104,7 @@ QString MenuController::importWowheadDressingRoom(const QString& rawUrl, bool in
 {
   WowheadCharacter chr;
   QString error;
-  // Lets the decoder resolve an ambiguous slot marker: it tries both readings and keeps
-  // the one naming an item this client actually has.
-  const auto isKnownItem = [](int id) {
-    if (id <= 0)
-      return false;
-    ItemRecord rec = items.getById(id);   // copied -- ItemRecord::slot() is not const
-    return rec.slot() >= 0;
-  };
-  if (!wowhead_parse_dressing_room(rawUrl, &chr, &error, isKnownItem)) {
+  if (!wowhead_parse_dressing_room(rawUrl, &chr, &error)) {
     trace("=== wowhead dressing room FAILED: " + error);
     return error;
   }

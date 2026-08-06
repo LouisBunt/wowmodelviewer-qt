@@ -1,7 +1,5 @@
 #include "WowheadDressingRoom.h"
 
-#include <algorithm>
-
 #include <QObject>
 #include <QRegularExpression>
 #include <QStringList>
@@ -10,30 +8,23 @@
 
 namespace {
 
-// Wowhead's base-58 alphabet. Position in this string IS the digit value, so the order
-// matters and it cannot be sorted or shortened.
+// Wowhead's encoding alphabet, taken verbatim from their hash engine
+// (WH.calc.hash.getEncoding()). '7', '8' and '9' ARE part of the alphabet but never
+// appear in values -- they are the delimiters: '8' separates fields, '7' escapes runs
+// of empty fields, '9' escapes runs of zero characters. Values are base 58
+// (WH.calc.hash.getMaxEncodingIndex()), so digits only ever go up to index 58.
 int charValue(QChar c)
 {
   static const QString charset =
-    QStringLiteral("0zMcmVokRsaqbdrfwihuGINALpTjnyxtgevElBCDFHJKOPQSUWXYZ123456");
+    QStringLiteral("0zMcmVokRsaqbdrfwihuGINALpTjnyxtgevElBCDFHJKOPQSUWXYZ123456789");
   return charset.indexOf(c);
 }
 
-// A number in Wowhead's base-58, least significant character LAST.
-//
-// Mirrors wow.export's decode(): an empty string is 0, and a string containing a
-// character outside the alphabet is 0 rather than an error -- the callers treat
-// "0" as "nothing in this slot" anyway.
+// Base-58 number, least significant character last (WH.calc.decode.longValue).
 int decodeNumber(const QString& s)
 {
-  if (s.isEmpty())
-    return 0;
-  if (s.length() == 1)
-    return charValue(s.at(0));
-
   int result = 0;
   for (int i = 0; i < s.length(); ++i) {
-    // Reverse order: the last character is the units digit.
     const int value = charValue(s.at(s.length() - 1 - i));
     if (value < 0)
       return 0;
@@ -45,36 +36,45 @@ int decodeNumber(const QString& s)
   return result;
 }
 
-// Runs of empty segments are stored as '9' followed by one character giving the count.
-// Expanding them back to literal "08" pairs is what makes the segment indices line up.
-QString decompressZeros(const QString& s)
+// Undo Wowhead's two compression escapes, mirroring WH.calc.decode.zeroDelimiters and
+// WH.calc.decode.zeroes:
+//
+//   '7'...'7' X  ->  N empty fields ("08" repeated),  N = idx(X) + (#7s - 1) * 58
+//   '9'...'9' X  ->  N literal '0' characters,        N = idx(X) + (#9s - 1) * 58
+//
+// The repeated-escape form is how runs longer than 58 are written; a decoder that
+// reads only single-escape runs (as wow.export's does) drifts by 58 fields on any
+// character with more than 58 consecutive empty values -- which is every character
+// that uses fewer than half of the 50 customization pairs.
+QString expandEscape(const QString& s, QChar escape, const QString& replacement)
 {
   QString out;
   out.reserve(s.length());
-  for (int i = 0; i < s.length(); ++i) {
-    if (s.at(i) == '9' && i + 1 < s.length()) {
-      const int count = charValue(s.at(i + 1));
-      if (count >= 0) {
-        for (int n = 0; n < count; ++n)
-          out += "08";
-        ++i;                  // the count character is consumed
-        continue;
-      }
-      // Unknown count character: keep the pair verbatim, exactly as the JS regex does
-      // when indexOf() returns -1.
+  for (int i = 0; i < s.length();) {
+    if (s.at(i) != escape) {
       out += s.at(i);
-      out += s.at(i + 1);
       ++i;
       continue;
     }
-    out += s.at(i);
+    int escapes = 0;
+    while (i < s.length() && s.at(i) == escape) {
+      ++escapes;
+      ++i;
+    }
+    if (i >= s.length())
+      break;                        // trailing escape without a count -- drop it
+    const int count = charValue(s.at(i)) + (escapes - 1) * 58;
+    ++i;
+    for (int n = 0; n < count; ++n)
+      out += replacement;
   }
   return out;
 }
 
-// Wowhead numbers the dressing room's visible slots 1..13 in display order. This is
-// that order expressed in WMV's CharSlots, derived by composing wow.export's two
-// tables (WOWHEAD_SLOT_TO_SLOT_ID and WMV_SLOT_TO_SLOT_ID).
+// Wowhead's dressing-room slots 1..14 in WMV's CharSlots. 14 is the second off-hand
+// position the dressing room offers; it has no own CharSlots home, and like every
+// other entry this is only the FALLBACK -- the importer places items by what the item
+// database says the item is, not by where the hash listed it.
 int charSlotForWowheadSlot(int whSlot)
 {
   switch (whSlot) {
@@ -91,176 +91,93 @@ int charSlotForWowheadSlot(int whSlot)
     case 11: return CS_BOOTS;
     case 12: return CS_HAND_RIGHT;
     case 13: return CS_HAND_LEFT;
+    case 14: return CS_HAND_LEFT;
     default: return -1;
   }
 }
 
-QString segment(const QStringList& segments, int index)
+QString field(const QStringList& fields, int index)
 {
-  return (index >= 0 && index < segments.size()) ? segments.at(index) : QString();
+  return (index >= 0 && index < fields.size()) ? fields.at(index) : QString();
 }
 
 int charAtValue(const QString& s, int index)
 {
-  return (index < s.length()) ? charValue(s.at(index)) : charValue(QChar('0'));
+  return (index >= 0 && index < s.length()) ? charValue(s.at(index)) : 0;
 }
 
-// The current layout (version >= 15). Customizations and equipment are no longer at
-// fixed segment indices; equipment starts at the first segment marked with a '7'.
-void parseV15(const QStringList& segments, int version, WowheadCharacter* out,
-              const WowheadItemValidator& isKnownItem)
+// The v15 layout, replicated from Wowhead's own hash template
+// (WH.Wow.DressingRoom.getHashTemplate()). The format is strictly POSITIONAL: after
+// expanding the two escapes, the fields separated by '8' are, in order:
+//
+//   [0]      race
+//   [1]      gender, class, spec (one char each) + level (rest of the field)
+//   [2]      npcOptions, pepe (one char each) + mount (rest of the field)
+//   [3..102] 50 customization pairs: optionId, choiceId
+//   [103..]  equipment slots 1..14: itemId, itemBonus -- slots 12 and 13 additionally
+//            carry an enchant field
+//   then     artifact appearances and separateShoulders (unused here)
+//
+// There are no slot markers and no per-slot layout variation; earlier decoders
+// (wow.export's, and ours ported from it) misread the '7'/'9' escapes as markers,
+// which happened to work on hashes with short zero runs and scrambled everything else.
+void parseV15(const QStringList& fields, int version, WowheadCharacter* out)
 {
   out->version = version;
-  out->race = decodeNumber(segment(segments, 0));
+  out->race = decodeNumber(field(fields, 0));
 
-  const QString combined = segment(segments, 1);
-  out->gender  = charAtValue(combined, 0);
-  out->classId = charAtValue(combined, 1);
-  out->spec    = charAtValue(combined, 2);
-  out->level   = decodeNumber(combined.mid(3));
+  const QString header = field(fields, 1);
+  out->gender  = charAtValue(header, 0);
+  out->classId = charAtValue(header, 1);
+  out->spec    = charAtValue(header, 2);
+  out->level   = decodeNumber(header.mid(3));
 
-  int equipStart = -1;
-  for (int i = 6; i < segments.size(); ++i) {
-    if (!segments.at(i).isEmpty() && segments.at(i).startsWith('7')) {
-      equipStart = i;
-      break;
-    }
+  for (int pair = 0; pair < 50; ++pair) {
+    const int choiceId = decodeNumber(field(fields, 4 + pair * 2));
+    if (choiceId != 0)
+      out->customizationChoices.push_back((unsigned int)choiceId);
   }
 
-  // Customizations sit between the header and the equipment block, as
-  // (unused, choiceID) pairs.
-  if (equipStart > 6) {
-    for (int i = 6; i < equipStart; i += 2) {
-      const int choiceId = decodeNumber(segment(segments, i + 1));
-      if (choiceId != 0)
-        out->customizationChoices.push_back((unsigned int)choiceId);
-    }
-  }
-
-  if (equipStart < 0)
-    return;
-
-  // With the game database at hand, the equipment block does not have to be walked by
-  // Wowhead's own bookkeeping at all -- and it should not be. That bookkeeping relies
-  // on marker bytes of unknown width and on knowing how many filler fields follow each
-  // slot, and on a real link it both mis-slotted gloves and swallowed the second
-  // weapon. Instead: read every segment, and treat as an item exactly those that name
-  // a real, equippable item. The filler fields (enchant and illusion ids) are not
-  // equippable, so they fall out on their own.
-  if (isKnownItem) {
-    int whSlot = 1;
-    for (int i = equipStart; i < segments.size(); ++i) {
-      QString seg = segments.at(i);
-      bool hadMarker = false;
-
-      if (seg.startsWith('7') && seg.length() >= 2) {
-        hadMarker = true;
-        const int markerVal = charValue(seg.at(1));
-        if (markerVal >= 0 && markerVal <= 12)
-          whSlot = markerVal + 1;
-        seg = seg.mid(2);
-        // The marker is normally one character ("7V<item>") but has been seen taking
-        // two ("77i<item>"). Keep whichever reading names a real item.
-        if (seg.length() > 1 && !isKnownItem(decodeNumber(seg)) &&
-            isKnownItem(decodeNumber(seg.mid(1))))
-          seg = seg.mid(1);
-      }
-
-      if (seg.isEmpty())
-        continue;
-
-      const int value = decodeNumber(seg);
-      if (value > 0 && isKnownItem(value)) {
-        out->equipment.push_back({charSlotForWowheadSlot(whSlot), value, 0});
-        ++whSlot;
-      } else if (value > 0 && !hadMarker && !out->equipment.empty() &&
-                 out->equipment.back().bonusId == 0) {
-        // The first non-item value after an item is its bonus-list id -- the colour
-        // (verified against Wowhead: item pages render the matching difficulty tint
-        // for ?bonus=<this value>). Only the first: weapons carry a second trailing
-        // field (enchant slot) that must not overwrite it, and a value behind a slot
-        // marker belongs to the NEXT item's context, never to the previous one.
-        out->equipment.back().bonusId = value;
-      }
-    }
-    return;
-  }
-
-  // No database to check against (unit tests, and any caller that has not mounted the
-  // game data yet): fall back on Wowhead's own counting, which is right often enough
-  // to be useful and is all there is.
-  int segIdx = equipStart;
-  int whSlot = 1;
-  while (segIdx < segments.size() && whSlot <= 13) {
-    QString seg = segment(segments, segIdx);
-
-    // A '7' marker restarts the slot numbering, which is how skipped slots stay in
-    // sync. How many characters the marker occupies is NOT reliably known: normally
-    // one ("7V<item>"), but a real link has been seen carrying two ("77i<item>"), and
-    // stripping the usual one then leaves a junk id where the item should be. So when
-    // the caller can tell a real item from a junk one, try the longer marker too and
-    // keep whichever reading names an item that actually exists.
-    if (seg.startsWith('7') && seg.length() >= 2) {
-      const int markerVal = charValue(seg.at(1));
-      if (markerVal >= 0 && markerVal <= 12)
-        whSlot = markerVal + 1;
-
-      QString payload = seg.mid(2);
-      if (isKnownItem && payload.length() > 1 && !isKnownItem(decodeNumber(payload)) &&
-          isKnownItem(decodeNumber(payload.mid(1))))
-        payload = payload.mid(1);
-      seg = payload;
-    }
-
-    if (seg.isEmpty()) {
-      ++segIdx;
-      continue;
-    }
-
-    const int itemId = decodeNumber(seg);
+  int index = 103;
+  for (int whSlot = 1; whSlot <= 14; ++whSlot) {
+    const int itemId = decodeNumber(field(fields, index++));
+    const int bonusId = decodeNumber(field(fields, index++));
+    if (whSlot == 12 || whSlot == 13)
+      ++index;                      // enchant/illusion -- nothing to render it with
     if (itemId > 0)
-      out->equipment.push_back({charSlotForWowheadSlot(whSlot), itemId});
-
-    // Each item is followed by trailing data (enchant/illusion, and a second field on
-    // the weapon slots) that we do not use but have to step over.
-    ++segIdx;
-    if (segIdx < segments.size() && !segments.at(segIdx).startsWith('7'))
-      ++segIdx;
-    if (whSlot >= 12 && segIdx < segments.size() && !segments.at(segIdx).startsWith('7'))
-      ++segIdx;
-    ++whSlot;
+      out->equipment.push_back({whSlot, charSlotForWowheadSlot(whSlot), itemId, bonusId});
   }
 }
 
-// Pre-15 hashes: everything is at a fixed segment index.
+// Pre-15 hashes: everything at a fixed segment index. Kept as ported from wow.export;
+// links this old have no bonus data to carry.
 void parseLegacy(const QStringList& segments, int version, WowheadCharacter* out)
 {
   out->version = version;
-  out->race = decodeNumber(segment(segments, 0));
+  out->race = decodeNumber(field(segments, 0));
 
-  const QString header = segment(segments, 1);
+  const QString header = field(segments, 1);
   out->gender  = charAtValue(header, 0);
   out->classId = charAtValue(header, 1);
   out->spec    = charAtValue(header, 2);
   out->level   = decodeNumber(header.mid(3));
 
   for (int i = 3; i <= 30; ++i) {
-    const int value = decodeNumber(segment(segments, i));
+    const int value = decodeNumber(field(segments, i));
     if (value != 0)
       out->customizationChoices.push_back((unsigned int)value);
   }
 
-  // Only the slots the old format stored, at their fixed indices.
   const struct { int segIdx; int whSlot; } kLegacySlots[] = {
     { 31, 1 }, { 33, 2 }, { 35, 3 }, { 37, 4 },
     { 38, 8 }, { 40, 9 }, { 42, 10 }, { 44, 11 }
   };
   for (const auto& entry : kLegacySlots) {
-    const QString seg = segment(segments, entry.segIdx);
-    // The legacy segments carry a suffix we do not use; the id is the last 4 digits.
-    const int itemId = decodeNumber(seg.mid(std::max(0, seg.length() - 4)));
+    const QString seg = field(segments, entry.segIdx);
+    const int itemId = decodeNumber(seg.right(4));
     if (itemId > 0)
-      out->equipment.push_back({charSlotForWowheadSlot(entry.whSlot), itemId});
+      out->equipment.push_back(
+        {entry.whSlot, charSlotForWowheadSlot(entry.whSlot), itemId, 0});
   }
 }
 
@@ -271,8 +188,7 @@ bool wowhead_is_dressing_room_url(const QString& url)
   return url.contains("dressing-room", Qt::CaseInsensitive);
 }
 
-bool wowhead_parse_dressing_room(const QString& url, WowheadCharacter* out, QString* error,
-                                 const WowheadItemValidator& isKnownItem)
+bool wowhead_parse_dressing_room(const QString& url, WowheadCharacter* out, QString* error)
 {
   const auto fail = [error](const QString& msg) {
     if (error)
@@ -286,20 +202,22 @@ bool wowhead_parse_dressing_room(const QString& url, WowheadCharacter* out, QStr
     return fail(QObject::tr("In diesem Link steht kein Anprobe-Code hinter dem '#'."));
 
   const QString hash = match.captured(1);
-  if (hash.isEmpty())
-    return fail(QObject::tr("In diesem Link steht kein Anprobe-Code hinter dem '#'."));
-
   const int version = charValue(hash.at(0));
   if (version < 0)
     return fail(QObject::tr("Der Anprobe-Code beginnt mit einem unbekannten Zeichen."));
 
-  const QStringList segments = decompressZeros(hash.mid(1)).split('8');
+  // Escape expansion order does not matter: the two escapes rewrite disjoint patterns
+  // and neither produces the other's escape character.
+  const QString expanded =
+    expandEscape(expandEscape(hash.mid(1), QChar('7'), QStringLiteral("08")),
+                 QChar('9'), QStringLiteral("0"));
+  const QStringList fields = expanded.split(QChar('8'));
 
   WowheadCharacter parsed;
   if (version >= 15)
-    parseV15(segments, version, &parsed, isKnownItem);
+    parseV15(fields, version, &parsed);
   else
-    parseLegacy(segments, version, &parsed);
+    parseLegacy(fields, version, &parsed);
 
   if (parsed.race <= 0)
     return fail(QObject::tr("Aus dem Anprobe-Code ließ sich keine Rasse lesen. "
