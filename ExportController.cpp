@@ -1,11 +1,40 @@
 #include "ExportController.h"
 
+#include <QDir>
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QSaveFile>
 
 #include "ExporterPlugin.h"
 #include "PluginManager.h"
 #include "WoWModel.h"
+
+namespace {
+// Where the Blender add-on's "Letzten WMV-Export importieren" button looks. The path
+// is the whole contract -- no IPC, both sides just hardcode it (add-on counterpart:
+// blender_addon/io_import_wmv_fbx/__init__.py, _last_export_path()). wow.export has
+// shipped this exact mechanism for years.
+QString lastExportFilePath()
+{
+  QString base = qEnvironmentVariable("LOCALAPPDATA");
+  if (base.isEmpty())
+    base = QDir::homePath();
+  return base + "/WMVMidnight/last_export.txt";
+}
+
+// One "FBX:<absolute path>" line. QSaveFile so the add-on can never read a half-written
+// file: the content appears atomically or not at all.
+void recordLastExport(const QString& fbxPath)
+{
+  const QString file = lastExportFilePath();
+  QDir().mkpath(QFileInfo(file).absolutePath());
+  QSaveFile out(file);
+  if (!out.open(QIODevice::WriteOnly | QIODevice::Truncate))
+    return;                       // a missing handshake only costs the one-click import
+  out.write(("FBX:" + QFileInfo(fbxPath).absoluteFilePath() + "\n").toUtf8());
+  out.commit();
+}
+}
 
 ExportController::ExportController(QObject* parent) : QObject(parent)
 {
@@ -77,6 +106,13 @@ QString ExportController::exportTo(WoWModel* model, int formatIndex, const QStri
     const QString why = QString::fromStdWString(f.plugin->lastError());
     return why.isEmpty() ? QObject::tr("Export fehlgeschlagen (kein Grund gemeldet).") : why;
   }
+
+  // FBX only: the handshake exists for the Blender add-on, and that imports FBX. Done
+  // here rather than in a caller because every export route -- dialog, character tab,
+  // --export -- funnels through this function.
+  if (f.label.contains("fbx", Qt::CaseInsensitive) ||
+      f.filter.contains("fbx", Qt::CaseInsensitive))
+    recordLastExport(path);
 
   return QString();
 }

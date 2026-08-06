@@ -114,4 +114,6 @@ als Experiment zu machen und danach zu entscheiden.
 
 - `C:\Users\braun\wmv-src` — Upstream-Quellcode mit Mag'har-Fix (PR #17) und Dark Theme
 - `C:\Users\braun\wmv-qt-proto` — statischer Design-Prototyp (Attrappe, keine Daten)
-- `C:\Users\braun\wmv-qt` — dieser Umbau
+- `D:\CLAUDE\ModelViewer` — dieser Umbau (bis August 2026 unter `C:\Users\braun\wmv-qt`)
+- `D:\CLAUDE\ModelViewer-test` — Testinstallation mit Spieldaten (listfile, wowdb, dbd, games)
+- `D:\CLAUDE\ModelViewer-release` — fertige EXE-Pakete

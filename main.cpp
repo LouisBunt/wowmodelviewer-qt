@@ -27,6 +27,7 @@
 #include <QVBoxLayout>
 
 #include "GLHost.h"
+#include "BlenderAddonInstaller.h"
 #include "CharacterPanel.h"
 #include "ExportController.h"
 #include "InspectorTabs.h"
@@ -406,6 +407,29 @@ int main(int argc, char** argv)
     }
   }
 
+  // --install-blender-addon copies the bundled add-on into every Blender profile, the
+  // same as the button in the character tab -- scriptable, so the install path can be
+  // verified against a scratch APPDATA without clicking.
+  for (int i = 1; i < argc; ++i) {
+    if (QString(argv[i]) == "--install-blender-addon") {
+      const auto r = BlenderAddonInstaller::install();
+      trace(r.error.isEmpty()
+              ? QString("blender addon installed into %1 version(s)").arg(r.installedVersions)
+              : QString("blender addon install FAILED: %1").arg(r.error));
+    }
+  }
+
+  // --tab <0..3> opens an inspector tab (0 Anpassen, 1 Charakter, 2 Licht, 3 Export).
+  // Same purpose as --category: a tab that can only be reached by clicking cannot be
+  // checked from a script. Applied late, so it wins over the default tab.
+  for (int i = 1; i < argc - 1; ++i) {
+    if (QString(argv[i]) == "--tab") {
+      const int tab = QString::fromLocal8Bit(argv[i + 1]).toInt();
+      QTimer::singleShot(0, win, [win, tab]() { win->setInspectorTab(tab); });
+      trace(QString("inspector tab set to %1").arg(tab));
+    }
+  }
+
   QObject::connect(win, &MainWindow::fileIdActivated, [win](int id) {
     if (GameFile* f = GAMEDIRECTORY.getFile((uint)id))
       emit win->fileActivated(f);
@@ -440,12 +464,19 @@ int main(int argc, char** argv)
     // creatures and props resolve raceID == -1 and are left alone.
     win->characterPanel()->setModel(isCharacter ? m : nullptr);
     win->timeline()->setModel(m);
-    win->materialTab()->setModel(m);
+    // Geosets are not character-only, so they get every model -- including the
+    // creature that just made characterPanel()->setModel() a null above.
+    win->characterPanel()->setGeosetModel(m);
   };
   QObject::connect(win, &MainWindow::fileActivated, win, showModel);
 
-  if (win->characterPanel())
+  if (win->characterPanel()) {
     win->characterPanel()->setModel(model && model->infos.raceID != -1 ? model : nullptr);
+    // The model loaded at startup went through this path, not showModel(), so it never
+    // reached the geoset list -- the section came up empty until the user opened a
+    // second model. Same omission the old Material tab had.
+    win->characterPanel()->setGeosetModel(model);
+  }
   if (win->timeline())
     win->timeline()->setModel(model);
 
@@ -478,6 +509,10 @@ int main(int argc, char** argv)
   auto* menus = new MenuController(win, host, exporters, win);
   QObject::connect(menus, &MenuController::loadFileRequested, menus, showModel);
   menus->build();
+
+  // The character tab delegates every button to the menu controller, so it can only be
+  // built once that exists.
+  win->characterIoHost()->layout()->addWidget(new CharacterIoTab(menus, exporters, host));
   // Connected after showModel, so by the time the menu re-reads the state the panels
   // already hold the new model.
   QObject::connect(win, &MainWindow::fileActivated, menus,
@@ -509,6 +544,18 @@ int main(int argc, char** argv)
     const QString err = menus->importArmory(url, false);
     trace(err.isEmpty() ? QString("armory import OK: %1").arg(url)
                         : QString("armory import FAILED: %1").arg(err));
+  }
+
+  // --dressing-room <url> does the same for a Wowhead anprobe link. Quote it on the
+  // command line: the '#' that carries the whole look also starts a comment in most
+  // shells, and an unquoted link arrives here truncated to "…/dressing-room".
+  for (int i = 1; i < argc - 1; ++i) {
+    if (QString(argv[i]) != "--dressing-room")
+      continue;
+    const QString url = QString::fromLocal8Bit(argv[i + 1]);
+    const QString err = menus->importWowheadDressingRoom(url, false);
+    trace(err.isEmpty() ? QString("dressing room import OK: %1").arg(url)
+                        : QString("dressing room import FAILED: %1").arg(err));
   }
 
   // --clips <id>[,<id>...] selects animation clips for the export below, by the same
