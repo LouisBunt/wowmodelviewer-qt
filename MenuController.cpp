@@ -1163,6 +1163,22 @@ QString MenuController::importWowheadDressingRoom(const QString& rawUrl, bool in
     }
 
     info->equipment[slot] = entry.itemId;
+
+    // The colour. A tier piece's Raid Finder/Heroic/Mythic tints share ONE item id;
+    // the hash's bonus-list id picks the tint via its type-7 entry
+    // (ItemAppearanceModifierID), which is exactly what WoWItem::setModifierId eats.
+    // No bonus, or a bonus without a type-7 entry (ilvl-only bonuses), means the
+    // Normal look -- modifier 0, which the slot already holds.
+    if (entry.bonusId > 0) {
+      sqlResult bonus = GAMEDATABASE.sqlQuery(
+        QString("SELECT Value1 FROM ItemBonus WHERE ParentItemBonusListID = %1 AND Type = 7")
+          .arg(entry.bonusId));
+      if (bonus.valid && !bonus.values.empty() && !bonus.values[0].empty())
+        info->itemModifierIds[slot] = bonus.values[0][0].toInt();
+      trace(QString("  item %1: bonus %2 -> appearance modifier %3")
+              .arg(entry.itemId).arg(entry.bonusId).arg(info->itemModifierIds[slot]));
+    }
+
     trace(QString("  item %1 -> CharSlots %2 (%3; wowhead said %4)")
             .arg(entry.itemId).arg(slot)
             .arg(fromDatabase ? "from the item database" : "wowhead position, item unknown")
