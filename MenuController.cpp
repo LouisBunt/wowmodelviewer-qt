@@ -36,6 +36,7 @@
 #include "ExportController.h"
 #include "GLHost.h"
 #include "MainWindow.h"
+#include "WowheadDressingRoom.h"
 
 #include "CharDetails.h"
 #include "CharInfos.h"
@@ -187,6 +188,8 @@ void MenuController::build()
       &MenuController::importArmoryCharacter);
   add(characterMenu_, tr("NPC von URL importieren …"), QString(),
       &MenuController::importNpcFromUrl);
+  add(characterMenu_, tr("Wowhead-Anprobe importieren …"), QString(),
+      &MenuController::importWowheadDressingRoomDialog);
   add(characterMenu_, tr("Wowhead-Look importieren …"), QString(),
       &MenuController::importWowheadLook);
   characterMenu_->addSeparator();
@@ -639,16 +642,13 @@ void MenuController::importWowheadLook()
 
   const QString input = entered.trimmed();
 
-  // The dressing room keeps everything behind the '#', and a fragment is never sent to
-  // the server -- there is nothing to fetch. Say that plainly and name the way around it
-  // instead of failing with a network error the user cannot act on.
-  if (input.contains("dressing-room", Qt::CaseInsensitive)) {
-    QMessageBox::information(
-      win_, tr("Anprobe-Link"),
-      tr("Ein Anprobe-Link trägt den gesamten Look hinter dem '#'. Dieser Teil wird "
-         "nie an Wowhead übertragen, er lässt sich also nicht abrufen.\n\n"
-         "Klick in der Anprobe auf \"Speichern\" — daraus wird ein Outfit mit einer "
-         "echten Adresse, und die kann hier importiert werden."));
+  // A dressing-room link carries the whole look behind the '#', so there is nothing to
+  // fetch -- it is decoded locally instead. It also carries race, gender and the
+  // customizations, so it goes to the full character import rather than the item path.
+  if (wowhead_is_dressing_room_url(input)) {
+    const QString err = importWowheadDressingRoom(input, true);
+    if (!err.isEmpty())
+      QMessageBox::warning(win_, tr("Wowhead-Anprobe"), err);
     return;
   }
 
@@ -937,6 +937,12 @@ QString MenuController::importArmory(const QString& rawUrl, bool interactive)
               "erreichbar. Liegt der Ordner \"plugins\" neben der Anwendung?");
   }
 
+  return applyCharInfos(result, interactive, tr("Armory-Import"));
+}
+
+QString MenuController::applyCharInfos(CharInfos* result, bool interactive,
+                                       const QString& label)
+{
   if (!result->valid) {
     const QString msg = result->errorMessage.empty()
       ? tr("Der Link konnte nicht ausgewertet werden. Er muss auf eine Charakterseite "
@@ -975,7 +981,7 @@ QString MenuController::importArmory(const QString& rawUrl, bool interactive)
   // because the by-file lookup cannot tell them apart (Mag'har vs Orc, Gilnean vs
   // Human, ...). Stamp the race we actually imported, or the character keeps the host
   // race's texture layout and none of the imported choices resolve.
-  trace(QString("armory race=%1 sex=%2 -> modelFileID=%3; model resolved raceID=%4 "
+  trace(QString("import race=%1 sex=%2 -> modelFileID=%3; model resolved raceID=%4 "
                 "ChrModelID=%5 isChar=%6 modelType=%7")
           .arg(race).arg(sex).arg(raceModelFileID).arg(m->infos.raceID)
           .arg(m->infos.ChrModelID.empty() ? -1 : m->infos.ChrModelID[0])
@@ -1081,8 +1087,8 @@ QString MenuController::importArmory(const QString& rawUrl, bool interactive)
 
   win_->characterPanel()->refresh();
   modelChanged();
-  win_->setPathLabel(tr("Armory-Import: %1 Anpassungen übernommen, %2 übersprungen")
-                       .arg(applied).arg(skipped));
+  win_->setPathLabel(tr("%1: %2 Anpassungen übernommen, %3 übersprungen")
+                       .arg(label).arg(applied).arg(skipped));
   trace(QString("done: %1 applied, %2 skipped").arg(applied).arg(skipped));
 
   // Last, because a match replaces the model and deletes `m`. An imported character whose
@@ -1092,6 +1098,115 @@ QString MenuController::importArmory(const QString& rawUrl, bool interactive)
     win_->characterPanel()->checkPostureVariant(c.second);
 
   return QString();
+}
+
+QString MenuController::importWowheadDressingRoom(const QString& rawUrl, bool interactive)
+{
+  WowheadCharacter chr;
+  QString error;
+  // Lets the decoder resolve an ambiguous slot marker: it tries both readings and keeps
+  // the one naming an item this client actually has.
+  const auto isKnownItem = [](int id) {
+    if (id <= 0)
+      return false;
+    ItemRecord rec = items.getById(id);   // copied -- ItemRecord::slot() is not const
+    return rec.slot() >= 0;
+  };
+  if (!wowhead_parse_dressing_room(rawUrl, &chr, &error, isKnownItem)) {
+    trace("=== wowhead dressing room FAILED: " + error);
+    return error;
+  }
+
+  trace(QString("=== wowhead dressing room: v%1 race=%2 gender=%3 class=%4 level=%5, "
+                "%6 customizations, %7 items")
+          .arg(chr.version).arg(chr.race).arg(chr.gender).arg(chr.classId).arg(chr.level)
+          .arg((int)chr.customizationChoices.size())
+          .arg((int)chr.equipment.size()));
+
+  // From here on this is the same shape the armory importer produces, so it can go
+  // through the same apply path -- model lookup, race correction, customizations,
+  // equipment, posture variant.
+  QScopedPointer<CharInfos> info(new CharInfos());
+  info->valid = true;
+  info->raceId = (unsigned int)chr.race;
+  info->gender = (chr.gender == 0) ? "Male" : "Female";
+  // A dressing-room look IS the appearance -- there is no "what it really is" behind
+  // it, so the transmog notice would be wrong here.
+  info->hasTransmogGear = false;
+  info->eyeGlowType = (chr.classId == 6) ? EGT_DEATHKNIGHT : EGT_DEFAULT;
+
+  info->equipment.assign(NUM_CHAR_SLOTS, 0);
+  info->itemModifierIds.assign(NUM_CHAR_SLOTS, 0);
+
+  // Where each item goes is decided by the ITEM, not by Wowhead's slot counting. The
+  // counting depends on marker bytes whose meaning is not fully known, and it has been
+  // observed placing gloves in the tabard slot; the game database always knows that
+  // 202462 is a pair of gloves. Wowhead's position is used only for an item this
+  // client cannot identify -- then it is the only hint there is.
+  for (const auto& entry : chr.equipment) {
+    ItemRecord rec = items.getById(entry.itemId);   // copied -- slot() is not const
+    int slot = rec.slot();
+    const bool fromDatabase = (slot >= 0 && slot < NUM_CHAR_SLOTS);
+    if (!fromDatabase)
+      slot = entry.positionalSlot;
+
+    // Two weapons both name the right hand; the second one is the off-hand. Anything
+    // else already occupied means the link listed a slot twice -- last one wins, which
+    // is what the dressing room shows too.
+    if (slot == CS_HAND_RIGHT && info->equipment[CS_HAND_RIGHT] != 0)
+      slot = CS_HAND_LEFT;
+
+    if (slot < 0 || slot >= NUM_CHAR_SLOTS) {
+      trace(QString("  item %1: no slot (wowhead said %2) -- dropped")
+              .arg(entry.itemId).arg(entry.positionalSlot));
+      continue;
+    }
+
+    info->equipment[slot] = entry.itemId;
+    trace(QString("  item %1 -> CharSlots %2 (%3; wowhead said %4)")
+            .arg(entry.itemId).arg(slot)
+            .arg(fromDatabase ? "from the item database" : "wowhead position, item unknown")
+            .arg(entry.positionalSlot));
+  }
+
+  // Wowhead stores only the choice id; CharDetails is keyed by option. The link
+  // between the two is in the game database, so an option the current client does not
+  // know simply drops out here rather than being applied to the wrong option.
+  int unresolved = 0;
+  for (unsigned int choiceId : chr.customizationChoices) {
+    sqlResult r = GAMEDATABASE.sqlQuery(
+      QString("SELECT ChrCustomizationOptionID FROM ChrCustomizationChoice WHERE ID = %1")
+        .arg(choiceId));
+    if (!r.valid || r.values.empty() || r.values[0].empty()) {
+      unresolved++;
+      trace(QString("  choice %1: no option in the database").arg(choiceId));
+      continue;
+    }
+    info->customizations.push_back(
+      std::make_pair(r.values[0][0].toUInt(), choiceId));
+  }
+  if (unresolved > 0)
+    trace(QString("  %1 of %2 choices could not be resolved to an option")
+            .arg(unresolved).arg((int)chr.customizationChoices.size()));
+
+  return applyCharInfos(info.take(), interactive, tr("Wowhead-Anprobe"));
+}
+
+void MenuController::importWowheadDressingRoomDialog()
+{
+  bool ok = false;
+  const QString url = QInputDialog::getText(
+    win_, tr("Wowhead-Anprobe importieren"),
+    tr("Link aus der Wowhead-Anprobe:\n"
+       "(in der Anprobe auf \"Teilen\"/die Adresszeile — er enthält ein '#')\n\n"
+       "  https://www.wowhead.com/dressing-room#…"),
+    QLineEdit::Normal, QString(), &ok);
+  if (!ok || url.trimmed().isEmpty())
+    return;
+
+  const QString err = importWowheadDressingRoom(url.trimmed(), true);
+  if (!err.isEmpty())
+    QMessageBox::warning(win_, tr("Wowhead-Anprobe"), err);
 }
 
 void MenuController::importNpcFromUrl()
