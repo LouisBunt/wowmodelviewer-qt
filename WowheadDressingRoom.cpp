@@ -151,8 +151,10 @@ void parseV15(const QStringList& segments, int version, WowheadCharacter* out,
     int whSlot = 1;
     for (int i = equipStart; i < segments.size(); ++i) {
       QString seg = segments.at(i);
+      bool hadMarker = false;
 
       if (seg.startsWith('7') && seg.length() >= 2) {
+        hadMarker = true;
         const int markerVal = charValue(seg.at(1));
         if (markerVal >= 0 && markerVal <= 12)
           whSlot = markerVal + 1;
@@ -167,10 +169,18 @@ void parseV15(const QStringList& segments, int version, WowheadCharacter* out,
       if (seg.isEmpty())
         continue;
 
-      const int itemId = decodeNumber(seg);
-      if (itemId > 0 && isKnownItem(itemId)) {
-        out->equipment.push_back({charSlotForWowheadSlot(whSlot), itemId});
+      const int value = decodeNumber(seg);
+      if (value > 0 && isKnownItem(value)) {
+        out->equipment.push_back({charSlotForWowheadSlot(whSlot), value, 0});
         ++whSlot;
+      } else if (value > 0 && !hadMarker && !out->equipment.empty() &&
+                 out->equipment.back().bonusId == 0) {
+        // The first non-item value after an item is its bonus-list id -- the colour
+        // (verified against Wowhead: item pages render the matching difficulty tint
+        // for ?bonus=<this value>). Only the first: weapons carry a second trailing
+        // field (enchant slot) that must not overwrite it, and a value behind a slot
+        // marker belongs to the NEXT item's context, never to the previous one.
+        out->equipment.back().bonusId = value;
       }
     }
     return;

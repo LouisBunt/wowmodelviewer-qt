@@ -44,6 +44,11 @@ struct WowheadCharacter
   {
     int positionalSlot;   // CharSlots, or -1 if the counting ran off the end
     int itemId;
+    // The item-bonus-list id encoded after the item, 0 when none. This is what carries
+    // the COLOUR: a tier piece's Raid Finder/Heroic/Mythic tints are all one item id,
+    // and the bonus (via its type-7 entry) picks the ItemAppearanceModifier. Ignoring
+    // it imports every set in its Normal colours.
+    int bonusId = 0;
   };
   std::vector<Item> equipment;
 };
