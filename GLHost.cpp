@@ -106,9 +106,12 @@ bool GLHost::initVideo()
 
   video.InitGL();
 
-  // Lighting no longer needs the wx LightControl panel to exist (Phase 0).
+  // Lighting no longer needs the wx LightControl panel to exist (Phase 0). reset()
+  // seeds the defaults and switches light 0 on; applyLights() is our own version of
+  // SceneLighting::apply -- see there for why.
   SceneLighting::reset(lights_);
-  SceneLighting::apply(lights_, 0);
+  videoReady_ = true;          // applyLights() checks this before touching GL
+  applyLights();
 
   video.ResizeGLScene(width(), height());
   videoReady_ = true;
@@ -187,6 +190,149 @@ void GLHost::keyPressEvent(QKeyEvent* e)
   QWidget::keyPressEvent(e);
 }
 
+// --- things the menu drives -------------------------------------------------
+
+void GLHost::setBackgroundColour(const QColor& c)
+{
+  if (!c.isValid())
+    return;
+  bg_[0] = float(c.redF());
+  bg_[1] = float(c.greenF());
+  bg_[2] = float(c.blueF());
+}
+
+QColor GLHost::backgroundColour() const
+{
+  return QColor::fromRgbF(qreal(bg_[0]), qreal(bg_[1]), qreal(bg_[2]));
+}
+
+void GLHost::applyCameraPreset(int index)
+{
+  // yaw, pitch. Pitch 90 is level with the pivot; OrbitCamera clamps it to (0,180).
+  static const struct { float yaw, pitch; } kPresets[] = {
+    {   0.0f, 90.0f },   // front -- the same angle OrbitCamera::reset() uses
+    {  45.0f, 80.0f },   // three-quarter
+    {  90.0f, 90.0f },   // side
+    {   0.0f, 12.0f }    // top-down
+  };
+  if (index < 0 || index >= int(sizeof(kPresets) / sizeof(kPresets[0])))
+    return;
+  camera_.setYawAndPitch(kPresets[index].yaw, kPresets[index].pitch);
+}
+
+bool GLHost::saveScreenshot(const QString& path)
+{
+  if (!videoReady_ || path.isEmpty())
+    return false;
+
+  // render() does the readback: the back buffer's contents are undefined once it has
+  // swapped, so the grab has to happen inside the same draw.
+  shotPath_ = path;
+  shotOk_ = false;
+  render();
+  shotPath_.clear();
+  return shotOk_;
+}
+
+void GLHost::setActiveLight(int i)
+{
+  if (i >= 0 && i < (int)MAX_LIGHTS)
+    activeLight_ = i;
+}
+
+void GLHost::applyLights()
+{
+  if (!videoReady_)
+    return;
+  video.SetCurrent();
+
+  // SceneLighting::apply() carries a documented upstream quirk: it writes the colour and
+  // position of EVERY light into the ACTIVE light's GL slot, so editing light 2 changed
+  // light 0 instead. Harmless while nothing edited them (the wx panel was never shown),
+  // but with a real light panel it makes the controls look broken. Program each light
+  // into its own slot here; the enable/attenuation semantics are otherwise the same.
+  for (size_t i = 0; i < MAX_LIGHTS; i++) {
+    const GLuint id = GL_LIGHT0 + (GLuint)i;
+    const Light& l = lights_[i];
+
+    if (l.enabled)
+      glEnable(id);
+    else
+      glDisable(id);
+
+    glLightfv(id, GL_DIFFUSE, glm::value_ptr(l.diffuse));
+    glLightfv(id, GL_AMBIENT, glm::value_ptr(l.ambience));
+    glLightfv(id, GL_SPECULAR, glm::value_ptr(l.specular));
+    glLightfv(id, GL_POSITION, glm::value_ptr(l.pos));
+
+    glLightf(id, GL_CONSTANT_ATTENUATION, 1.0f);
+    glLightf(id, GL_LINEAR_ATTENUATION, 0.0f);
+    glLightf(id, GL_QUADRATIC_ATTENUATION, 0.0f);
+    glLightf(id, GL_SPOT_CUTOFF, 180.0f);
+
+    const float straightDown[3] = { 0.0f, -1.0f, 0.0f };
+    glLightfv(id, GL_SPOT_DIRECTION, straightDown);
+
+    if (l.type == LIGHT_POSITIONAL) {
+      glLightf(id, GL_CONSTANT_ATTENUATION, l.constant_int);
+      glLightf(id, GL_LINEAR_ATTENUATION, l.linear_int);
+      glLightf(id, GL_QUADRATIC_ATTENUATION, l.quadradic_int);
+    } else if (l.type == LIGHT_SPOT) {
+      glLightf(id, GL_SPOT_CUTOFF, l.arc);
+      glLightfv(id, GL_SPOT_DIRECTION, glm::value_ptr(l.target));
+    }
+  }
+}
+
+void GLHost::drawGrid()
+{
+  glDisable(GL_TEXTURE_2D);
+  glDisable(GL_LIGHTING);
+
+  // Scale the grid to the model so it stays a reference rather than a distraction:
+  // one line per unit out to roughly the orbit distance.
+  const float extent = qBound(5.0f, camera_.radius() * 1.5f, 200.0f);
+  const float step = extent / 20.0f;
+
+  glBegin(GL_LINES);
+  for (int i = -20; i <= 20; ++i) {
+    const float p = i * step;
+    // The axes read slightly brighter, everything else stays near the background.
+    if (i == 0)
+      glColor3f(0.32f, 0.35f, 0.40f);
+    else
+      glColor3f(0.13f, 0.15f, 0.18f);
+    glVertex3f(p, -extent, 0.0f);
+    glVertex3f(p,  extent, 0.0f);
+    glVertex3f(-extent, p, 0.0f);
+    glVertex3f( extent, p, 0.0f);
+  }
+  glEnd();
+
+  // video.InitGL() leaves GL_COLOR_MATERIAL enabled for AMBIENT/DIFFUSE/EMISSION/SPECULAR,
+  // so the current glColor IS the material of whatever is drawn next. Leaving the grid's
+  // dim grey set here tinted the model that follows -- it rendered noticeably darker with
+  // the grid on than with it off.
+  glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
+
+  glEnable(GL_LIGHTING);
+  glEnable(GL_TEXTURE_2D);
+}
+
+bool GLHost::grabTo(const QString& path)
+{
+  const int w = width(), h = height();
+  if (w <= 0 || h <= 0)
+    return false;
+
+  QImage img(w, h, QImage::Format_RGBA8888);
+  glFinish();
+  glPixelStorei(GL_PACK_ALIGNMENT, 1);
+  glReadBuffer(GL_BACK);
+  glReadPixels(0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE, img.bits());
+  return img.mirrored(false, true).save(path);   // GL's origin is bottom-left
+}
+
 // ---------------------------------------------------------------------------
 
 void GLHost::tick()
@@ -197,35 +343,83 @@ void GLHost::tick()
     model_->update(16);
   ++frame_;
   render();
+
+  // Sample over a window rather than per frame: 1/frametime jitters too much to read.
+  if (!fpsClock_.isValid())
+    fpsClock_.start();
+  ++fpsFrames_;
+  const qint64 elapsed = fpsClock_.elapsed();
+  if (elapsed >= 500) {
+    fps_ = float(fpsFrames_) * 1000.0f / float(elapsed);
+    fpsFrames_ = 0;
+    fpsClock_.restart();
+  }
 }
 
 void GLHost::render()
 {
   video.SetCurrent();
 
-  glClearColor(0.043f, 0.051f, 0.063f, 1.0f);   // #0b0d10, the mock-up's app background
+  glClearColor(bg_[0], bg_[1], bg_[2], 1.0f);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+  // Viewport and projection every frame, as ModelCanvas::Render does. resizeEvent sets
+  // them too, but a render pass is free to leave the matrix stack somewhere else, and
+  // re-establishing them costs nothing.
+  //
+  // Deliberately the engine's own ResizeGLScene rather than a hand-rolled
+  // glm::perspective: video.fov is in DEGREES (see OrbitCamera::frameBounds, which feeds
+  // it through glm::radians), and gluPerspective takes degrees. Building the matrix with
+  // glm::perspective would need radians and silently produce a different field of view.
+  video.ResizeGLScene(width(), height());
 
   glMatrixMode(GL_MODELVIEW);
   glLoadIdentity();
   const glm::mat4 view = camera_.getViewMatrix();
   glMultMatrixf(glm::value_ptr(view));
 
+  // The state the render passes ASSUME somebody else has established. Under wx that
+  // somebody is ModelCanvas::RenderObjects(); it was never ported, and video.InitGL()
+  // only sets glDepthFunc without ever enabling the test. Without this the model draws
+  // in submission order with no occlusion at all: interior geometry gets painted over
+  // the skin (an orc seen from behind showed its open mouth and teeth through the back
+  // of its head) and the whole figure reads as semi-transparent.
+  //
+  // ModelRenderPass::init/deinit owns GL_BLEND, GL_ALPHA_TEST, GL_CULL_FACE and
+  // glDepthMask per pass -- none of those belong here.
+  glEnable(GL_DEPTH_TEST);
+  glDepthFunc(GL_LEQUAL);
+  glEnable(GL_LIGHTING);
+  glEnable(GL_TEXTURE_2D);
+
+  if (showGrid_)
+    drawGrid();
+
   // Draw the attachment tree, not the model directly: equipped items, shoulders,
   // weapons and the like hang off it as children.
   if (root_)
     root_->draw();
 
+  // Particles last, with depth writes off so they blend against the solid geometry
+  // instead of clipping one another -- weapon glows, enchant effects, spell visuals.
+  // This pass was missing entirely, so none of them were drawn.
+  if (root_) {
+    glEnable(GL_TEXTURE_2D);
+    glDisable(GL_LIGHTING);
+    glDepthMask(GL_FALSE);
+    glEnable(GL_BLEND);
+    root_->drawParticles();
+    glDisable(GL_BLEND);
+    glDepthMask(GL_TRUE);
+  }
+
   // Read back BEFORE swapping: after a buffer swap the back buffer's contents are
   // undefined.
+  if (!shotPath_.isEmpty())
+    shotOk_ = grabTo(shotPath_);
+
   if (grabAt_ > 0 && frame_ >= grabAt_) {
-    const int w = width(), h = height();
-    QImage img(w, h, QImage::Format_RGBA8888);
-    glFinish();
-    glPixelStorei(GL_PACK_ALIGNMENT, 1);
-    glReadBuffer(GL_BACK);
-    glReadPixels(0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE, img.bits());
-    img.mirrored(false, true).save(grabPath_);   // GL's origin is bottom-left
+    grabTo(grabPath_);
     grabAt_ = -1;
     qApp->quit();
   }

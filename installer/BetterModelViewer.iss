@@ -1,4 +1,4 @@
-; better Model Viewer - Inno Setup installer script
+﻿; better Model Viewer - Inno Setup installer script
 ; -----------------------------------------------------------------------------
 ; Per-user installer, no admin required. The application writes its config, log and
 ; database cache next to its own executable, so it must live somewhere the user can
@@ -16,8 +16,8 @@
 ; Output: installer\dist\better-Model-Viewer-Setup-<version>.exe
 
 #define MyAppName "better Model Viewer"
-#define MyAppVersion "0.1.0-beta"
-#define MyAppVersionNumeric "0.1.0.0"
+#define MyAppVersion "1.5.0-beta"
+#define MyAppVersionNumeric "1.5.0.0"
 #define MyAppPublisher "Skogdesign"
 #define MyAppExeName "WoWModelViewer-Qt.exe"
 #define MyAppURL "https://github.com/LouisBunt/wowmodelviewer-qt"

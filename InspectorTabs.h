@@ -11,6 +11,7 @@ class WoWModel;
 class QCheckBox;
 class QComboBox;
 class QLabel;
+class QListWidget;
 class QVBoxLayout;
 
 // The "Material" tab: the model's geosets with visibility checkboxes, and its
@@ -36,13 +37,22 @@ private:
   bool updating_ = false;
 };
 
-// The "Export" tab: format, options, and the button.
+// The "Export" tab: format, options, animation clips, and the button.
+//
+// The four option checkboxes used to be decoration -- ExportController hardcoded the
+// combination it passed to the plugin. They drive the export now, and switching
+// "Animationen" on reveals the clip list, which is the part the wx front-end put in a
+// separate dialog (AnimationExportChoiceDialog).
 class ExportTab : public QWidget
 {
   Q_OBJECT
 public:
   explicit ExportTab(ExportController* exporters, GLHost* canvas, QWidget* parent = nullptr);
   void refreshFormats();
+
+  // Re-read the animation list off the current model. Called when the clip list becomes
+  // visible, so a model loaded after this tab was built still lists its own clips.
+  void refreshClips();
 
 private:
   ExportController* exporters_ = nullptr;
@@ -52,6 +62,8 @@ private:
   QCheckBox* optSkeleton_ = nullptr;
   QCheckBox* optSkinning_ = nullptr;
   QCheckBox* optAnimation_ = nullptr;
+  QListWidget* clipList_ = nullptr;
+  QLabel* clipHint_ = nullptr;
   QLabel* status_ = nullptr;
 };
 

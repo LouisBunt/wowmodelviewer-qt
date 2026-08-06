@@ -36,7 +36,7 @@ foreach(lib
 endforeach()
 
 set(CMAKE_PREFIX_PATH ${QT_LOCATION}/lib/cmake)
-find_package(Qt5 5.13 COMPONENTS Core Gui Widgets REQUIRED)
+find_package(Qt5 5.13 COMPONENTS Core Gui Widgets Network REQUIRED)
 
 # OrbitCamera still lives under Source/wowmodelviewer, but it is toolkit-free (glm
 # only), so we simply compile it in rather than duplicating it.
@@ -46,10 +46,16 @@ add_executable(WoWModelViewer-Qt WIN32
   GLHost.h
   MainWindow.cpp
   MainWindow.h
+  MenuController.cpp
+  MenuController.h
   CharacterPanel.cpp
   CharacterPanel.h
   InspectorTabs.cpp
   InspectorTabs.h
+  ItemBrowser.cpp
+  ItemBrowser.h
+  LightPanel.cpp
+  LightPanel.h
   ExportController.cpp
   ExportController.h
   TimelinePanel.cpp
@@ -72,7 +78,7 @@ target_include_directories(WoWModelViewer-Qt PRIVATE
 target_compile_definitions(WoWModelViewer-Qt PRIVATE GLEW_STATIC)
 
 target_link_libraries(WoWModelViewer-Qt
-  Qt5::Core Qt5::Gui Qt5::Widgets
+  Qt5::Core Qt5::Gui Qt5::Widgets Qt5::Network
   opengl32 glu32
   ${VCPKG_STATIC}/lib/libglew32.lib
   ${WMV_BUILD}/Source/core/Release/core.lib
