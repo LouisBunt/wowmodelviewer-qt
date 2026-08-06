@@ -5,6 +5,7 @@
 #include <QString>
 #include <vector>
 
+class CharInfos;
 class ExportController;
 class GLHost;
 class GameFile;
@@ -51,6 +52,18 @@ public:
   // has one, and pasted links usually do.
   QString importArmory(const QString& rawUrl, bool interactive);
 
+  // Import a character out of a Wowhead dressing-room link -- race, gender, every
+  // customization choice and the equipped items. Unlike the armory this needs no
+  // network access: the whole look sits in the link's '#' fragment, which is why the
+  // outfit fetcher cannot read one. Same contract as importArmory(): empty string on
+  // success, otherwise the reason; drivable from the command line (--dressing-room).
+  QString importWowheadDressingRoom(const QString& rawUrl, bool interactive);
+
+  // The .chr file dialogs. Public because the character tab offers the same two
+  // buttons; both entry points run the identical code rather than a second copy.
+  void loadCharacter() { loadCharacterFile(false); }
+  void saveCharacter() { saveCharacterFile(false); }
+
 signals:
   // A model file the menu wants shown. main() owns the load path -- it also refreshes
   // the inspector panels and the timeline -- so the menu asks instead of doing it
@@ -72,13 +85,12 @@ private:
   void applyPreset(int index);
 
   // --- Charakter
-  void loadCharacter()       { loadCharacterFile(false); }
-  void saveCharacter()       { saveCharacterFile(false); }
   void loadEquipment()       { loadCharacterFile(true); }
   void saveEquipment()       { saveCharacterFile(true); }
   void clearEquipment();
   void randomiseCharacter();
   void importArmoryCharacter();   // the dialog wrapper around importArmory()
+  void importWowheadDressingRoomDialog();  // ... around importWowheadDressingRoom()
   void importNpcFromUrl();
   void importWowheadLook();
 
@@ -90,6 +102,13 @@ private:
 
   // Write the current character to `path` in the upstream SavedCharacter format.
   bool writeCharacterTo(const QString& path, bool equipmentOnly);
+
+  // Put an imported character onto the viewport: load the race's model, correct the
+  // race the model reports, apply customizations, tabard and equipment, refresh.
+  // Shared by the armory and the Wowhead dressing-room import, which differ only in
+  // how they obtain the CharInfos. TAKES OWNERSHIP of `result`.
+  // `label` names the import in the status line.
+  QString applyCharInfos(CharInfos* result, bool interactive, const QString& label);
 
 public slots:
   // Replace the loaded model with `modelPath`, carrying customization and equipment
