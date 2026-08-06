@@ -26,6 +26,7 @@
 #include "TabardDetails.h"
 #include "WoWModel.h"
 #include "database.h"
+#include "modelheaders.h"
 
 namespace {
 const char* kText = "#e8eaee";
@@ -176,10 +177,129 @@ CharacterPanel::CharacterPanel(QWidget* parent) : QWidget(parent)
   tabardRows_->setSpacing(6);
   col->addLayout(tabardRows_);
 
+  // Geoset visibility. These sat in a "Material" tab of their own, labelled with the
+  // raw geoset number -- which told nobody that 1301 is the trouser leg. They belong
+  // next to the rest of the character, under the name of the part they hide.
+  geosetHeader_ = new QLabel(QString::fromUtf8("SICHTBARE TEILE"));
+  geosetHeader_->setFont(hf);
+  geosetHeader_->setStyleSheet(QString("color:%1; background:transparent;").arg(kDim));
+  col->addWidget(geosetHeader_);
+
+  geosetRows_ = new QVBoxLayout;
+  geosetRows_->setSpacing(4);
+  col->addLayout(geosetRows_);
+
   col->addStretch(1);
 
   header_->setText(QString::fromUtf8("ANPASSUNG"));
   subHeader_->setText(QString::fromUtf8("Kein Charaktermodell geladen."));
+}
+
+namespace {
+// Geoset ids are group * 100 + variant: 1301 is variant 1 of group 13, the trousers.
+// The group is what a person recognises, so it names the row and the variant is just
+// the numbered alternative within it.
+QString geosetGroupName(int group)
+{
+  switch (group) {
+    case CG_SKIN_OR_HAIR:    return QString::fromUtf8("Haar");
+    case CG_FACE_1:          return QString::fromUtf8("Gesicht (Bart 1)");
+    case CG_FACE_2:          return QString::fromUtf8("Gesicht (Bart 2)");
+    case CG_FACE_3:          return QString::fromUtf8("Gesicht (Bart 3)");
+    case CG_GLOVES:          return QString::fromUtf8("Handschuhe");
+    case CG_BOOTS:           return QString::fromUtf8("Stiefel");
+    case CG_TAIL:            return QString::fromUtf8("Schweif");
+    case CG_EARS:            return QString::fromUtf8("Ohren");
+    case CG_SLEEVES:         return QString::fromUtf8("Ärmel");
+    case CG_KNEEPADS:        return QString::fromUtf8("Knieschoner");
+    case CG_CHEST:           return QString::fromUtf8("Oberteil");
+    case CG_PANTS:           return QString::fromUtf8("Hose");
+    case CG_TABARD:          return QString::fromUtf8("Wappenrock");
+    case CG_TROUSERS:        return QString::fromUtf8("Beinkleid");
+    case CG_DH_LOINCLOTH:    return QString::fromUtf8("Lendentuch");
+    case CG_CLOAK:           return QString::fromUtf8("Umhang");
+    case CG_EYEGLOW:         return QString::fromUtf8("Augenglühen");
+    case CG_BELT:            return QString::fromUtf8("Gürtel");
+    case CG_BONE:            return QString::fromUtf8("Bart / Knochen");
+    case CG_FEET:            return QString::fromUtf8("Füße");
+    case CG_TORSO:           return QString::fromUtf8("Torso");
+    case CG_HAND_ATTACHMENT: return QString::fromUtf8("Handanbau");
+    case CG_HEAD_ATTACHMENT: return QString::fromUtf8("Kopfanbau");
+    case CG_DH_BLINDFOLDS:   return QString::fromUtf8("Augenbinde");
+    default:                 return QString::fromUtf8("Gruppe %1").arg(group);
+  }
+}
+}
+
+void CharacterPanel::setGeosetModel(WoWModel* model)
+{
+  geosetModel_ = model;
+  buildGeosets();
+}
+
+void CharacterPanel::buildGeosets()
+{
+  while (QLayoutItem* item = geosetRows_->takeAt(0)) {
+    if (QWidget* w = item->widget())
+      w->deleteLater();
+    delete item;
+  }
+
+  // A heading with nothing under it reads like something failed to load. There is no
+  // geoset list without a model, so the whole section goes away with it.
+  if (!geosetModel_ || geosetModel_->geosets.empty()) {
+    geosetHeader_->setVisible(false);
+    return;
+  }
+  geosetHeader_->setVisible(true);
+
+  // Saved rather than forced back to false: this also runs from refresh(), which may
+  // already be inside an update -- clearing the flag there would drop the reentrancy
+  // guard of the whole panel halfway through.
+  const bool wasUpdating = updating_;
+  updating_ = true;
+  int shown = 0, total = 0;
+  for (size_t i = 0; i < geosetModel_->geosets.size(); ++i) {
+    ModelGeosetHD* g = geosetModel_->geosets[i];
+    if (!g)
+      continue;
+    ++total;
+
+    const int group = g->id / 100;
+    const int variant = g->id % 100;
+    auto* cb = new QCheckBox(variant > 0
+      ? QString::fromUtf8("%1 %2").arg(geosetGroupName(group)).arg(variant)
+      : geosetGroupName(group));
+    cb->setFont(QFont(uiFamily(), 8));
+    cb->setStyleSheet(QString(
+      "QCheckBox { color:%1; background:transparent; spacing:7px; }"
+      "QCheckBox::indicator { width:13px; height:13px; border-radius:3px;"
+      " border:1px solid %2; background:%3; }"
+      "QCheckBox::indicator:checked { background:%4; border-color:%4; }")
+      .arg(kSoft).arg(kBord).arg(kCard).arg(kAccent));
+    cb->setChecked(g->display);
+    cb->setToolTip(QString::fromUtf8("Geoset %1 · %2 Dreiecke").arg(g->id).arg(g->icount / 3));
+    // Captures the INDEX, not the ModelGeosetHD*. The vector is rebuilt whenever the
+    // model merges or unmerges an item's geometry, which would leave a captured pointer
+    // dangling; an index is re-checked against the current vector on every click.
+    //
+    // showGeoset() rather than writing g->display: it is the model's own accessor and
+    // keeps the flag consistent with the merged-model bookkeeping. Deliberately NO
+    // model refresh here -- refresh() recomputes every display flag from the equipment
+    // and would undo the click on the spot.
+    const int index = (int)i;
+    connect(cb, &QCheckBox::toggled, this, [this, index](bool on) {
+      if (updating_ || !geosetModel_ || index >= (int)geosetModel_->geosets.size())
+        return;
+      geosetModel_->showGeoset((uint)index, on);
+    });
+    geosetRows_->addWidget(cb);
+    if (g->display)
+      ++shown;
+  }
+  updating_ = wasUpdating;
+
+  geosetHeader_->setText(QString::fromUtf8("SICHTBARE TEILE · %1 / %2").arg(shown).arg(total));
 }
 
 void CharacterPanel::clearRows()
@@ -556,6 +676,12 @@ void CharacterPanel::equipById(int itemId)
 
 void CharacterPanel::refresh()
 {
+  // Before the character-only early-out: geosets belong to every model, and the list
+  // has to be re-read because WoWModel::refreshMerging() throws the whole geoset vector
+  // away and builds a new one whenever equipment is merged in. Stale rows would then
+  // carry indices that no longer mean what the label says.
+  buildGeosets();
+
   if (!model_)
     return;
 

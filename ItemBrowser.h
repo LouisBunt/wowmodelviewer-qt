@@ -3,6 +3,7 @@
 
 #include <vector>
 
+#include <QString>
 #include <QWidget>
 
 class QCheckBox;
@@ -10,6 +11,7 @@ class QComboBox;
 class QLabel;
 class QLineEdit;
 class QListWidget;
+class QTimer;
 
 // The "Items" side of the browser column.
 //
@@ -43,6 +45,11 @@ private:
   void refreshSets();
   void setMode(bool sets);
 
+  // One result row -> one list entry. Split out because the rows are emitted twice:
+  // straight through when a slot filter is set, and under slot headings when it is not.
+  // `row` is ID, name, quality, item level, inventory type.
+  void addItemRow(const std::vector<QString>& row);
+
   QComboBox* slot_ = nullptr;
   QComboBox* expansion_ = nullptr;
   QComboBox* quality_ = nullptr;
@@ -52,6 +59,7 @@ private:
   QLabel* count_ = nullptr;
   QLabel* itemsChip_ = nullptr;
   QLabel* setsChip_ = nullptr;
+  QTimer* searchDelay_ = nullptr;   // keeps every keystroke from hitting the database
 
   bool setMode_ = false;
   bool ready_ = false;

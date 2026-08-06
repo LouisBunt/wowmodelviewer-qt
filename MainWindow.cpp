@@ -14,6 +14,7 @@
 #include <QScrollArea>
 #include <QStackedWidget>
 #include <QSlider>
+#include <QTimer>
 #include <QVBoxLayout>
 
 #include "CharacterPanel.h"
@@ -298,7 +299,9 @@ QWidget* MainWindow::buildToolBar()
   // actually go somewhere. "Effekte" is dropped: this front-end has no effects panel to
   // send anyone to, and a button to nowhere is worse than no button.
   const struct { const char* label; int action; } kItems[] = {
-    { "Modell",      ToolModel      },
+    // Same words as the inspector tabs they open -- a button called "Modell" that
+    // lands on a tab called "Anpassen" reads like a misclick.
+    { "Anpassen",    ToolModel      },
     { "Charakter",   ToolCharacter  },
     { "Licht",       ToolLight      },
     { "Kamera",      ToolCamera     },
@@ -337,8 +340,20 @@ QWidget* MainWindow::buildBrowser()
   sw->setContentsMargins(12, 12, 12, 8);
   auto* search = new QLineEdit;
   search_ = search;
-  connect(search, &QLineEdit::returnPressed, this, [this]() { populateTree(); });
-  search->setPlaceholderText(QString::fromUtf8("Modelle, Items, NPCs …"));
+  // Typing filters as you go. A rebuild walks the whole listfile, so it waits for a
+  // pause in the typing rather than running per keystroke; Enter skips the wait.
+  auto* searchDelay = new QTimer(this);
+  searchDelay->setSingleShot(true);
+  searchDelay->setInterval(350);
+  connect(searchDelay, &QTimer::timeout, this, &MainWindow::populateTree);
+  connect(search, &QLineEdit::textChanged, this, [searchDelay](const QString&) {
+    searchDelay->start();
+  });
+  connect(search, &QLineEdit::returnPressed, this, [this, searchDelay]() {
+    searchDelay->stop();
+    populateTree();
+  });
+  search->setPlaceholderText(QString::fromUtf8("Name oder FileDataID …"));
   search->setFixedHeight(32);
   search->setFont(QFont(uiF(), 9));
   search->setStyleSheet(QString(
@@ -524,8 +539,8 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* e)
     const QVariant tool = obj->property("toolButton");
     if (tool.isValid()) {
       switch (tool.toInt()) {
-        case ToolModel:      setInspectorTab(TabMaterial); break;
-        case ToolCharacter:  setInspectorTab(TabCharacter); break;
+        case ToolModel:      setInspectorTab(TabCharacter); break;
+        case ToolCharacter:  setInspectorTab(TabCharacterIo); break;
         case ToolLight:      setInspectorTab(TabLight); break;
         case ToolCamera:     emit cameraMenuRequested(); break;
         case ToolBackground: emit backgroundRequested(); break;
@@ -585,11 +600,6 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* e)
   }
 
   return QWidget::eventFilter(obj, e);
-}
-
-void MainWindow::onSearchChanged(const QString&)
-{
-  populateTree();
 }
 
 void MainWindow::onTreeActivated(const QModelIndex& index)
@@ -736,8 +746,8 @@ QWidget* MainWindow::buildInspector()
   auto* tr = new QHBoxLayout(tabs);
   tr->setContentsMargins(0, 0, 0, 0);
   tr->setSpacing(0);
-  const char* names[] = {"Charakter", "Material", "Licht", "Export"};
-  for (int i = 0; i < 4; ++i) {
+  const char* names[] = {"Anpassen", "Charakter", "Licht", "Export"};
+  for (int i = 0; i < (int)(sizeof(names) / sizeof(names[0])); ++i) {
     auto* t = new QLabel(QString::fromLatin1(names[i]));
     t->setFixedHeight(38);
     t->setAlignment(Qt::AlignCenter);
@@ -762,15 +772,20 @@ QWidget* MainWindow::buildInspector()
   cb->addStretch(1);
   inspectorStack_->addWidget(wrapScroll(charBody));
 
-  // Page 1 -- material
-  auto* matBody = new QWidget;
-  matBody->setStyleSheet("background:transparent;");
-  auto* mb = new QVBoxLayout(matBody);
-  mb->setContentsMargins(16, 16, 16, 24);
-  materialTab_ = new MaterialTab;
-  mb->addWidget(materialTab_);
-  mb->addStretch(1);
-  inspectorStack_->addWidget(wrapScroll(matBody));
+  // Page 1 -- the character himself: where he comes from and where he goes.
+  // Filled by main(), which is the first place that has both the loaded exporters and
+  // the menu controller the buttons delegate to.
+  auto* ioBody = new QWidget;
+  ioBody->setStyleSheet("background:transparent;");
+  auto* ib = new QVBoxLayout(ioBody);
+  ib->setContentsMargins(16, 16, 16, 24);
+  characterIoHost_ = new QWidget;
+  auto* ih = new QVBoxLayout(characterIoHost_);
+  ih->setContentsMargins(0, 0, 0, 0);
+  characterIoHost_->setStyleSheet("background:transparent;");
+  ib->addWidget(characterIoHost_);
+  ib->addStretch(1);
+  inspectorStack_->addWidget(wrapScroll(ioBody));
 
   // Page 2 -- lighting. The four scene lights were configurable in principle since
   // Phase 0 (SceneLighting is widget-free) but had no UI at all.

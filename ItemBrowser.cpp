@@ -1,13 +1,18 @@
 #include "ItemBrowser.h"
 
+#include <map>
+
 #include <QCheckBox>
 #include <QComboBox>
 #include <QEvent>
 #include <QFontDatabase>
 #include <QHBoxLayout>
+#include <QHash>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
+#include <QRegularExpression>
+#include <QTimer>
 #include <QVBoxLayout>
 
 #include "Game.h"
@@ -132,6 +137,35 @@ QString sqlEscape(QString s)
 {
   return s.replace('\'', ' ').replace('"', ' ');
 }
+
+// Item.InventoryType -> the heading the item is filed under. Built from kSlots so the
+// grouping and the filter dropdown can never drift apart. Types kSlots does not list
+// (rings, trinkets, bags) carry no appearance and are already excluded by the query.
+const QHash<int, QString>& slotHeadings()
+{
+  static const QHash<int, QString> map = [] {
+    QHash<int, QString> m;
+    for (const auto& s : kSlots) {
+      const QString types = QString::fromLatin1(s.types);
+      if (types.isEmpty())
+        continue;                       // the "Alle Slots" entry has no type of its own
+      for (const QString& t : types.split(',', QString::SkipEmptyParts))
+        m.insert(t.toInt(), QString::fromUtf8(s.label));
+    }
+    return m;
+  }();
+  return map;
+}
+
+// The order headings appear in: the same order as the filter dropdown, which runs
+// head to foot and then weapons -- how someone dresses a character.
+int slotRank(const QString& heading)
+{
+  for (int i = 0; i < (int)(sizeof(kSlots) / sizeof(kSlots[0])); ++i)
+    if (heading == QString::fromUtf8(kSlots[i].label))
+      return i;
+  return 999;
+}
 }
 
 ItemBrowser::ItemBrowser(QWidget* parent) : QWidget(parent)
@@ -161,14 +195,26 @@ ItemBrowser::ItemBrowser(QWidget* parent) : QWidget(parent)
   col->addWidget(modes);
 
   search_ = new QLineEdit;
-  search_->setPlaceholderText(QString::fromUtf8("Name suchen …"));
+  search_->setPlaceholderText(QString::fromUtf8("Name oder Item-ID suchen …"));
   search_->setFont(QFont(uiFamily(), 8));
   search_->setFixedHeight(28);
   search_->setStyleSheet(QString(
     "QLineEdit { background:%1; border:1px solid %2; border-radius:6px;"
     " padding:0 8px; color:%3; }"
     "QLineEdit:focus { border-color:#3a434f; }").arg(kCard).arg(kBord).arg(kText));
-  connect(search_, &QLineEdit::returnPressed, this, [this]() { refresh(); });
+  // Typing filters straight away. Every keystroke would mean a query against a table
+  // of 110k rows, so the query waits until the typing pauses; Enter skips the wait.
+  searchDelay_ = new QTimer(this);
+  searchDelay_->setSingleShot(true);
+  searchDelay_->setInterval(250);
+  connect(searchDelay_, &QTimer::timeout, this, [this]() { refresh(); });
+  connect(search_, &QLineEdit::textChanged, this, [this](const QString&) {
+    searchDelay_->start();
+  });
+  connect(search_, &QLineEdit::returnPressed, this, [this]() {
+    searchDelay_->stop();
+    refresh();
+  });
   col->addWidget(search_);
 
   slot_ = new QComboBox;
@@ -300,9 +346,16 @@ void ItemBrowser::refreshItems()
   if (qual != -1)
     where << QString("ItemSparse.OverallQualityID = %1").arg(qual);
 
+  // A search that is only digits is meant as an item id -- that is how someone pastes
+  // an id out of a link or a log. The name match stays in the OR so a numeric NAME
+  // (there are items called "1000 Years of Polish") is still reachable.
   const QString needle = sqlEscape(search_->text().trimmed());
-  if (!needle.isEmpty())
-    where << QString("ItemSparse.Display_Lang LIKE '%%%1%%'").arg(needle);
+  if (!needle.isEmpty()) {
+    const bool numeric = QRegularExpression("^\\d+$").match(needle).hasMatch();
+    where << (numeric
+      ? QString("(Item.ID = %1 OR ItemSparse.Display_Lang LIKE '%%%1%%')").arg(needle)
+      : QString("ItemSparse.Display_Lang LIKE '%%%1%%'").arg(needle));
+  }
 
   const QString from = "FROM Item LEFT JOIN ItemSparse ON Item.ID = ItemSparse.ID WHERE "
                        + where.join(" AND ");
@@ -314,26 +367,56 @@ void ItemBrowser::refreshItems()
 
   sqlResult r = GAMEDATABASE.sqlQuery(
     "SELECT Item.ID, ItemSparse.Display_Lang, ItemSparse.OverallQualityID, "
-    "ItemSparse.ItemLevel " + from +
+    "ItemSparse.ItemLevel, Item.InventoryType " + from +
     QString(" ORDER BY ItemSparse.Display_Lang LIMIT %1").arg(kMaxRows));
+
+  // Without a slot filter the list used to be one alphabetical run in which a helmet
+  // sat between two pairs of boots. Group it under slot headings instead; with a slot
+  // already chosen the heading would say the same thing on every row, so it is left off.
+  const bool group = types.isEmpty();
+  std::map<int, std::vector<const std::vector<QString>*>> bySlot;   // slotRank -> rows
 
   if (r.valid) {
     for (const auto& row : r.values) {
-      const int quality = row[2].toInt();
-      auto* item = new QListWidgetItem(row[1]);
-      item->setData(Qt::UserRole, row[0].toInt());
-      item->setForeground(QColor(qualityColour(quality)));
-      const int ilvl = row[3].toInt();
-      item->setToolTip(QString::fromUtf8("Item %1%2")
-                         .arg(row[0])
-                         .arg(ilvl > 1 ? QString::fromUtf8(" · Stufe %1").arg(ilvl) : QString()));
-      list_->addItem(item);
+      if (group) {
+        const QString heading = slotHeadings().value(row[4].toInt());
+        bySlot[slotRank(heading)].push_back(&row);
+      } else {
+        addItemRow(row);
+      }
     }
   }
 
-  count_->setText(nTotal > list_->count()
-    ? QString::fromUtf8("%1 VON %2 TREFFERN").arg(list_->count()).arg(nTotal)
+  for (const auto& entry : bySlot) {
+    const QString heading = slotHeadings().value(entry.second.front()->at(4).toInt());
+    auto* head = new QListWidgetItem(heading.toUpper());
+    QFont hf(uiFamily(), 7);
+    hf.setLetterSpacing(QFont::AbsoluteSpacing, 1.3);
+    head->setFont(hf);
+    head->setForeground(QColor(kDim));
+    head->setFlags(Qt::NoItemFlags);      // a heading is not a thing one can equip
+    list_->addItem(head);
+    for (const auto* row : entry.second)
+      addItemRow(*row);
+  }
+
+  // Counted from the query, not from the widget: the widget also holds the headings.
+  const int shown = r.valid ? (int)r.values.size() : 0;
+  count_->setText(nTotal > shown
+    ? QString::fromUtf8("%1 VON %2 TREFFERN").arg(shown).arg(nTotal)
     : QString::fromUtf8("%1 TREFFER").arg(nTotal));
+}
+
+void ItemBrowser::addItemRow(const std::vector<QString>& row)
+{
+  auto* item = new QListWidgetItem(row[1]);
+  item->setData(Qt::UserRole, row[0].toInt());
+  item->setForeground(QColor(qualityColour(row[2].toInt())));
+  const int ilvl = row[3].toInt();
+  item->setToolTip(QString::fromUtf8("Item %1%2")
+                     .arg(row[0])
+                     .arg(ilvl > 1 ? QString::fromUtf8(" · Stufe %1").arg(ilvl) : QString()));
+  list_->addItem(item);
 }
 
 void ItemBrowser::refreshSets()

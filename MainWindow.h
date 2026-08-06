@@ -17,7 +17,7 @@ class QLineEdit;
 class QMenuBar;
 class QTreeView;
 class TimelinePanel;
-class MaterialTab;
+class CharacterIoTab;
 class QStackedWidget;
 
 // The shell from the "WoW Model Viewer Redesign" mock-up, with the real GL canvas
@@ -46,7 +46,9 @@ public:
   void populateTree();
   void setCategory(int index);
   void setInspectorTab(int index);
-  MaterialTab* materialTab() const { return materialTab_; }
+  // Filled by main() once the exporters and the menu controller exist, the same
+  // way the Export tab is.
+  QWidget* characterIoHost() const { return characterIoHost_; }
   QWidget* exportHost() const { return exportHost_; }
   CharacterPanel* characterPanel() const { return charPanel_; }
   TimelinePanel* timeline() const { return timeline_; }
@@ -61,7 +63,7 @@ public:
   void setActiveCameraPreset(int index);
 
   // Inspector page order, so the toolbar and the rail cannot address the wrong one.
-  enum InspectorTab { TabCharacter = 0, TabMaterial, TabLight, TabExport };
+  enum InspectorTab { TabCharacter = 0, TabCharacterIo, TabLight, TabExport };
 
   // Read the measured frame rate off the canvas. Driven by main()'s UI timer.
   void updateStats();
@@ -87,7 +89,6 @@ protected:
 
 private slots:
   void onTreeActivated(const QModelIndex& index);
-  void onSearchChanged(const QString& text);
 
 private:
   QWidget* buildTitleBar();
@@ -124,7 +125,7 @@ private:
   std::vector<QLabel*> railButtons_;
   std::vector<QLabel*> inspectorTabs_;
   QStackedWidget* inspectorStack_ = nullptr;
-  MaterialTab* materialTab_ = nullptr;
+  QWidget* characterIoHost_ = nullptr;
   QWidget* exportHost_ = nullptr;
   QPoint dragOffset_;
   bool dragging_ = false;

@@ -33,6 +33,13 @@ public:
   explicit CharacterPanel(QWidget* parent = nullptr);
 
   void setModel(WoWModel* model);
+
+  // The geoset switches take EVERY model, not only characters -- a creature has geosets
+  // too, and the tab they used to live in was given every model. Kept apart from
+  // setModel() for exactly that reason: that one is character-only and is handed a null
+  // for a creature, which would otherwise take the switches away with it.
+  void setGeosetModel(WoWModel* model);
+
   void onEvent(Event* e) override;
 
   // Public so a headless run can exercise the same path the id field uses.
@@ -70,8 +77,10 @@ private:
   void buildTabard();
   void refreshEquipment();
   void equipById(int itemId);
+  void buildGeosets();
 
   WoWModel* model_ = nullptr;
+  WoWModel* geosetModel_ = nullptr;
   QVBoxLayout* rows_ = nullptr;
   QVBoxLayout* equipRows_ = nullptr;
   QLabel* header_ = nullptr;
@@ -79,6 +88,8 @@ private:
   QLabel* equipHeader_ = nullptr;
   QLabel* tabardHeader_ = nullptr;
   QCheckBox* dhMode_ = nullptr;
+  QLabel* geosetHeader_ = nullptr;
+  QVBoxLayout* geosetRows_ = nullptr;
   QVBoxLayout* tabardRows_ = nullptr;
   std::vector<QSpinBox*> tabardSpins_;
   QLineEdit* itemInput_ = nullptr;
