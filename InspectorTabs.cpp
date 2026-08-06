@@ -5,6 +5,7 @@
 #include <QFontDatabase>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QListWidget>
 #include <QPushButton>
 #include <QVBoxLayout>
 
@@ -173,19 +174,48 @@ ExportTab::ExportTab(ExportController* exporters, GLHost* canvas, QWidget* paren
   optSkinning_  = new QCheckBox(QString::fromUtf8("Skinning"));
   optSkeleton_  = new QCheckBox(QString::fromUtf8("Skelett"));
   optAnimation_ = new QCheckBox(QString::fromUtf8("Animationen"));
+  // Blender's default expectation: mesh with an armature and vertex weights.
   optMesh_->setChecked(true);
   optSkinning_->setChecked(true);
+  optSkeleton_->setChecked(true);
   for (QCheckBox* c : { optMesh_, optSkinning_, optSkeleton_, optAnimation_ }) {
     c->setFont(QFont(uiFamily(), 8));
     c->setStyleSheet(checkboxStyle());
     col->addWidget(c);
   }
+  optSkinning_->setToolTip(QString::fromUtf8(
+    "Braucht Geometrie und Skelett -- der Exporter schaltet beides bei Bedarf selbst zu."));
 
-  // Animation export needs the clip picker, which is not ported. Saying so beats
-  // offering a checkbox that quietly does nothing.
-  optAnimation_->setEnabled(false);
-  optAnimation_->setToolTip(QString::fromUtf8(
-    "Der Clip-Auswahldialog ist noch nicht portiert -- exportiert wird die aktuelle Pose."));
+  // The clip list, shown only while "Animationen" is on. Multi-select, because the FBX
+  // exporter takes a list of animation indices and writes one take per entry.
+  clipList_ = new QListWidget;
+  clipList_->setFont(QFont(uiFamily(), 8));
+  clipList_->setSelectionMode(QAbstractItemView::ExtendedSelection);
+  clipList_->setFixedHeight(150);
+  clipList_->setStyleSheet(QString(
+    "QListWidget { background:%1; border:1px solid %2; border-radius:6px; color:%3; }"
+    "QListWidget::item { padding:3px 5px; }"
+    "QListWidget::item:selected { background:#181510; color:%4; }"
+    "QScrollBar:vertical { background:transparent; width:9px; }"
+    "QScrollBar::handle:vertical { background:#262c35; border-radius:4px; min-height:24px; }"
+    "QScrollBar::add-line, QScrollBar::sub-line { height:0; }")
+    .arg(kCard).arg(kBord).arg(kText).arg(kAccent));
+  clipList_->setVisible(false);
+  col->addWidget(clipList_);
+
+  clipHint_ = new QLabel;
+  clipHint_->setFont(QFont(uiFamily(), 8));
+  clipHint_->setWordWrap(true);
+  clipHint_->setStyleSheet(QString("color:%1; background:transparent;").arg(kDim));
+  clipHint_->setVisible(false);
+  col->addWidget(clipHint_);
+
+  connect(optAnimation_, &QCheckBox::toggled, this, [this](bool on) {
+    clipList_->setVisible(on);
+    clipHint_->setVisible(on);
+    if (on)
+      refreshClips();
+  });
 
   auto* button = new QPushButton(QString::fromUtf8("Modell exportieren"));
   button->setFont(QFont(uiFamily(), 9, QFont::DemiBold));
@@ -207,6 +237,23 @@ ExportTab::ExportTab(ExportController* exporters, GLHost* canvas, QWidget* paren
   connect(button, &QPushButton::clicked, this, [this]() {
     if (!exporters_ || !canvas_)
       return;
+
+    ExportController::Options o;
+    o.mesh      = optMesh_->isChecked();
+    o.skeleton  = optSkeleton_->isChecked();
+    o.skinning  = optSkinning_->isChecked();
+    o.animation = optAnimation_->isChecked();
+    if (o.animation)
+      for (QListWidgetItem* item : clipList_->selectedItems())
+        o.clips.push_back(item->data(Qt::UserRole).toInt());
+
+    if (o.animation && o.clips.empty()) {
+      status_->setText(QString::fromUtf8("Keine Animation ausgewählt -- bitte mindestens "
+                                        "einen Clip markieren."));
+      return;
+    }
+
+    exporters_->setOptions(o);
     const QString err = exporters_->exportModel(canvas_->model(), format_->currentIndex(), this);
     if (err.isEmpty())
       status_->setText(QString::fromUtf8("Export abgeschlossen."));
@@ -226,4 +273,32 @@ void ExportTab::refreshFormats()
     format_->addItem(f.label);
   if (format_->count() == 0)
     status_->setText(QString::fromUtf8("Keine Exporter gefunden."));
+}
+
+void ExportTab::refreshClips()
+{
+  clipList_->clear();
+  WoWModel* m = canvas_ ? canvas_->model() : nullptr;
+  if (!m) {
+    clipHint_->setText(QString::fromUtf8("Kein Modell geladen."));
+    return;
+  }
+
+  // Same source the timeline uses: keyed by the model's animation index, which is what
+  // setAnimationsToExport() expects.
+  for (const auto& a : m->getAnimsMap()) {
+    auto* item = new QListWidgetItem(QString::fromStdWString(a.second));
+    item->setData(Qt::UserRole, (int)a.first);
+    clipList_->addItem(item);
+  }
+
+  if (clipList_->count() == 0) {
+    clipHint_->setText(QString::fromUtf8("Dieses Modell hat keine Animationen."));
+    return;
+  }
+
+  clipList_->setCurrentRow(0);
+  clipHint_->setText(QString::fromUtf8("%1 Clips -- Mehrfachauswahl mit Strg/Shift. "
+                                      "Jeder Clip wird als eigener Take geschrieben.")
+                       .arg(clipList_->count()));
 }

@@ -33,6 +33,23 @@ public:
   struct Format { QString label; QString filter; ExporterPlugin* plugin; };
   const std::vector<Format>& formats() const { return formats_; }
 
+  // What goes into the file. The exporter enforces its own dependencies on top of this
+  // (skinning implies mesh + skeleton, animation implies skeleton), so an inconsistent
+  // combination is corrected rather than silently dropped -- see FBXExporter::exportModel.
+  //
+  // `clips` are model animation indices; empty means no animation is written even when
+  // `animation` is set, which is exactly how the FBX exporter reads it.
+  struct Options {
+    bool mesh = true;
+    bool skeleton = true;
+    bool skinning = true;
+    bool animation = false;
+    std::vector<int> clips;
+  };
+
+  void setOptions(const Options& o) { options_ = o; }
+  const Options& options() const { return options_; }
+
   // Asks for a path and exports. Returns an empty string on success, otherwise the
   // reason.
   QString exportModel(WoWModel* model, int formatIndex, QWidget* parent);
@@ -43,6 +60,7 @@ public:
 
 private:
   std::vector<Format> formats_;
+  Options options_;
 };
 
 #endif
