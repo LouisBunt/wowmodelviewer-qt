@@ -44,6 +44,17 @@ struct WowheadCharacter
     int bonusId;
   };
   std::vector<Item> equipment;
+
+  // Retail's slot 14 is the SECOND shoulder (the dressing room's "Transmogrify Right
+  // Shoulder" checkbox), gated by the separateShoulders flag at the end of the hash.
+  // Kept out of `equipment` on purpose: WMV has a single shoulder slot, and letting
+  // the item-database placement run on this item made it silently OVERWRITE the left
+  // shoulder. The importer decides what to tell the user instead.
+  // (Pre-MoP Classic dressing rooms use slot 14 as Ranged -- that is decided by the
+  // URL, not the hash, and handled by the parser.)
+  bool separateShoulders = false;
+  int shoulder2ItemId = 0;
+  int shoulder2Bonus = 0;
 };
 
 // True for anything that looks like a dressing-room address. Deliberately loose: the

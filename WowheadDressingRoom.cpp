@@ -71,10 +71,11 @@ QString expandEscape(const QString& s, QChar escape, const QString& replacement)
   return out;
 }
 
-// Wowhead's dressing-room slots 1..14 in WMV's CharSlots. 14 is the second off-hand
-// position the dressing room offers; it has no own CharSlots home, and like every
-// other entry this is only the FALLBACK -- the importer places items by what the item
-// database says the item is, not by where the hash listed it.
+// Wowhead's dressing-room slots 1..13 in WMV's CharSlots. Slot 14 is deliberately
+// absent: on retail it is the SECOND shoulder (see WowheadCharacter::shoulder2ItemId),
+// on pre-MoP Classic pages it is Ranged -- either way it must not run through the
+// normal placement, which is only the FALLBACK anyway; the importer places items by
+// what the item database says they are.
 int charSlotForWowheadSlot(int whSlot)
 {
   switch (whSlot) {
@@ -91,7 +92,6 @@ int charSlotForWowheadSlot(int whSlot)
     case 11: return CS_BOOTS;
     case 12: return CS_HAND_RIGHT;
     case 13: return CS_HAND_LEFT;
-    case 14: return CS_HAND_LEFT;
     default: return -1;
   }
 }
@@ -121,7 +121,8 @@ int charAtValue(const QString& s, int index)
 // There are no slot markers and no per-slot layout variation; earlier decoders
 // (wow.export's, and ours ported from it) misread the '7'/'9' escapes as markers,
 // which happened to work on hashes with short zero runs and scrambled everything else.
-void parseV15(const QStringList& fields, int version, WowheadCharacter* out)
+void parseV15(const QStringList& fields, int version, WowheadCharacter* out,
+              bool classicRanged)
 {
   out->version = version;
   out->race = decodeNumber(field(fields, 0));
@@ -139,13 +140,32 @@ void parseV15(const QStringList& fields, int version, WowheadCharacter* out)
   }
 
   int index = 103;
-  for (int whSlot = 1; whSlot <= 14; ++whSlot) {
+  for (int whSlot = 1; whSlot <= 13; ++whSlot) {
     const int itemId = decodeNumber(field(fields, index++));
     const int bonusId = decodeNumber(field(fields, index++));
     if (whSlot == 12 || whSlot == 13)
       ++index;                      // enchant/illusion -- nothing to render it with
     if (itemId > 0)
       out->equipment.push_back({whSlot, charSlotForWowheadSlot(whSlot), itemId, bonusId});
+  }
+
+  // Slot 14: the second shoulder on retail (see the header). Captured separately, and
+  // the separateShoulders flag sits behind the two artifact-appearance fields.
+  //
+  // On a pre-MoP Classic dressing room the same field is the RANGED weapon instead.
+  // That is a property of the PAGE, not the hash -- the caller derives it from the
+  // URL -- and there the item goes through normal placement like any weapon.
+  const int slot14Item = decodeNumber(field(fields, index++));
+  const int slot14Bonus = decodeNumber(field(fields, index++));
+  index += 2;                       // artifactAppearanceMainHand, ...OffHand
+  out->separateShoulders = decodeNumber(field(fields, index)) != 0;
+
+  if (classicRanged) {
+    if (slot14Item > 0)
+      out->equipment.push_back({14, CS_HAND_LEFT, slot14Item, slot14Bonus});
+  } else {
+    out->shoulder2ItemId = slot14Item;
+    out->shoulder2Bonus = slot14Bonus;
   }
 }
 
@@ -213,9 +233,16 @@ bool wowhead_parse_dressing_room(const QString& url, WowheadCharacter* out, QStr
                  QChar('9'), QStringLiteral("0"));
   const QStringList fields = expanded.split(QChar('8'));
 
+  // Classic-era dressing rooms repurpose equipment slot 14 as Ranged; recognisable
+  // only by the page address (wowhead.com/classic/dressing-room#..., /cata/, /sod/,
+  // /tbc/, /wotlk/, /mop-classic/), never by the hash itself.
+  const bool classicRanged = url.contains(QRegularExpression(
+    "wowhead\\.com/(classic|era|sod|tbc|wotlk|cata|mop)[-a-z]*/",
+    QRegularExpression::CaseInsensitiveOption));
+
   WowheadCharacter parsed;
   if (version >= 15)
-    parseV15(fields, version, &parsed);
+    parseV15(fields, version, &parsed, classicRanged);
   else
     parseLegacy(fields, version, &parsed);
 

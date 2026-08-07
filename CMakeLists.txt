@@ -87,3 +87,10 @@ target_link_libraries(WoWModelViewer-Qt
   ${VCPKG_STATIC}/lib/libglew32.lib
   ${WMV_BUILD}/Source/core/Release/core.lib
   ${WMV_BUILD}/Source/games/wow/Release/wow.lib)
+
+# The decoder test suite. tests/ is also configurable standalone (see tests/CMakeLists
+# for why); from here it simply becomes a ctest target of the main build.
+include(CTest)
+if(BUILD_TESTING)
+  add_subdirectory(tests)
+endif()
