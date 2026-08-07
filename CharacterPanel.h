@@ -55,6 +55,16 @@ public:
   // then prove the path without clicking the row's "x".
   void unequipSlot(int slot);
 
+  // Item view: show ONLY the piece in `slot`, hiding the figure and every other item;
+  // slot < 0 restores the whole character. See the implementation for why this beats
+  // loading the item's model on its own.
+  void setItemFocus(int slot);
+  int itemFocus() const { return focusSlot_; }
+
+  // True when the piece worn in `slot` has geometry of its own -- the precondition for
+  // the item view to show anything at all.
+  bool slotHasOwnModel(int slot) const;
+
   void randomise();
 
   // Public so the armory import can run the same check: it applies customizations
@@ -74,6 +84,10 @@ signals:
   // the orc's upright posture is the only one in the game data. The panel cannot load
   // models itself, so it names the file and lets the owner do the swap.
   void postureModelRequested(const QString& modelPath);
+
+  // The item view was switched on or off; the owner reframes the camera on what is
+  // left visible. The panel cannot do it itself -- the camera belongs to the viewport.
+  void itemFocusChanged(int slot);
 
 private:
   void rebuild();
@@ -101,6 +115,8 @@ private:
   std::vector<QComboBox*> combos_;
   std::vector<QLabel*> slotLabels_;   // one per CharSlots entry we show
   std::vector<QLabel*> clearButtons_; // the per-row "x", visible only when worn
+  std::vector<QLabel*> focusButtons_; // the per-row eye: show only this piece
+  int focusSlot_ = -1;                // -1 = whole character visible
   bool updating_ = false;      // guards against reacting to our own writes
 
 protected:

@@ -607,6 +607,18 @@ void CharacterPanel::buildEquipment()
     itemName->setStyleSheet(QString("color:%1; background:transparent;").arg(kDim));
     rr->addWidget(itemName, 1);
 
+    // Item view: show only this piece, the figure and the rest switched off. Toggles,
+    // so a second click brings the character back.
+    auto* focus = new QLabel(QString::fromUtf8("◉"));
+    focus->setFont(QFont(uiFamily(), 8));
+    focus->setCursor(Qt::PointingHandCursor);
+    focus->setToolTip(QString::fromUtf8("Nur dieses Teil zeigen"));
+    focus->setStyleSheet(QString("color:%1; background:transparent;").arg(kDim));
+    focus->setProperty("focusSlot", (int)s.slot);
+    focus->installEventFilter(this);
+    focus->setVisible(false);
+    rr->addWidget(focus);
+
     // The only way to take a single piece OFF used to be equipping something else
     // over it -- clearing always meant everything at once. Same clickable-label
     // pattern the main window uses for its category chips.
@@ -623,6 +635,7 @@ void CharacterPanel::buildEquipment()
     equipRows_->addWidget(row);
     slotLabels_.push_back(itemName);
     clearButtons_.push_back(clear);
+    focusButtons_.push_back(focus);
   }
 
   refreshEquipment();
@@ -634,6 +647,13 @@ bool CharacterPanel::eventFilter(QObject* obj, QEvent* e)
     const QVariant slot = obj->property("charSlot");
     if (slot.isValid()) {
       unequipSlot(slot.toInt());
+      return true;
+    }
+    const QVariant focus = obj->property("focusSlot");
+    if (focus.isValid()) {
+      // Toggle: clicking the piece that is already alone brings everyone back.
+      const int want = focus.toInt();
+      setItemFocus(focusSlot_ == want ? -1 : want);
       return true;
     }
   }
@@ -668,12 +688,25 @@ void CharacterPanel::refreshEquipment()
       break;
     QLabel* lbl = slotLabels_[i];
     QLabel* clear = i < (int)clearButtons_.size() ? clearButtons_[i] : nullptr;
+    QLabel* focus = i < (int)focusButtons_.size() ? focusButtons_[i] : nullptr;
     ++i;
 
     WoWItem* item = model_->getItem(s.slot);
     const bool worn = item && item->id() != 0;
     if (clear)
       clear->setVisible(worn);       // an "x" next to an empty slot removes nothing
+    if (focus) {
+      // Only offered where there IS geometry to look at: texture-only armour would
+      // switch the body off and leave an empty viewport.
+      const bool showable = worn && item &&
+                            (!item->models().empty() || item->mergedModel() != nullptr);
+      focus->setVisible(showable);
+      const bool active = (focusSlot_ == (int)s.slot);
+      focus->setStyleSheet(QString("color:%1; background:transparent;")
+                             .arg(active ? kAccent : kDim));
+      focus->setToolTip(active ? QString::fromUtf8("Wieder alles zeigen")
+                               : QString::fromUtf8("Nur dieses Teil zeigen"));
+    }
     if (!worn) {
       lbl->setText(QString::fromUtf8("—"));
       lbl->setStyleSheet(QString("color:%1; background:transparent;").arg(kDim));
@@ -721,6 +754,35 @@ void CharacterPanel::equipById(int itemId)
     refreshEquipment();
     emit customizationChanged();
   }
+}
+
+void CharacterPanel::setItemFocus(int slot)
+{
+  if (!model_)
+    return;
+
+  // The rule itself lives in WoWModel::applyItemFocus, which refresh() calls last --
+  // that is the only place it survives the visibility recomputation every equipment
+  // change triggers. Here it is just the switch and the panel's own repaint.
+  focusSlot_ = slot;
+  model_->setItemFocus(slot);
+  note(QString("item focus -> %1").arg(slot < 0 ? QString("aus") : QString::number(slot)));
+  refreshEquipment();
+  emit customizationChanged();
+  emit itemFocusChanged(slot);
+}
+
+bool CharacterPanel::slotHasOwnModel(int slot) const
+{
+  if (!model_)
+    return false;
+  for (auto it = model_->begin(); it != model_->end(); ++it) {
+    WoWItem* item = *it;
+    if (item && item->slot() == slot && item->id() != 0 &&
+        (!item->models().empty() || item->mergedModel() != nullptr))
+      return true;
+  }
+  return false;
 }
 
 void CharacterPanel::refresh()

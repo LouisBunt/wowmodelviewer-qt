@@ -56,6 +56,11 @@ public:
   void applyCameraPreset(int index);
   void resetCamera() { camera_.reset(model_); }
 
+  // Frame the camera on what is currently DRAWN rather than on the whole mesh --
+  // the item view hides the body, and framing the invisible figure leaves the piece
+  // as a speck in the middle. Falls back to resetCamera() when nothing is visible.
+  void frameVisible();
+
   // The scene's four fixed-function lights. Handed out so a panel can edit them in
   // place; call applyLights() afterwards to push the change into GL.
   Light* lights() { return lights_; }

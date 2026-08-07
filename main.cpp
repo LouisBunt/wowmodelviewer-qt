@@ -527,6 +527,10 @@ int main(int argc, char** argv)
   };
   QObject::connect(win, &MainWindow::fileActivated, win, showModel);
 
+  if (win->characterPanel())
+    QObject::connect(win->characterPanel(), &CharacterPanel::itemFocusChanged,
+                     host, [host](int) { host->frameVisible(); });
+
   if (win->characterPanel()) {
     win->characterPanel()->setModel(model && model->infos.raceID != -1 ? model : nullptr);
     // The model loaded at startup went through this path, not showModel(), so it never
@@ -634,22 +638,6 @@ int main(int argc, char** argv)
     trace(QString("export clips: %1").arg((int)o.clips.size()));
   }
 
-  // --export <Format>,<Pfad> runs an export without the dialog, so it is verifiable
-  // headlessly rather than merely assumed to work.
-  for (int i = 1; i < argc - 1; ++i) {
-    if (QString(argv[i]) != "--export")
-      continue;
-    const QStringList a = QString::fromLocal8Bit(argv[i + 1]).split(',');
-    if (a.size() != 2)
-      continue;
-    int idx = -1;
-    for (int k = 0; k < (int)exporters->formats().size(); ++k)
-      if (exporters->formats()[k].label.compare(a[0], Qt::CaseInsensitive) == 0)
-        idx = k;
-    const QString err = exporters->exportTo(host->model(), idx, a[1]);
-    trace(err.isEmpty() ? QString("export OK -> %1").arg(a[1])
-                        : QString("export FAILED: %1").arg(err));
-  }
 
   // Keep the scrubber and frame counter in step with playback. The canvas advances
   // the animation itself; this only reads it back.
@@ -753,6 +741,33 @@ int main(int argc, char** argv)
       win->characterPanel()->unequipSlot(p.toInt());
       trace(QString("unequip slot %1").arg(p.toInt()));
     }
+  }
+
+  // --focus <slot> turns on the item view for one CharSlots index (-1 = off), the
+  // headless twin of the equipment row's eye.
+  for (int i = 1; i < argc - 1; ++i) {
+    if (QString(argv[i]) != "--focus")
+      continue;
+    const int slot = QString::fromLocal8Bit(argv[i + 1]).toInt();
+    win->characterPanel()->setItemFocus(slot);
+    trace(QString("item focus %1").arg(slot));
+  }
+
+  // --export <Format>,<Pfad> runs an export without the dialog, so it is verifiable
+  // headlessly rather than merely assumed to work.
+  for (int i = 1; i < argc - 1; ++i) {
+    if (QString(argv[i]) != "--export")
+      continue;
+    const QStringList a = QString::fromLocal8Bit(argv[i + 1]).split(',');
+    if (a.size() != 2)
+      continue;
+    int idx = -1;
+    for (int k = 0; k < (int)exporters->formats().size(); ++k)
+      if (exporters->formats()[k].label.compare(a[0], Qt::CaseInsensitive) == 0)
+        idx = k;
+    const QString err = exporters->exportTo(host->model(), idx, a[1]);
+    trace(err.isEmpty() ? QString("export OK -> %1").arg(a[1])
+                        : QString("export FAILED: %1").arg(err));
   }
 
   win->show();
