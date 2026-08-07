@@ -155,7 +155,9 @@ MainWindow::MainWindow()
     "QDialog QPushButton:default { border-color:%6; }")
     .arg(tok::kApp).arg(tok::kPanel).arg(tok::kText).arg("#0f1216")
     .arg(tok::kBorder).arg(tok::kAccent).arg(tok::kOnAccent));
-  setWindowTitle("WoW Model Viewer");
+  // The version belongs in the title: a screenshot in a bug report then carries it
+  // without the reporter having to look it up.
+  setWindowTitle(QString("better Model Viewer %1").arg(WMV_QT_VERSION));
   resize(1480, 900);
 
   // The design has its own title bar, so the native frame goes away. On Windows this

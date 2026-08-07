@@ -1509,13 +1509,17 @@ void MenuController::about()
 
   QMessageBox::about(
     win_, tr("Über better Model Viewer"),
-    tr("<b>better Model Viewer</b><br>"
+    tr("<b>better Model Viewer %1</b><br>"
        "Qt-Frontend für WoW Model Viewer.<br><br>"
-       "Modell-, Render- und Datenschicht (core.dll / wow.dll) sind unverändert "
-       "übernommen; nur die Oberfläche ist neu.<br><br>"
-       "Exportformate: %1<br><br>"
-       "Lizenz: GPLv3, geerbt von WoW Model Viewer.<br>"
-       "World of Warcraft ist eine eingetragene Marke von Blizzard Entertainment.")
+       "Modell-, Render- und Datenschicht (core.dll / wow.dll) stammen aus dem "
+       "Ursprungsprojekt und sind bis auf wenige gezielte Eingriffe unverändert; "
+       "die Oberfläche ist neu.<br><br>"
+       "Exportformate: %2<br><br>"
+       "Lizenz: GPLv3, geerbt von WoW Model Viewer. Hinweise zu mitgelieferten "
+       "Fremdkomponenten stehen in THIRD-PARTY-NOTICES.txt neben dem Programm.<br>"
+       "World of Warcraft ist eine eingetragene Marke von Blizzard Entertainment; "
+       "dieses Projekt steht in keiner Verbindung zu Blizzard.")
+      .arg(WMV_QT_VERSION)
       .arg(formats.isEmpty() ? tr("keine geladen") : formats.join(", ")));
 }
 

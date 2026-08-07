@@ -41,6 +41,8 @@
 
 #include "Game.h"
 #include "GameFile.h"
+#include "logger/LogOutputFile.h"
+#include "logger/Logger.h"
 #include "CharTexture.h"
 #include "RaceInfos.h"
 #include "WoWDatabase.h"
@@ -240,15 +242,83 @@ static void splashStage(QSplashScreen* splash, QApplication& app, const QString&
   app.processEvents();
 }
 
+// True when the run is driven by a script (--shot / --export and friends). A modal dialog
+// there would block forever instead of failing, so those runs report to the trace and exit.
+static bool g_scripted = false;
+
+// Startup failures the user has to be TOLD about. They all mean the same thing in practice
+// -- the folder is not a usable WoW installation -- and picking the wrong folder is the
+// single most likely thing to go wrong on a first run.
+//
+// This used to write into a QLabel that was never parented, laid out or shown, so the app
+// put up an empty window for three seconds and quit without a word. A message box costs one
+// dialog and turns a dead end into an instruction.
+static int fatalStart(QSplashScreen* splash, QWidget* win, const QString& what,
+                      const QString& detail)
+{
+  if (splash)
+    splash->close();
+  trace("FATAL: " + what + (detail.isEmpty() ? QString() : " -- " + detail));
+
+  if (g_scripted) {
+    if (win)
+      win->close();
+    return 1;
+  }
+
+  QMessageBox box(QMessageBox::Critical, QObject::tr("better Model Viewer"), what, QMessageBox::Ok);
+  box.setInformativeText(
+      QObject::tr("Erwartet wird der Ordner der WoW-Installation, also der mit dem "
+                  "Unterordner \"Data\" darin (zum Beispiel "
+                  "C:\\Program Files (x86)\\World of Warcraft\\_retail_).\n\n"
+                  "Der zuletzt gewählte Ordner ist in userSettings\\qt-frontend.ini "
+                  "gespeichert; nach dem Löschen dieser Zeile fragt das Programm beim "
+                  "nächsten Start erneut."));
+  if (!detail.isEmpty())
+    box.setDetailedText(detail);
+  box.exec();
+
+  if (win)
+    win->close();
+  return 1;
+}
+
 int main(int argc, char** argv)
 {
-  trace("main entered");
+  trace(QString("main entered -- better Model Viewer %1").arg(WMV_QT_VERSION));
   QApplication app(argc, argv);
+
+  // Every data path -- listfile.csv, games/wow/<ver>/database.xml, ./plugins, wowdb.sqlite,
+  // userSettings -- is opened RELATIVE. Started from the Start menu that is the install
+  // folder and all is well, but the documented command line ("WoWModelViewer-Qt.exe <folder>
+  // <id>" from a shell) left the working directory wherever the user happened to be: no file
+  // tree, no item database, no exporters, and a fresh ~80 MB cache written into that folder.
+  // Pinning it here fixes all of them at once.
+  //
+  // Consequence for scripted runs: a RELATIVE --shot/--export path now lands next to the
+  // executable, not in the caller's directory. Pass absolute paths there.
+  QDir::setCurrent(QCoreApplication::applicationDirPath());
+
+  // Nothing in the Qt front-end ever registered a log sink, so every LOG_INFO/LOG_ERROR from
+  // core.dll, wow.dll and the exporter plugins went nowhere -- while dialogs told the user to
+  // "see the log for details". Registered before anything else so early failures are caught.
+  QDir().mkpath("userSettings");
+  LOGGER.addChild(new WMVLog::LogOutputFile("userSettings/log.txt"));
+
   applyDarkPalette(app);
   // Window/taskbar icon for every top-level widget; the exe's Explorer icon comes
   // from resources/appicon.rc.
   app.setWindowIcon(QIcon(":/appicon.png"));
   trace("QApplication constructed");
+
+  // Scripted runs must never stop on a modal dialog; decided here, before anything can fail.
+  for (int i = 1; i < argc; ++i) {
+    const QString a = QString::fromLocal8Bit(argv[i]);
+    if (a == "--shot" || a == "--export" || a == "--install-blender-addon") {
+      g_scripted = true;
+      break;
+    }
+  }
 
   QSplashScreen* splash = makeSplash();
   splash->show();
@@ -268,8 +338,6 @@ int main(int argc, char** argv)
 
   auto* win = new MainWindow;
   GLHost* host = win->canvas();
-  // Kept so the existing failure paths below still have somewhere to report to.
-  auto* status = new QLabel;
 
   // --- game init: identical to what modelviewer.cpp does, minus the wx wrapping
   // CASCFolder builds the build-info path as "<folder>\..\.build.info", so the
@@ -288,9 +356,9 @@ int main(int argc, char** argv)
   core::Game::instance().init(folder, new wow::WoWDatabase());
   trace("Game::init returned");
   if (!core::Game::instance().initDone()) {
-    status->setText("Game::init failed -- is the data folder correct?");
-    win->show();
-    return app.exec();
+    return fatalStart(splash, win,
+                      QObject::tr("Die Spieldaten konnten nicht geöffnet werden."),
+                      cascFolder);
   }
   // Game::init() only wires the objects together -- initDone() merely checks two
   // pointers. Nothing is opened until a config is chosen and handed to setConfig(),
@@ -300,12 +368,9 @@ int main(int argc, char** argv)
   std::vector<core::GameConfig> configs = GAMEDIRECTORY.configsFound();
   trace(QString("configsFound returned %1 entries").arg(configs.size()));
   if (configs.empty()) {
-    trace("FATAL: no config found in the data folder");
-    splash->close();
-    status->setText("No WoW locale/config found in that folder");
-    win->show();
-    QTimer::singleShot(3000, qApp, &QApplication::quit);
-    return app.exec();
+    return fatalStart(splash, win,
+                      QObject::tr("In diesem Ordner wurde keine WoW-Installation gefunden."),
+                      cascFolder);
   }
 
   // Same rule the wx front-end uses: prefer the retail "wow" product, newest build.
@@ -333,18 +398,43 @@ int main(int argc, char** argv)
   splashStage(splash, app, QString::fromUtf8("Spielarchiv wird eingebunden …"));
   trace("before setConfig (mounts CASC)");
   if (!GAMEDIRECTORY.setConfig(config)) {
-    trace(QString("FATAL: setConfig failed, lastError=%1").arg(GAMEDIRECTORY.lastError()));
-    splash->close();
-    status->setText(QString("setConfig failed (error %1)").arg(GAMEDIRECTORY.lastError()));
-    win->show();
-    QTimer::singleShot(3000, qApp, &QApplication::quit);
-    return app.exec();
+    return fatalStart(splash, win,
+                      QObject::tr("Das Spielarchiv konnte nicht eingebunden werden. "
+                                  "Läuft WoW oder der Battle.net-Updater gerade?"),
+                      QString("setConfig error %1\n%2").arg(GAMEDIRECTORY.lastError()).arg(cascFolder));
   }
   trace("setConfig returned OK");
 
   // configFolder must match the client's major version; the listfile path below is
   // resolved relative to it.
-  const QString cfgFolder = QString("games/wow/%1.0/").arg(config.version.section('.', 0, 0));
+  //
+  // Only some major versions ship data definitions, so an exact match cannot be assumed:
+  // a client we have no folder for (11.x, or any Classic product) used to point the whole
+  // database at a directory that does not exist. Everything then "worked" -- empty item
+  // list, no race data, untextured characters, imports reporting zero pieces -- with the
+  // reason sitting in a trace file nobody reads. Fall back to the newest bundled definition
+  // at or below the client's version, and say so when it is not an exact match.
+  const int clientMajor = config.version.section('.', 0, 0).toInt();
+  QString cfgFolder = QString("games/wow/%1.0/").arg(clientMajor);
+  if (!QFile::exists(cfgFolder + "database.xml")) {
+    int best = -1;
+    const QFileInfoList dirs = QDir("games/wow").entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot);
+    for (const QFileInfo& d : dirs) {
+      const int major = d.fileName().section('.', 0, 0).toInt();
+      if (major <= clientMajor && major > best &&
+          QFile::exists(d.absoluteFilePath() + "/database.xml"))
+        best = major;
+    }
+    if (best < 0) {
+      return fatalStart(splash, win,
+                        QObject::tr("Für die WoW-Version %1 liegen dieser Installation keine "
+                                    "Datendefinitionen bei.").arg(config.version),
+                        QString("kein games/wow/<=%1.0/database.xml gefunden in %2")
+                          .arg(clientMajor).arg(QDir::currentPath()));
+    }
+    trace(QString("no data for client major %1 -- falling back to %2.0").arg(clientMajor).arg(best));
+    cfgFolder = QString("games/wow/%1.0/").arg(best);
+  }
   core::Game::instance().setConfigFolder(cfgFolder);
   trace("configFolder = " + cfgFolder);
 
@@ -360,10 +450,15 @@ int main(int argc, char** argv)
   // cached sqlite. One text covers both honestly.
   splashStage(splash, app, QString::fromUtf8("Datenbank wird geladen — beim ersten Start dauert das eine Weile …"));
   trace("before GAMEDATABASE.initFromXML");
-  if (!GAMEDATABASE.initFromXML("database.xml"))
-    trace("WARNING: database.xml init failed -- character data will be empty");
-  else
-    trace("database.xml loaded");
+  // Without the database every character draws as untextured geosets and every equip is a
+  // silent no-op -- an application that LOOKS like it started but can do nothing it promises.
+  // Stopping here beats letting the user discover that one broken feature at a time.
+  if (!GAMEDATABASE.initFromXML("database.xml")) {
+    return fatalStart(splash, win,
+                      QObject::tr("Die Datendefinitionen konnten nicht geladen werden."),
+                      cfgFolder + "database.xml (" + QDir::currentPath() + ")");
+  }
+  trace("database.xml loaded");
 
   CharTexture::initRegions();
   RaceInfos::init();
@@ -397,10 +492,16 @@ int main(int argc, char** argv)
   // failing is not: the browser is right there, so come up with an empty viewport and
   // let them pick, instead of dead-ending on a message.
   if (!file && modelRequested) {
-    splash->close();
-    status->setText(QString("FileDataID %1 not found in CASC").arg(fileId));
-    win->show();
-    return app.exec();
+    // Not a fatal folder problem: the client is fine, only this one id is not in it.
+    // Say so and carry on with an empty viewport -- the browser is right there.
+    trace(QString("requested FileDataID %1 not in this client").arg(fileId));
+    if (!g_scripted) {
+      splash->close();
+      QMessageBox::warning(nullptr, QObject::tr("better Model Viewer"),
+                           QObject::tr("Das Modell mit der ID %1 gibt es in dieser "
+                                       "WoW-Version nicht.\n\nDer Modellbrowser links "
+                                       "zeigt, was vorhanden ist.").arg(fileId));
+    }
   }
   if (!file)
     trace(QString("default model %1 not in this client -- starting empty").arg(fileId));
@@ -748,7 +849,15 @@ int main(int argc, char** argv)
   for (int i = 1; i < argc - 1; ++i) {
     if (QString(argv[i]) != "--focus")
       continue;
-    const int slot = QString::fromLocal8Bit(argv[i + 1]).toInt();
+    // toInt() turns anything unparseable into 0, which is CS_HEAD -- a typo would silently
+    // focus the helmet slot instead of reporting itself.
+    bool ok = false;
+    const QString raw = QString::fromLocal8Bit(argv[i + 1]);
+    const int slot = raw.toInt(&ok);
+    if (!ok) {
+      trace(QString("--focus: '%1' ist keine Slot-Nummer -- ignoriert").arg(raw));
+      continue;
+    }
     win->characterPanel()->setItemFocus(slot);
     trace(QString("item focus %1").arg(slot));
   }
@@ -778,13 +887,29 @@ int main(int argc, char** argv)
   QTimer::singleShot(2500, [host]() {
     if (host->isReady())
       return;
+    const QString why = host->lastError().isEmpty()
+                          ? QStringLiteral("video never initialised and no error was recorded "
+                                           "-- showEvent/initVideo did not run at all")
+                          : host->lastError();
     QFile f("userSettings/qt-frontend-error.txt");
-    if (f.open(QIODevice::WriteOnly | QIODevice::Text)) {
-      QTextStream out(&f);
-      out << (host->lastError().isEmpty()
-                ? QStringLiteral("video never initialised and no error was recorded "
-                                 "-- showEvent/initVideo did not run at all")
-                : host->lastError()) << "\n";
+    if (f.open(QIODevice::WriteOnly | QIODevice::Text))
+      QTextStream(&f) << why << "\n";
+    trace("FATAL: OpenGL init failed -- " + why);
+
+    // This is the likeliest failure on hardware we have never seen -- remote desktop, a VM
+    // without GPU passthrough, an ancient display driver. Writing it only to a file the user
+    // does not know about made the application appear to vanish two seconds after launch.
+    if (!g_scripted) {
+      QMessageBox box(QMessageBox::Critical, QObject::tr("better Model Viewer"),
+                      QObject::tr("Die 3D-Ansicht konnte nicht gestartet werden."),
+                      QMessageBox::Ok);
+      box.setInformativeText(
+          QObject::tr("Das Programm braucht OpenGL. Häufige Ursachen:\n\n"
+                      "• Start über Remotedesktop — dort steht meist kein OpenGL bereit\n"
+                      "• Grafiktreiber veraltet oder nur der Windows-Standardtreiber aktiv\n"
+                      "• virtuelle Maschine ohne Grafikdurchreichung"));
+      box.setDetailedText(why);
+      box.exec();
     }
     qApp->quit();
   });
