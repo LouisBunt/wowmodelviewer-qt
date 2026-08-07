@@ -3,6 +3,7 @@ project(WoWModelViewerQt)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_AUTOMOC ON)
+set(CMAKE_AUTORCC ON)
 
 # Reuse the upstream tree: we link its core/wow libraries unchanged.
 #
@@ -66,6 +67,8 @@ add_executable(WoWModelViewer-Qt WIN32
   WowheadDressingRoom.h
   BlenderAddonInstaller.cpp
   BlenderAddonInstaller.h
+  resources/resources.qrc
+  resources/appicon.rc
   ${WMV_SRC}/Source/wowmodelviewer/OrbitCamera.cpp)
 
 set_target_properties(WoWModelViewer-Qt PROPERTIES OUTPUT_NAME "WoWModelViewer-Qt")

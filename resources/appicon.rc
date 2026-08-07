@@ -1,0 +1,2 @@
+// The executable's Windows icon -- what Explorer, the taskbar and shortcuts show.
+IDI_ICON1 ICON "appicon.ico"
