@@ -637,7 +637,7 @@ int main(int argc, char** argv)
     else if (a == "--item-solo")
       menus->showItem(id, true);
     else if (a == "--set")
-      menus->showSet(id);
+      menus->showSet(id, false);
   }
 
   // --wowhead <url|liste> runs the Wowhead look import without the dialog: either an
@@ -684,6 +684,17 @@ int main(int argc, char** argv)
         win->characterPanel()->equip(id);
         trace(QString("equipped item %1").arg(id));
       }
+    }
+  }
+
+  // --unequip <slot>[,<slot>...] takes single pieces off by CharSlots index -- the
+  // headless twin of the equipment rows' "x", same as --equip mirrors the id field.
+  for (int i = 1; i < argc - 1; ++i) {
+    if (QString(argv[i]) != "--unequip")
+      continue;
+    for (const QString& p : QString::fromLocal8Bit(argv[i + 1]).split(',', QString::SkipEmptyParts)) {
+      win->characterPanel()->unequipSlot(p.toInt());
+      trace(QString("unequip slot %1").arg(p.toInt()));
     }
   }
 

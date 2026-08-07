@@ -37,7 +37,9 @@ signals:
   // standalone: show the item's own model on its own. Only meaningful for the slots that
   // HAVE one (head, shoulder, back, weapons); the receiver reports when they do not.
   void itemActivated(int itemId, bool standalone);
-  void setActivated(int setId);
+  // keepEquipment: leave what is currently worn and only add the set's pieces on
+  // top. Travels in the signal because Qt connects cannot see default arguments.
+  void setActivated(int setId, bool keepEquipment);
 
 private:
   void refresh();
@@ -55,6 +57,7 @@ private:
   QComboBox* quality_ = nullptr;
   QLineEdit* search_ = nullptr;
   QCheckBox* standalone_ = nullptr;
+  QCheckBox* keepEquip_ = nullptr;   // sets mode only
   QListWidget* list_ = nullptr;
   QLabel* count_ = nullptr;
   QLabel* itemsChip_ = nullptr;

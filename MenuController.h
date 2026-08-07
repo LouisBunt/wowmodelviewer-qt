@@ -120,7 +120,7 @@ public slots:
   // head, shoulder, back and weapons have one, and the rest fall back to the mannequin
   // with a note rather than showing nothing.
   void showItem(int itemId, bool standalone);
-  void showSet(int setId);
+  void showSet(int setId, bool keepEquipment);
 
   // Item ids out of a Wowhead outfit or transmog-set page. Those are rendered
   // server-side, so the list is simply in the HTML. Empty with `error` set on failure.

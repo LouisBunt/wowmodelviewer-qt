@@ -1,6 +1,7 @@
 #include "CharacterPanel.h"
 
 #include <QCheckBox>
+#include <QEvent>
 #include <QComboBox>
 #include <QDateTime>
 #include <QDir>
@@ -606,11 +607,54 @@ void CharacterPanel::buildEquipment()
     itemName->setStyleSheet(QString("color:%1; background:transparent;").arg(kDim));
     rr->addWidget(itemName, 1);
 
+    // The only way to take a single piece OFF used to be equipping something else
+    // over it -- clearing always meant everything at once. Same clickable-label
+    // pattern the main window uses for its category chips.
+    auto* clear = new QLabel(QString::fromUtf8("×"));
+    clear->setFont(QFont(uiFamily(), 9));
+    clear->setCursor(Qt::PointingHandCursor);
+    clear->setToolTip(QString::fromUtf8("Ablegen"));
+    clear->setStyleSheet(QString("color:%1; background:transparent;").arg(kDim));
+    clear->setProperty("charSlot", (int)s.slot);
+    clear->installEventFilter(this);
+    clear->setVisible(false);
+    rr->addWidget(clear);
+
     equipRows_->addWidget(row);
     slotLabels_.push_back(itemName);
+    clearButtons_.push_back(clear);
   }
 
   refreshEquipment();
+}
+
+bool CharacterPanel::eventFilter(QObject* obj, QEvent* e)
+{
+  if (e->type() == QEvent::MouseButtonRelease) {
+    const QVariant slot = obj->property("charSlot");
+    if (slot.isValid()) {
+      unequipSlot(slot.toInt());
+      return true;
+    }
+  }
+  return QWidget::eventFilter(obj, e);
+}
+
+void CharacterPanel::unequipSlot(int slot)
+{
+  if (!model_ || slot < 0 || slot >= NUM_CHAR_SLOTS)
+    return;
+  WoWItem* item = model_->getItem((CharSlots)slot);
+  if (!item || item->id() == 0)
+    return;
+
+  note(QString("unequip slot %1 (was item %2)").arg(slot).arg(item->id()));
+  // Same order clearEquipment() uses: change the item, recompose the model once,
+  // then re-read the panel from the result.
+  item->setId(0);
+  model_->refresh();
+  refreshEquipment();
+  emit customizationChanged();
 }
 
 void CharacterPanel::refreshEquipment()
@@ -622,10 +666,15 @@ void CharacterPanel::refreshEquipment()
   for (const auto& s : kSlots) {
     if (i >= (int)slotLabels_.size())
       break;
-    QLabel* lbl = slotLabels_[i++];
+    QLabel* lbl = slotLabels_[i];
+    QLabel* clear = i < (int)clearButtons_.size() ? clearButtons_[i] : nullptr;
+    ++i;
 
     WoWItem* item = model_->getItem(s.slot);
-    if (!item || item->id() == 0) {
+    const bool worn = item && item->id() != 0;
+    if (clear)
+      clear->setVisible(worn);       // an "x" next to an empty slot removes nothing
+    if (!worn) {
       lbl->setText(QString::fromUtf8("—"));
       lbl->setStyleSheet(QString("color:%1; background:transparent;").arg(kDim));
       continue;

@@ -682,10 +682,15 @@ void MenuController::importWowheadLook()
   applyItemIds(ids, label);
 }
 
-void MenuController::showSet(int setId)
+void MenuController::showSet(int setId, bool keepEquipment)
 {
+  // Named columns, not SELECT *: the old positional read ("everything from index 2
+  // on is an item id") silently breaks the moment the table gains a column.
+  QString itemCols;
+  for (int i = 1; i <= 17; ++i)
+    itemCols += QString(", ItemID%1").arg(i);
   sqlResult r = GAMEDATABASE.sqlQuery(
-    QString("SELECT * FROM ItemSet WHERE ID = %1").arg(setId));
+    QString("SELECT Name_Lang%1 FROM ItemSet WHERE ID = %2").arg(itemCols).arg(setId));
   if (!r.valid || r.values.empty()) {
     trace(QString("set %1 not found").arg(setId));
     return;
@@ -699,14 +704,15 @@ void MenuController::showSet(int setId)
     return;
   }
 
-  // A set replaces what is worn -- otherwise leftovers from the previous one stay on
-  // whichever slots this set does not fill.
-  win_->characterPanel()->clearEquipment();
+  // By default a set replaces what is worn -- otherwise leftovers from the previous
+  // one stay on whichever slots this set does not fill. keepEquipment is the browser
+  // checkbox for deliberately mixing sets.
+  if (!keepEquipment)
+    win_->characterPanel()->clearEquipment();
 
-  // Columns are ID, Name_Lang, then ItemID1..17.
   const auto& row = r.values[0];
   int applied = 0;
-  for (int i = 2; i < (int)row.size(); ++i) {
+  for (int i = 1; i < (int)row.size(); ++i) {
     const int itemId = row[i].toInt();
     if (itemId <= 0)
       continue;
@@ -715,7 +721,9 @@ void MenuController::showSet(int setId)
   }
 
   modelChanged();
-  win_->setPathLabel(tr("Set: %1 — %2 Teile").arg(row[1]).arg(applied));
+  win_->setPathLabel(keepEquipment
+    ? tr("Set: %1 — %2 Teile hinzugefügt").arg(row[0]).arg(applied)
+    : tr("Set: %1 — %2 Teile").arg(row[0]).arg(applied));
 }
 
 void MenuController::toggleGrid()
