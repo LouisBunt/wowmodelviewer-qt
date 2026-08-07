@@ -335,6 +335,26 @@ bool GLHost::grabTo(const QString& path)
 
 // ---------------------------------------------------------------------------
 
+void GLHost::frameVisible()
+{
+  glm::vec3 mn, mx;
+  if (!model_ || !model_->visibleBounds(mn, mx)) {
+    camera_.reset(model_);
+    return;
+  }
+  const glm::vec3 center = (mn + mx) * 0.5f;
+  const glm::vec3 d = mx - center;
+
+  // Longest half-AXIS, not the half-diagonal. frameBounds pulls back far enough to fit a
+  // sphere of the given radius, and the sphere around a two-handed sword is mostly empty
+  // air -- the blade came out a sliver in the middle of the viewport. Fitting the longest
+  // axis makes that axis fill the frame instead; a compact piece barely notices (for a
+  // cube-ish shape the two differ by the usual sqrt(3)), and nothing can be cropped,
+  // because no other axis is longer than the one being fitted.
+  const float radius = std::max(d.x, std::max(d.y, d.z));
+  camera_.frameBounds(center, radius > 0.0001f ? radius : 0.1f);
+}
+
 void GLHost::tick()
 {
   if (!videoReady_)
