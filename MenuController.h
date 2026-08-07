@@ -1,7 +1,9 @@
 #ifndef MENUCONTROLLER_H
 #define MENUCONTROLLER_H
 
+#include <QNetworkAccessManager>
 #include <QObject>
+#include <QPointer>
 #include <QString>
 #include <vector>
 
@@ -126,6 +128,14 @@ public slots:
   // server-side, so the list is simply in the HTML. Empty with `error` set on failure.
   std::vector<int> fetchWowheadItemIds(const QString& url, QString* error) const;
 
+  // The menu's fetch: same scrape, but asynchronous -- the window stays usable and a
+  // second call aborts the one in flight. Reports through the status line and a
+  // message box; on success it applies the ids like the synchronous path.
+  void startWowheadFetch(const QString& url, const QString& label);
+
+  // Shared scraping backend of both fetch paths.
+  static std::vector<int> parseWowheadItemIds(const QString& html, QString* error);
+
   // Equip a list of item ids on the current character, loading a mannequin if there is
   // none. Shared by the Wowhead import and the headless --wowhead flag.
   void applyItemIds(const std::vector<int>& ids, const QString& label);
@@ -144,6 +154,8 @@ private:
   MainWindow* win_ = nullptr;
   GLHost* host_ = nullptr;
   ExportController* exporters_ = nullptr;
+  QNetworkAccessManager net_;               // the async Wowhead fetch
+  QPointer<QNetworkReply> activeReply_;     // at most one fetch in flight
 
   void toggleGrid();
 

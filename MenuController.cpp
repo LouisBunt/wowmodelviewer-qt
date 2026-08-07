@@ -15,6 +15,7 @@
 #include <QUrl>
 
 #include <QAction>
+#include <QApplication>
 #include <QColorDialog>
 #include <QDateTime>
 #include <QDir>
@@ -543,7 +544,14 @@ std::vector<int> MenuController::fetchWowheadItemIds(const QString& url, QString
     return ids;
   }
 
-  const QString html = QString::fromUtf8(reply->readAll());
+  return parseWowheadItemIds(QString::fromUtf8(reply->readAll()), error);
+}
+
+// The scraping itself, shared by the synchronous (--wowhead, headless) and the
+// asynchronous (menu) fetch path so the two can never drift apart.
+std::vector<int> MenuController::parseWowheadItemIds(const QString& html, QString* error)
+{
+  std::vector<int> ids;
 
   // Outfit and transmog-set pages render each piece as an anchor whose element id carries
   // the item: _item-id-118279_0. That is the whole contract -- no JSON, no API.
@@ -589,6 +597,56 @@ std::vector<int> MenuController::fetchWowheadItemIds(const QString& url, QString
     *error = tr("Auf dieser Seite standen keine Gegenstände. Ist es wirklich ein "
                 "gespeichertes Outfit oder ein Transmog-Set?");
   return unique;
+}
+
+void MenuController::startWowheadFetch(const QString& url, const QString& label)
+{
+  // A second request while one is in flight aborts the first -- its finished-handler
+  // sees the abort error and stops; without this, two results race for the mannequin.
+  if (activeReply_)
+    activeReply_->abort();
+
+  QNetworkRequest req{QUrl(url)};
+  req.setHeader(QNetworkRequest::UserAgentHeader,
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) betterModelViewer");
+  req.setAttribute(QNetworkRequest::FollowRedirectsAttribute, true);
+
+  QNetworkReply* reply = net_.get(req);
+  activeReply_ = reply;
+  win_->setPathLabel(tr("Wowhead wird abgefragt …"));
+  trace("wowhead fetch started: " + url);
+
+  // Parented to the reply: an answer before the timeout takes the timer with it.
+  auto* timeout = new QTimer(reply);
+  timeout->setSingleShot(true);
+  connect(timeout, &QTimer::timeout, reply, &QNetworkReply::abort);
+  timeout->start(15000);
+
+  connect(reply, &QNetworkReply::finished, this, [this, reply, label]() {
+    if (activeReply_ == reply)
+      activeReply_ = nullptr;
+    reply->deleteLater();
+
+    if (reply->error() != QNetworkReply::NoError) {
+      const QString why = reply->error() == QNetworkReply::OperationCanceledError
+        ? tr("Zeitüberschreitung beim Abruf von Wowhead.")
+        : tr("Abruf fehlgeschlagen: %1").arg(reply->errorString());
+      trace("wowhead fetch FAILED: " + why);
+      win_->setPathLabel(why);
+      QMessageBox::warning(win_, tr("Wowhead-Import"), why);
+      return;
+    }
+
+    QString error;
+    const std::vector<int> ids =
+      parseWowheadItemIds(QString::fromUtf8(reply->readAll()), &error);
+    if (ids.empty()) {
+      win_->setPathLabel(tr("Wowhead-Import fehlgeschlagen"));
+      QMessageBox::warning(win_, tr("Wowhead-Import"), error);
+      return;
+    }
+    applyItemIds(ids, label);
+  });
 }
 
 void MenuController::applyItemIds(const std::vector<int>& ids, const QString& label)
@@ -656,13 +714,10 @@ void MenuController::importWowheadLook()
   QString label;
 
   if (input.startsWith("http", Qt::CaseInsensitive)) {
-    QString error;
-    ids = fetchWowheadItemIds(input, &error);
-    if (ids.empty()) {
-      QMessageBox::warning(win_, tr("Wowhead-Import"), error);
-      return;
-    }
-    label = tr("Wowhead-Import");
+    // Asynchronous: the old path parked the whole window in a nested event loop for
+    // up to 15 s. The continuation lives in startWowheadFetch.
+    startWowheadFetch(input, tr("Wowhead-Import"));
+    return;
   } else {
     // A plain list: commas, spaces or newlines, and 0 for an empty slot.
     for (const QString& part : input.split(QRegularExpression("[^0-9-]+"), QString::SkipEmptyParts)) {
@@ -931,13 +986,21 @@ QString MenuController::importArmory(const QString& rawUrl, bool interactive)
   trace("=== armory import: " + url + (url == rawUrl.trimmed() ? "" : "  (trailing / removed)"));
 
   // The importers are plugins, loaded already by ExportController::loadPlugins --
-  // whichever one recognises the URL does the fetching and parsing.
+  // whichever one recognises the URL does the fetching and parsing. The fetch happens
+  // INSIDE the plugin DLL, synchronously; making it truly async means changing the
+  // plugin API. Until then: say what is happening and show a wait cursor -- the paint
+  // pass before the call is what actually gets both onto the screen.
+  win_->setPathLabel(tr("Armory wird abgefragt …"));
+  QApplication::setOverrideCursor(Qt::WaitCursor);
+  QApplication::processEvents();
+
   CharInfos* result = nullptr;
   for (auto it = PLUGINMANAGER.begin(); it != PLUGINMANAGER.end(); ++it) {
     const auto* plugin = dynamic_cast<ImporterPlugin*>(*it);
     if (plugin && plugin->acceptURL(url))
       result = plugin->importChar(url);
   }
+  QApplication::restoreOverrideCursor();
 
   if (!result) {
     trace("FAILED: no importer accepted the URL / page unreachable");

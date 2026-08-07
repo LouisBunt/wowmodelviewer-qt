@@ -18,7 +18,9 @@
 #include <QFile>
 #include <QFileDialog>
 #include <QLabel>
+#include <QPainter>
 #include <QSettings>
+#include <QSplashScreen>
 #include <QTextStream>
 #include <QTimer>
 #include <QInputDialog>
@@ -202,12 +204,46 @@ static void applyDarkPalette(QApplication& app)
   app.setPalette(p);
 }
 
+// The first start builds the database from DB2 (~20 s) and even a warm start reads a
+// ~148 MB listfile -- all of it before the window exists. Without this the user
+// launches the app and nothing at all appears. A splash with stage messages is the
+// honest fix here; threading is not: GAMEDIRECTORY/GAMEDATABASE are unlocked globals
+// and the GL context belongs to the UI thread.
+static QSplashScreen* makeSplash()
+{
+  QPixmap pm(420, 160);
+  pm.fill(QColor("#14181e"));
+  QPainter p(&pm);
+  p.setPen(QColor("#23282f"));
+  p.drawRect(0, 0, pm.width() - 1, pm.height() - 1);
+  p.setPen(QColor("#c8a15a"));
+  QFont f("Segoe UI", 14, QFont::DemiBold);
+  f.setLetterSpacing(QFont::AbsoluteSpacing, 2.0);
+  p.setFont(f);
+  p.drawText(QRect(0, 40, pm.width(), 30), Qt::AlignCenter, "MODEL VIEWER");
+  p.end();
+  auto* splash = new QSplashScreen(pm);
+  return splash;
+}
+
+static void splashStage(QSplashScreen* splash, QApplication& app, const QString& text)
+{
+  if (!splash)
+    return;
+  splash->showMessage(text, Qt::AlignBottom | Qt::AlignHCenter, QColor("#b6bdc8"));
+  app.processEvents();
+}
+
 int main(int argc, char** argv)
 {
   trace("main entered");
   QApplication app(argc, argv);
   applyDarkPalette(app);
   trace("QApplication constructed");
+
+  QSplashScreen* splash = makeSplash();
+  splash->show();
+  splashStage(splash, app, QString::fromUtf8("Spieldaten werden geöffnet …"));
 
   const QString dataFolder = resolveGameFolder(argc, argv);
   if (dataFolder.isEmpty()) {
@@ -256,6 +292,7 @@ int main(int argc, char** argv)
   trace(QString("configsFound returned %1 entries").arg(configs.size()));
   if (configs.empty()) {
     trace("FATAL: no config found in the data folder");
+    splash->close();
     status->setText("No WoW locale/config found in that folder");
     win->show();
     QTimer::singleShot(3000, qApp, &QApplication::quit);
@@ -284,9 +321,11 @@ int main(int argc, char** argv)
   trace(QString("chosen config: %1 / %2 / %3")
           .arg(config.locale).arg(config.product).arg(config.version));
 
+  splashStage(splash, app, QString::fromUtf8("Spielarchiv wird eingebunden …"));
   trace("before setConfig (mounts CASC)");
   if (!GAMEDIRECTORY.setConfig(config)) {
     trace(QString("FATAL: setConfig failed, lastError=%1").arg(GAMEDIRECTORY.lastError()));
+    splash->close();
     status->setText(QString("setConfig failed (error %1)").arg(GAMEDIRECTORY.lastError()));
     win->show();
     QTimer::singleShot(3000, qApp, &QApplication::quit);
@@ -300,6 +339,7 @@ int main(int argc, char** argv)
   core::Game::instance().setConfigFolder(cfgFolder);
   trace("configFolder = " + cfgFolder);
 
+  splashStage(splash, app, QString::fromUtf8("Dateiliste wird geladen … (~148 MB)"));
   trace("before initFromListfile");
   GAMEDIRECTORY.initFromListfile("../../../listfile.csv");
   trace("initFromListfile returned");
@@ -307,6 +347,9 @@ int main(int argc, char** argv)
   // The database, texture regions and race registry. Without these WoWModel cannot
   // resolve a model file to a race, infos.raceID stays -1, and character models draw
   // as a handful of untextured geosets -- which is exactly what Phase 1 produced.
+  // The expensive stage on a first start or schema bump; a warm start only opens the
+  // cached sqlite. One text covers both honestly.
+  splashStage(splash, app, QString::fromUtf8("Datenbank wird geladen — beim ersten Start dauert das eine Weile …"));
   trace("before GAMEDATABASE.initFromXML");
   if (!GAMEDATABASE.initFromXML("database.xml"))
     trace("WARNING: database.xml init failed -- character data will be empty");
@@ -317,6 +360,7 @@ int main(int argc, char** argv)
   RaceInfos::init();
   trace("RaceInfos::init done");
 
+  splashStage(splash, app, QString::fromUtf8("Gegenstände werden gelesen …"));
   // The item table. items.getById() is what maps an id to its slot, so without this
   // every equip attempt resolves to slot -1 and silently does nothing.
   {
@@ -344,6 +388,7 @@ int main(int argc, char** argv)
   // failing is not: the browser is right there, so come up with an empty viewport and
   // let them pick, instead of dead-ending on a message.
   if (!file && modelRequested) {
+    splash->close();
     status->setText(QString("FileDataID %1 not found in CASC").arg(fileId));
     win->show();
     return app.exec();
@@ -356,8 +401,11 @@ int main(int argc, char** argv)
   // silently -- geometry survives (CPU side) but everything renders untextured.
   // GLHost creates the context in showEvent, so show first, pump the event queue,
   // then load.
+  splashStage(splash, app, QString::fromUtf8("Modell wird geladen …"));
   trace("before show (context comes up here)");
   win->show();
+  splash->finish(win);
+  splash->deleteLater();
   app.processEvents();
   trace(QString("context ready = %1").arg(host->isReady() ? "yes" : "NO"));
   if (!host->isReady())
