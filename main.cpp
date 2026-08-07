@@ -23,6 +23,7 @@
 #include <QSplashScreen>
 #include <QTextStream>
 #include <QTimer>
+#include <QIcon>
 #include <QInputDialog>
 #include <QMessageBox>
 #include <QString>
@@ -211,19 +212,24 @@ static void applyDarkPalette(QApplication& app)
 // and the GL context belongs to the UI thread.
 static QSplashScreen* makeSplash()
 {
-  QPixmap pm(420, 160);
-  pm.fill(QColor("#14181e"));
-  QPainter p(&pm);
-  p.setPen(QColor("#23282f"));
-  p.drawRect(0, 0, pm.width() - 1, pm.height() - 1);
-  p.setPen(QColor("#c8a15a"));
-  QFont f("Segoe UI", 14, QFont::DemiBold);
-  f.setLetterSpacing(QFont::AbsoluteSpacing, 2.0);
-  p.setFont(f);
-  p.drawText(QRect(0, 40, pm.width(), 30), Qt::AlignCenter, "MODEL VIEWER");
-  p.end();
-  auto* splash = new QSplashScreen(pm);
-  return splash;
+  // The branded poster, compiled in via the Qt resource system so the exe stays
+  // self-contained. The drawn fallback only exists so a build without resources
+  // still shows SOMETHING rather than nothing.
+  QPixmap pm(":/splash.png");
+  if (pm.isNull()) {
+    pm = QPixmap(420, 160);
+    pm.fill(QColor("#14181e"));
+    QPainter p(&pm);
+    p.setPen(QColor("#23282f"));
+    p.drawRect(0, 0, pm.width() - 1, pm.height() - 1);
+    p.setPen(QColor("#c8a15a"));
+    QFont f("Segoe UI", 14, QFont::DemiBold);
+    f.setLetterSpacing(QFont::AbsoluteSpacing, 2.0);
+    p.setFont(f);
+    p.drawText(QRect(0, 40, pm.width(), 30), Qt::AlignCenter, "MODEL VIEWER");
+    p.end();
+  }
+  return new QSplashScreen(pm);
 }
 
 static void splashStage(QSplashScreen* splash, QApplication& app, const QString& text)
@@ -239,6 +245,9 @@ int main(int argc, char** argv)
   trace("main entered");
   QApplication app(argc, argv);
   applyDarkPalette(app);
+  // Window/taskbar icon for every top-level widget; the exe's Explorer icon comes
+  // from resources/appicon.rc.
+  app.setWindowIcon(QIcon(":/appicon.png"));
   trace("QApplication constructed");
 
   QSplashScreen* splash = makeSplash();

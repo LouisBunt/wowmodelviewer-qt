@@ -44,7 +44,7 @@ DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 OutputDir=dist
 OutputBaseFilename=better-Model-Viewer-Setup-{#MyAppVersion}
-SetupIconFile={#IconsDir}\WMW-Midnight.ico
+SetupIconFile=..\resources\appicon.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
 ; GPLv3 -- shown during setup and installed alongside the binary.
 LicenseFile=..\LICENSE
