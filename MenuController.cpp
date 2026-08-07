@@ -1115,6 +1115,25 @@ QString MenuController::importWowheadDressingRoom(const QString& rawUrl, bool in
           .arg((int)chr.customizationChoices.size())
           .arg((int)chr.equipment.size()));
 
+  // A look with two DIFFERENT shoulder pieces cannot be shown: WMV has one shoulder
+  // slot, and quietly letting the second item through used to make it overwrite the
+  // first. Say so once instead; the left piece is what gets displayed.
+  int leftShoulderItem = 0;
+  for (const auto& e : chr.equipment)
+    if (e.wowheadSlot == 2)
+      leftShoulderItem = e.itemId;
+  if (chr.separateShoulders && chr.shoulder2ItemId > 0 &&
+      chr.shoulder2ItemId != leftShoulderItem) {
+    trace(QString("  separate shoulders: right item %1 NOT displayed (viewer has one "
+                  "shoulder slot)").arg(chr.shoulder2ItemId));
+    if (interactive)
+      QMessageBox::information(
+        win_, tr("Getrennte Schulterstücke"),
+        tr("Dieser Look nutzt getrennte Schulterstücke. Angezeigt wird beidseitig das "
+           "linke Teil — getrennte Schultern kann der Model Viewer noch nicht "
+           "darstellen."));
+  }
+
   // From here on this is the same shape the armory importer produces, so it can go
   // through the same apply path -- model lookup, race correction, customizations,
   // equipment, posture variant.
