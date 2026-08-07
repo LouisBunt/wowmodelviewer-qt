@@ -50,6 +50,11 @@ public:
   void refresh();
 
   void clearEquipment();
+
+  // Take ONE piece off. Public for the same reason equip() is: a headless run can
+  // then prove the path without clicking the row's "x".
+  void unequipSlot(int slot);
+
   void randomise();
 
   // Public so the armory import can run the same check: it applies customizations
@@ -95,7 +100,11 @@ private:
   QLineEdit* itemInput_ = nullptr;
   std::vector<QComboBox*> combos_;
   std::vector<QLabel*> slotLabels_;   // one per CharSlots entry we show
+  std::vector<QLabel*> clearButtons_; // the per-row "x", visible only when worn
   bool updating_ = false;      // guards against reacting to our own writes
+
+protected:
+  bool eventFilter(QObject* obj, QEvent* e) override;
 };
 
 #endif

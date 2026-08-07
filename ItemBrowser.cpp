@@ -258,6 +258,14 @@ ItemBrowser::ItemBrowser(QWidget* parent) : QWidget(parent)
     "brauchen die Figur."));
   col->addWidget(standalone_);
 
+  // Sets mode only: without this a set click always WIPES the current outfit first,
+  // which makes mixing two sets impossible.
+  keepEquip_ = new QCheckBox(QString::fromUtf8("Vorhandene Ausrüstung behalten"));
+  keepEquip_->setFont(QFont(uiFamily(), 8));
+  keepEquip_->setStyleSheet(standalone_->styleSheet());
+  keepEquip_->setVisible(false);
+  col->addWidget(keepEquip_);
+
   count_ = new QLabel;
   QFont cf(uiFamily(), 7);
   cf.setLetterSpacing(QFont::AbsoluteSpacing, 1.3);
@@ -280,7 +288,7 @@ ItemBrowser::ItemBrowser(QWidget* parent) : QWidget(parent)
       return;
     const int id = it->data(Qt::UserRole).toInt();
     if (setMode_)
-      emit setActivated(id);
+      emit setActivated(id, keepEquip_->isChecked());
     else
       emit itemActivated(id, standalone_->isChecked());
   });
@@ -302,6 +310,8 @@ void ItemBrowser::setMode(bool sets)
   slot_->setEnabled(!sets);
   expansion_->setEnabled(!sets);
   quality_->setEnabled(!sets);
+  standalone_->setVisible(!sets);
+  keepEquip_->setVisible(sets);
   refresh();
 }
 
@@ -428,14 +438,27 @@ void ItemBrowser::refreshSets()
   if (!needle.isEmpty())
     where += QString(" AND Name_Lang LIKE '%%%1%%'").arg(needle);
 
+  // ItemSet has no quality to colour by -- and "quality of the first item" would be
+  // one extra lookup per row and a lie for mixed sets. The piece count is honest and
+  // computable from the columns this query already returns.
+  QString itemCols;
+  for (int i = 1; i <= 17; ++i)
+    itemCols += QString(", ItemID%1").arg(i);
   sqlResult r = GAMEDATABASE.sqlQuery(
-    "SELECT ID, Name_Lang FROM ItemSet WHERE " + where + " ORDER BY Name_Lang");
+    "SELECT ID, Name_Lang" + itemCols + " FROM ItemSet WHERE " + where +
+    " ORDER BY Name_Lang");
 
   if (r.valid) {
     for (const auto& row : r.values) {
-      auto* item = new QListWidgetItem(row[1]);
+      int pieces = 0;
+      for (int i = 2; i < (int)row.size(); ++i)
+        if (row[i].toInt() > 0)
+          ++pieces;
+      auto* item = new QListWidgetItem(
+        QString::fromUtf8("%1  · %2 Teile").arg(row[1]).arg(pieces));
       item->setData(Qt::UserRole, row[0].toInt());
       item->setForeground(QColor(kText));
+      item->setToolTip(QString::fromUtf8("Set %1").arg(row[0]));
       list_->addItem(item);
     }
   }
