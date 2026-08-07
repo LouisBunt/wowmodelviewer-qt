@@ -134,7 +134,19 @@ if ($OpenSslDir -and (Test-Path (Join-Path $OpenSslDir "libssl-1_1-x64.dll"))) {
 # --- game data definitions ---------------------------------------------------
 # database.xml and the CSVs come from the tracked bin_support tree, never from a
 # build-staging copy: a stale database.xml silently breaks races and customization.
-StageTree (Join-Path $support "wow\12.0") "games\wow\12.0"
+#
+# EVERY bundled version, not just the newest. The application derives the folder from the
+# client's major version and falls back to the newest one at or below it; shipping only 12.0
+# meant anyone on an older client got an empty database and a viewer that started but could
+# not equip, texture or import anything.
+$wowData = Get-ChildItem (Join-Path $support "wow") -Directory |
+           Where-Object { Test-Path (Join-Path $_.FullName "database.xml") }
+if (-not $wowData) {
+  throw "No game data definitions under $support\wow -- the package would start with an empty database."
+}
+foreach ($d in $wowData) { StageTree $d.FullName "games\wow\$($d.Name)" }
+Write-Host ("  data definitions staged: " + (($wowData | ForEach-Object { $_.Name }) -join ", "))
+
 StageTree (Join-Path $support "dbd") "dbd"
 Stage (Join-Path $support "Encryption\extraEncryptionKeys.csv") "extraEncryptionKeys.csv"
 
@@ -153,6 +165,10 @@ StageTree (Join-Path $upstream "blender_addon\io_import_wmv_fbx") "blender_addon
 # GPLv3: the licence travels with the binary, not just with the source.
 Stage (Join-Path $Root "LICENSE") "LICENSE.txt"
 Stage (Join-Path $Root "installer\LIESMICH.txt") "LIESMICH.txt"
+# Attribution the bundled third-party binaries and data require -- Autodesk's FBX notice,
+# LGPL notice plus replaceability for Qt, the GPL source offer, and where listfile.csv and
+# the TACT keys come from. Shipping the binaries without this is not licence-compliant.
+Stage (Join-Path $Root "installer\THIRD-PARTY-NOTICES.txt") "THIRD-PARTY-NOTICES.txt"
 
 # --- report ------------------------------------------------------------------
 $bytes = (Get-ChildItem $StageDir -Recurse -File | Measure-Object Length -Sum).Sum

@@ -1,22 +1,37 @@
-better Model Viewer 1.5.0-beta (Teststand)
-==========================================
+better Model Viewer 1.7.0-beta (Early Access)
+============================================
 
 Was das ist
 -----------
 Ein neues Frontend fuer WoW Model Viewer auf Qt statt wxWidgets. Die Modell-,
 Render- und Datenschicht ist im Kern dieselbe wie im Original: core.dll und
-wow.dll werden weiterbenutzt. Umgebaut ist im Wesentlichen die Oberflaeche.
-
-Eine Ausnahme gibt es seit dieser Version: in wow.dll ist das Laden von
-Varianten-Skeletten korrigiert (siehe "Haltung" weiter unten). Das ist der
-einzige Eingriff in die Engine.
+wow.dll werden weiterbenutzt. Umgebaut ist im Wesentlichen die Oberflaeche --
+dazu einige gezielte Eingriffe in wow.dll und den FBX-Exporter, die unten bei
+"Neu" genannt sind.
 
 Diese Version ersetzt die wxWidgets-Ausgabe (WoW Model Viewer Midnight). Beim
 Einrichten werden deren Programmdateien entfernt; die Spieldaten-Hilfsdateien
 bleiben erhalten.
 
-Teststand heisst Teststand: das meiste ist geprueft, aber nicht alles, und
-einiges fehlt noch. Was fehlt, steht weiter unten.
+Early Access heisst: die beschriebenen Funktionen sind geprueft und tun, was
+hier steht. Es fehlen aber Bereiche der alten Oberflaeche, und es sind Fehler zu
+erwarten, die nur auf fremder Hardware auftreten. Was fehlt, steht weiter unten.
+
+
+Voraussetzungen
+---------------
+- Windows 10 oder 11, 64 Bit
+- eine installierte, aktuelle World-of-Warcraft-Installation (Retail). Mitgeliefert
+  sind Datendefinitionen fuer die Hauptversionen 9.2, 10.0, 10.1 und 12.x. Fuer
+  einen Client dazwischen wird die naechstniedrigere Fassung genommen; Anpassungen
+  und Items koennen dann von der eigenen Spielversion abweichen.
+- OpenGL. Ueber Remotedesktop oder in einer virtuellen Maschine ohne Grafik-
+  durchreichung startet die 3D-Ansicht in der Regel nicht.
+- rund 350 MB Platz, dazu bis zu 100 MB fuer den Datenbank-Cache
+- Blender 3.0 oder neuer, falls das mitgelieferte Import-Add-on genutzt wird
+
+WoW darf waehrenddessen laufen. Wird das Spiel gerade aktualisiert, kann das
+Einbinden des Archivs fehlschlagen -- dann nach dem Update erneut starten.
 
 
 Start
@@ -30,7 +45,9 @@ und merkt sich die Antwort in userSettings\qt-frontend.ini -- danach faellt die
 Frage weg.
 
 Gewaehlt wird das Installationsverzeichnis, nicht der Data-Unterordner: gesucht
-wird die Datei .build.info, und die liegt eine Ebene darueber.
+wird die Datei .build.info, und die liegt eine Ebene darueber. Bei der ueblichen
+Battle.net-Installation ist das der Ordner "World of Warcraft" selbst, nicht
+"_retail_".
 
 Beides laesst sich auch mitgeben, etwa fuer Skripte:
 
@@ -40,7 +57,7 @@ Beides laesst sich auch mitgeben, etwa fuer Skripte:
 Der zweite Parameter ist das Modell, das beim Start geladen wird; 917116 ist der
 maennliche Ork und zugleich der Standard. Wird ein Ordner auf der Befehlszeile
 angegeben, erscheint nie ein Dialog -- ein Skript soll fehlschlagen, nicht
-haengen bleiben.
+haengen bleiben. Dateipfade in --shot und --export bitte absolut angeben.
 
 Der erste Start dauert laenger als die folgenden: die Datenbank wird einmal aus
 den DB2-Dateien aufgebaut und danach als wowdb.sqlite zwischengespeichert. Der
@@ -50,6 +67,8 @@ Weitere Optionen, vor allem zum Pruefen ohne Mausbedienung:
 
     --view <gier>,<nick>       Kamerawinkel setzen, z.B. --view 0,80
     --equip <id>[,<id>...]     Items anlegen, z.B. --equip 180900,190735
+    --unequip <slot>[,...]     Items ablegen
+    --focus <slot>             Item-Ansicht: nur dieses Teil zeigen (-1 = aus)
     --category <0..3>          Browser-Kategorie: 0 Alle, 1 Charaktere,
                                2 Kreaturen, 3 Items
     --anim <index>             Animation starten (Index in der Liste des
@@ -60,9 +79,11 @@ Weitere Optionen, vor allem zum Pruefen ohne Mausbedienung:
     --item-solo <id>           Item allein zeigen (nur wenn es ein eigenes Modell hat)
     --set <id>                 Item-Set anlegen
     --wowhead <url|liste>      Outfit/Transmog-Set abrufen oder Item-Liste anlegen
+    --dressing-room <url>      Anprobe-Link importieren (mit Ausruestung)
     --clips <id>[,<id>...]     Animationsclips fuer den Export waehlen
     --export <format>,<datei>  ohne Dialog exportieren
     --armory <url>             Armory-Charakter ohne Dialog importieren
+    --install-blender-addon    Blender-Add-on installieren und beenden
     --grid                     Gitter einschalten
     --shot <datei.png>         nach ~1,5 s das GL-Bild speichern und beenden
 
@@ -85,9 +106,9 @@ Strg+1..4 Kameraansichten, Strg+G Gitter).
 Werkzeugzeile darunter: Modell, Charakter, Licht, Kamera, Hintergrund -- das
 sind anklickbare Schalter, keine Beschriftungen.
 
-Rechts im Inspector: Charakter (Anpassung, Ausruestung per Item-ID, Daemonen-
-jaeger-Schalter, Wappenrock), Material (Geosets), Licht (vier Lichtquellen mit
-Farbe, Typ und Position) und Export.
+Rechts im Inspector: Charakter (Anpassung, Ausruestung, sichtbare Teile,
+Daemonenjaeger-Schalter, Wappenrock), Licht (vier Lichtquellen mit Farbe, Typ
+und Position), Import/Export und Blender.
 
 Unten die Zeitleiste: Animationsauswahl, Abspielsteuerung, Tempo und Scrubber.
 
@@ -96,73 +117,118 @@ maximiert, die drei Punkte rechts sind Minimieren / Maximieren / Schliessen.
 Groessenaenderung geht ueber den Griff rechts unten.
 
 
-Neu in 1.5.0
-------------
-- Darstellung: der Tiefentest war nie eingeschaltet. Modelle wirkten
-  halbtransparent, Innengeometrie (Mund, Zaehne, Augen) wurde durch den Kopf
-  gezeichnet. Behoben; zusaetzlich werden Partikel jetzt ueberhaupt gezeichnet
-  (Waffenglut, Verzauberungen).
-- Menueleiste: vorher fuenf Beschriftungen ohne Funktion, jetzt echte Menues.
-- Charakter speichern und laden im Format der wx-Ausgabe (.chr), Ausruestung
-  getrennt speicherbar, Ausruestung leeren, zufaellige Anpassung.
-- Armory-Import und NPC-Import ueber URL.
-- Lichtsteuerung als vierter Inspector-Reiter.
-- Gitter in der Ansicht, gemessene Bildrate statt fester Anzeige.
-- Animationen laufen nicht mehr automatisch: ein geladenes Modell steht in der
-  Ruhepose, bis ein Clip gewaehlt wird. Danach laeuft er in Schleife.
-- Export: die Optionen Geometrie / Skinning / Skelett / Animationen wirken jetzt
-  wirklich; vorher war die Kombination fest verdrahtet. Mit "Animationen" laesst
-  sich eine Clip-Liste mehrfach auswaehlen, jeder Clip wird ein eigener Take.
-- Haltung (Ork, "Aufrecht"): funktioniert. Zwei Ursachen -- die Auswahl ist eine
-  CondModel-Anpassung, die das Modell ERSETZT statt es zu veraendern, und
-  wow.dll verwarf beim Laden eines Varianten-Skeletts dessen eigene Animationen
-  und erbte stattdessen die des Basisskeletts.
-- Item- und Transmog-Browser unter "Items": filtert nach Slot, Erweiterung,
-  Qualitaet und Name, oder zeigt die 990 Item-Sets des Spiels. Doppelklick legt
-  das Teil an; "Nur Item, ohne Figur" zeigt das eigene Modell, wo es eines gibt.
-  Ist kein Charakter geladen, wird eine Figur als Anzeigestaender geladen.
-- Wowhead-Import unter Charakter > "Wowhead-Look importieren": nimmt einen Link
-  auf ein gespeichertes Outfit oder ein Transmog-Set und laedt die Teile, oder
-  eine einfach eingefuegte Liste von Item-IDs. Bei einer Set-Seite wird pro Slot
-  das erste Stueck genommen -- solche Seiten listen mehrere Varianten je Slot.
-  Nicht zuordenbare IDs werden gezaehlt und gemeldet, nicht verschluckt.
-- Qualitaetsfarben: die Ausruestungsliste stand vorher komplett in einer Farbe,
-  weil ItemRecord die Qualitaet hart auf 0 setzte und sie nie gelesen hat.
-- Dialoge: Eingabefelder waren schwarz auf schwarz. Die Fensterregel fuer den
-  Hintergrund galt auch fuer Dialoge und schlug die Palette, die Textfarbe blieb
-  aber der Systemwert. Betraf alle Dialoge, nicht nur den Armory-Import.
-- Datenbank: ItemSparse ist vollstaendig deklariert, damit der Sparse-Walk hinter
-  die Namensfelder reicht. Dadurch sind Erweiterung, Itemlevel und Qualitaet
-  ueberhaupt erst lesbar. Der Datenbank-Cache wird dafuer einmalig neu gebaut --
-  der erste Start nach dem Update dauert daher laenger.
+Charakter aus der Wowhead-Anprobe holen
+---------------------------------------
+Charakter > "Wowhead-Look importieren", dann den Link einfuegen. Angenommen
+werden:
 
-Geprueft: der FBX-Export ist in Blender 5.1 importiert worden -- Armature mit
-208 Knochen, 138 Vertexgruppen, Materialien und Texturen, und mit gewaehlten
-Clips auch Animationen (Actions).
+- Anprobe-Links (dressing-room), also die mit dem '#' und einer langen
+  Zeichenfolge dahinter. Der Look steckt komplett in diesem Teil der Adresse und
+  wird lokal ausgewertet -- es wird dafuer nichts abgerufen. Rasse, Geschlecht,
+  Anpassungen und die getragenen Teile samt Farbvariante kommen mit.
+- Links auf ein gespeichertes Outfit oder ein Transmog-Set. Diese Seiten werden
+  abgerufen; bei einer Set-Seite wird pro Slot das erste Stueck genommen, da
+  solche Seiten mehrere Varianten je Slot listen.
+- eine einfach eingefuegte Liste von Item-IDs.
+
+Nicht zuordenbare IDs werden gezaehlt und gemeldet, nicht verschluckt.
+
+
+Einzelnes Teil ansehen und exportieren
+--------------------------------------
+In der Ausruestungsliste hat jede belegte Zeile rechts zwei kleine Schalter:
+"x" legt das Teil ab, das Auge zeigt nur dieses Teil und blendet die Figur samt
+allem anderen aus. Die Kamera stellt sich dabei selbst auf das Teil ein; drehen
+und zoomen wie gewohnt. Erneutes Klicken holt den ganzen Charakter zurueck.
+
+Das Auge erscheint nur, wo es etwas zu zeigen gibt. Brust, Beine, Haende,
+Guertel und Hemd sind in WoW auf die Koerpertextur gemalt und haben kein eigenes
+Modell -- dort bleibt der Schalter aus.
+
+Ein Export in dieser Ansicht enthaelt nur das gezeigte Teil, nicht den Rest der
+Figur.
+
+
+Nach Blender
+------------
+Im Reiter "Blender" installiert ein Knopf das mitgelieferte Import-Add-on in die
+gefundene Blender-Installation. Danach in Blender unter
+Bearbeiten > Einstellungen > Add-ons "WoW Model Viewer FBX" einschalten.
+
+Exportiert wird als FBX. Neben der FBX-Datei legt der Exporter eine Datei
+".wmvmat.json" ab; das Add-on liest sie und baut daraus die Materialien
+originalgetreu auf -- Durchsichtigkeit, Leuchten und scrollende Effektflaechen
+inbegriffen. Ohne diese Datei funktioniert der Import ebenfalls, dann bleiben
+Blenders Standardmaterialien stehen.
+
+Der Import findet die zuletzt exportierte Datei von selbst (3D-Ansicht >
+Seitenleiste > WMV).
+
+
+Neu in 1.6 und 1.7
+------------------
+- Import aus der Wowhead-Anprobe, mit Ausruestung, Anpassungen und den richtigen
+  Farbvarianten (die stecken in den Bonus-IDs am Ende des Links). Die Angabe in
+  frueheren Fassungen, solche Links seien nicht importierbar, war falsch.
+- Item-Ansicht: ein einzelnes getragenes Teil allein zeigen, drehen und
+  exportieren.
+- Der Export schreibt nur noch, was sichtbar ist. Vorher landeten alle Punkte
+  des Modells in der Datei, auch die von versteckten Teilen: ein einzeln
+  exportierter Helm zog rund 317.000 fremde Punkte mit. Ein ganzer Charakter
+  faellt damit von 319.688 auf 20.065 Punkte, ein einzelner Helm auf 1.929.
+- Blender-Add-on: baut die Materialien als Node-Graph auf, kennt UV-Scroll
+  (Effektflaechen bewegen sich statt still zu stehen) und wird aus der Anwendung
+  heraus installiert.
+- Knochen bekommen sprechende Namen (bone_39_Head), Anhaengepunkte stehen in der
+  Beilage-Datei.
+- Item-Browser mit Kategorien, Sortierung und Suche; Sets lassen sich zusaetzlich
+  zur getragenen Ausruestung anlegen.
+- Ladebild beim Start, eigenes Programmsymbol.
+- Einzelne Teile lassen sich ablegen, ohne alles zu leeren.
+- Ein Ladefehler wird jetzt als Meldung angezeigt statt nur in eine Datei
+  geschrieben; frueher verschwand das Programm bei falschem Ordner oder ohne
+  OpenGL wortlos.
+- userSettings\log.txt wird geschrieben. Vorher gingen alle Meldungen der
+  Modell-, Archiv- und Exportschicht verloren.
+
+
+Datenuebertragung
+-----------------
+Das Programm arbeitet lokal. Verbindungen ins Netz entstehen nur hier:
+
+- Wowhead-Import mit einem Outfit- oder Set-Link: die betreffende Seite wird von
+  wowhead.com abgerufen. Anprobe-Links (dressing-room) werden dagegen rein
+  oertlich ausgewertet, dabei geht nichts hinaus.
+- Armory-Import: Region, Realm und Charaktername werden an einen Vermittler
+  geschickt, der die Blizzard-API abfragt. Dieser Dienst wird vom Projekt
+  betrieben, nicht von Blizzard. Ohne Armory-Import entsteht diese Verbindung
+  nicht.
+- Die Dateiliste (listfile.csv) liegt bei und wird nur nachgeladen, wenn eine
+  neuere Fassung angeboten wird.
+
+Es werden keine Nutzungsdaten erhoben und nichts im Hintergrund gesendet.
 
 
 Was noch fehlt
 --------------
+- Getrennte Schulterstuecke: Ein Look, der links und rechts unterschiedliche
+  Schultern traegt, wird beidseitig mit dem linken Teil dargestellt. Der Import
+  weist darauf hin.
 - Varianten-Modelle (der aufrechte Ork) bringen nur ihren eigenen Animationssatz
   mit: Stand, Gehen, Laufen, Springen, unbewaffneter Kampf und Fist1H. Waffen-
-  spezifische Animationen, Tod und Betaeubung sind dort nicht verfuegbar. Sauber
-  waere ein Zusammenfuehren mit dem Basisskelett; das steht noch aus.
-- Der Armory-Import haengt an einem Proxy, der die Blizzard-API serverseitig
-  abfragt. Der ist zeitweise nicht erreichbar -- dann hilft nur ein zweiter
-  Versuch. Fuer die Proxy-Adresse gibt es hier noch keine Einstellung.
+  spezifische Animationen, Tod und Betaeubung sind dort nicht verfuegbar.
+- Der Armory-Import haengt an einem Vermittler, der zeitweise nicht erreichbar
+  ist -- dann hilft nur ein zweiter Versuch. Fuer dessen Adresse gibt es hier
+  noch keine Einstellung.
 - Der FBX-Export laeuft im selben Prozess. Die wx-Ausgabe kapselt ihn bewusst in
   einen Kindprozess, weil das FBX-SDK nicht threadsicher ist; stuerzt er hier ab,
   reisst er die Anwendung mit.
 - Kein glTF-Exporter. Es gibt nur die Plugins fuer FBX und OBJ.
-- Anprobe-Links (dressing-room) lassen sich nicht importieren. Der Look steckt
-  dort komplett hinter dem '#', und dieser Teil wird nie an Wowhead uebertragen --
-  er ist also nicht abrufbar. In der Anprobe auf "Speichern" klicken, daraus wird
-  ein Outfit mit echter Adresse, und die geht.
 - Keine Farbsuche fuer Items. Die Spieldaten enthalten keine Farbe pro Item; sie
   muesste aus den Texturen berechnet werden.
 - Gesichtsknochen-Varianten (ChrCustomizationBoneSet) sind in wow.dll weiterhin
   nicht umgesetzt; Gesichtsformen weichen dadurch leicht vom Spiel ab.
-- Einstellungen, Modellbank, Bildsequenz und AVI, Uebersetzungen.
+- Einstellungsdialog, Modellbank, Bildsequenz und AVI, Uebersetzungen.
 - Karten- und ADT-Ansicht ist bewusst weggelassen.
 - Aero Snap und Groessenaenderung an den Fensterkanten fehlen, weil der native
   Rahmen entfaellt.
@@ -173,10 +239,22 @@ Fuer die fehlenden Bereiche ist die wxWidgets-Ausgabe weiterhin die
 vollstaendigere Anwendung.
 
 
-Diagnose
---------
-userSettings\qt-frontend-trace.txt protokolliert den Start und die Importe.
-Umgebungsvariablen:
+Wenn etwas nicht geht
+---------------------
+Bitte melden unter
+
+    https://github.com/LouisBunt/wowmodelviewer-qt/issues
+
+Hilfreich sind: was gemacht wurde, was passiert ist, die WoW-Version, und die
+beiden Dateien aus dem Unterordner userSettings des Programmordners:
+
+    log.txt                   Meldungen der Modell-, Archiv- und Exportschicht
+    qt-frontend-trace.txt     Start und Importe Schritt fuer Schritt
+
+Startet das Programm gar nicht, steht der Grund zusaetzlich in
+userSettings\qt-frontend-error.txt.
+
+Zum Untersuchen von Skelettproblemen:
 
     WMV_SKEL_DUMP=1          Skelett-Vererbung protokollieren
     WMV_SKEL_PARENT_ANIMS=1  Varianten-Skelette wieder vom Basisskelett erben
@@ -189,3 +267,11 @@ GNU General Public License Version 3. Der vollstaendige Text liegt als
 LICENSE.txt bei.
 
     https://github.com/LouisBunt/wowmodelviewer-qt
+
+Das Paket enthaelt Bibliotheken und Daten Dritter -- Autodesks FBX SDK, Qt,
+OpenSSL, die Dateiliste und die TACT-Schluessel. Herkunft und Bedingungen stehen
+in THIRD-PARTY-NOTICES.txt.
+
+World of Warcraft gehoert Blizzard Entertainment. Dieses Programm enthaelt keine
+Spieldaten, es liest die Installation auf dem eigenen Rechner. Das Projekt steht
+in keiner Verbindung zu Blizzard.

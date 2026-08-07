@@ -352,6 +352,13 @@ void GLHost::frameVisible()
   // cube-ish shape the two differ by the usual sqrt(3)), and nothing can be cropped,
   // because no other axis is longer than the one being fitted.
   const float radius = std::max(d.x, std::max(d.y, d.z));
+
+  // Logged because a mis-framed item view has been seen once and could not be reproduced:
+  // with these numbers a report can be told apart into "bounds were wrong" and "bounds were
+  // right, something moved the camera afterwards" without guessing.
+  LOG_INFO << "frameVisible: centre" << center.x << center.y << center.z
+           << "radius" << radius << "viewport" << width() << "x" << height();
+
   camera_.frameBounds(center, radius > 0.0001f ? radius : 0.1f);
 }
 

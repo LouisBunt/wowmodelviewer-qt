@@ -316,6 +316,10 @@ void CharacterPanel::clearRows()
 void CharacterPanel::setModel(WoWModel* model)
 {
   model_ = model;
+  // A freshly built WoWModel starts unfocused. Carrying the previous model's focus slot
+  // over would leave a row's eye lit for a view that is not active, and the first click on
+  // it would toggle the focus OFF rather than on.
+  focusSlot_ = -1;
   if (!model_) {
     clearRows();
     subHeader_->setText(QString::fromUtf8("Kein Charaktermodell geladen."));
@@ -576,7 +580,14 @@ void CharacterPanel::buildTabard()
 
 void CharacterPanel::buildEquipment()
 {
+  // All THREE row vectors have to be emptied here, not just the labels. They are filled in
+  // lockstep further down, and refreshEquipment() indexes all three from 0 -- so leaving the
+  // button vectors filled meant that from the second model on, every refresh wrote through
+  // pointers to rows that had already been deleted, while the CURRENT model's buttons sat
+  // unreachable at index 13 and up and stayed invisible.
   slotLabels_.clear();
+  clearButtons_.clear();
+  focusButtons_.clear();
   while (QLayoutItem* item = equipRows_->takeAt(0)) {
     if (QWidget* w = item->widget())
       w->deleteLater();
@@ -669,6 +680,13 @@ void CharacterPanel::unequipSlot(int slot)
     return;
 
   note(QString("unequip slot %1 (was item %2)").arg(slot).arg(item->id()));
+  // Taking off the piece the item view is showing removes the only thing on screen AND the
+  // eye that would switch back, so drop the focus with it.
+  if (focusSlot_ == slot) {
+    focusSlot_ = -1;
+    model_->setItemFocus(-1);
+    emit itemFocusChanged(-1);
+  }
   // Same order clearEquipment() uses: change the item, recompose the model once,
   // then re-read the panel from the result.
   item->setId(0);
@@ -761,12 +779,27 @@ void CharacterPanel::setItemFocus(int slot)
   if (!model_)
     return;
 
-  // The rule itself lives in WoWModel::applyItemFocus, which refresh() calls last --
-  // that is the only place it survives the visibility recomputation every equipment
-  // change triggers. Here it is just the switch and the panel's own repaint.
+  // Anything that is not a slot wearing its own geometry means "off". Focusing an empty or
+  // out-of-range slot leaves applyItemFocus with nothing to show and blanks the viewport,
+  // and the eye that would undo it is hidden on an empty row -- a dead end with no way back.
+  if (slot >= NUM_CHAR_SLOTS || (slot >= 0 && !slotHasOwnModel(slot))) {
+    note(QString("item focus %1 abgelehnt (leer oder kein eigenes Modell) -- Vollansicht")
+           .arg(slot));
+    slot = -1;
+  }
+  if (slot < 0)
+    slot = -1;
+
   focusSlot_ = slot;
   model_->setItemFocus(slot);
+
+  // refresh(), not just setItemFocus(): switching the view OFF has to put the hidden body,
+  // hair and armour geosets back, and only the full recomputation knows what they should be.
+  // applyItemFocus() runs at the END of refresh(), so turning it ON still works the same way.
+  model_->refresh();
+
   note(QString("item focus -> %1").arg(slot < 0 ? QString("aus") : QString::number(slot)));
+  buildGeosets();      // refresh() may have rebuilt the geoset vector under the checkbox list
   refreshEquipment();
   emit customizationChanged();
   emit itemFocusChanged(slot);
@@ -809,6 +842,13 @@ void CharacterPanel::clearEquipment()
 {
   if (!model_)
     return;
+
+  // Nothing is worn afterwards, so nothing can be focused -- see unequipSlot().
+  if (focusSlot_ >= 0) {
+    focusSlot_ = -1;
+    model_->setItemFocus(-1);
+    emit itemFocusChanged(-1);
+  }
 
   for (int slot = 0; slot < NUM_CHAR_SLOTS; ++slot)
     if (WoWItem* item = model_->getItem((CharSlots)slot))

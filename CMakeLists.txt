@@ -1,5 +1,10 @@
 cmake_minimum_required(VERSION 3.16)
-project(WoWModelViewerQt)
+project(WoWModelViewerQt VERSION 1.7.0)
+
+# The version the running application reports -- window title, About box, trace and log.
+# Without it a bug report cannot say which build it came from. Keep in step with
+# MyAppVersion in installer/BetterModelViewer.iss.
+set(WMV_QT_VERSION "1.7.0-beta")
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_AUTOMOC ON)
@@ -82,7 +87,9 @@ target_include_directories(WoWModelViewer-Qt PRIVATE
 
 # GLEW is initialised inside wow.dll (games/wow/video.cpp); we only need the
 # headers plus the same static lib so the symbols resolve consistently.
-target_compile_definitions(WoWModelViewer-Qt PRIVATE GLEW_STATIC)
+target_compile_definitions(WoWModelViewer-Qt PRIVATE
+  GLEW_STATIC
+  WMV_QT_VERSION="${WMV_QT_VERSION}")
 
 target_link_libraries(WoWModelViewer-Qt
   Qt5::Core Qt5::Gui Qt5::Widgets Qt5::Network

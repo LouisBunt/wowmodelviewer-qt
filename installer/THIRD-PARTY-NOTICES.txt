@@ -1,0 +1,143 @@
+better Model Viewer — Hinweise zu mitgelieferten Fremdkomponenten
+==================================================================
+
+Dieses Programm selbst steht unter der GNU General Public License, Version 3
+(siehe LICENSE.txt). Daneben liefert das Paket Bibliotheken und Daten Dritter
+aus. Dieser Text nennt sie, ihre Herkunft und ihre Bedingungen.
+
+Stand: Version 1.7.0-beta
+
+
+1. Autodesk FBX SDK  —  libfbxsdk.dll
+------------------------------------------------------------------
+Copyright (C) Autodesk, Inc. Alle Rechte vorbehalten.
+
+Wird vom FBX-Exporter (plugins/fbxexporter.dll) verwendet, um FBX-Dateien zu
+schreiben. Das SDK ist KEINE freie Software; es wird unter der Autodesk-Lizenz
+weitergegeben und darf nicht verändert, zurückentwickelt oder getrennt vom
+Programm weiterverbreitet werden.
+
+Autodesk verlangt den folgenden Hinweis:
+
+   This software contains Autodesk® FBX® code developed by Autodesk, Inc.
+   Copyright 2024 Autodesk, Inc. All rights, reserved. Such code is provided
+   "as is" and Autodesk, Inc. disclaims any and all warranties, whether express
+   or implied, including without limitation the implied warranties of
+   merchantability, fitness for a particular purpose or non-infringement of
+   third party rights. In no event shall Autodesk, Inc. be liable for any
+   direct, indirect, incidental, special, exemplary, or consequential damages
+   (including, but not limited to, procurement of substitute goods or services;
+   loss of use, data, or profits; or business interruption) however caused and
+   on any theory of liability, whether in contract, strict liability, or tort
+   (including negligence or otherwise) arising in any way out of such code.
+
+Lizenz und Bezug: https://aps.autodesk.com/developer/overview/fbx-sdk
+
+
+2. Qt 5  —  Qt5Core.dll, Qt5Gui.dll, Qt5Network.dll, Qt5Widgets.dll, Qt5Xml.dll
+------------------------------------------------------------------
+Copyright (C) The Qt Company Ltd. und Mitwirkende.
+Verwendet unter der GNU Lesser General Public License, Version 3 (LGPLv3).
+
+Die LGPL erlaubt ausdrücklich, die Qt-Bibliotheken durch eigene, veränderte
+Fassungen zu ersetzen. Dafür sind die DLLs als eigenständige Dateien neben dem
+Programm abgelegt und nicht statisch eingebunden: Eine passende Qt-5.13-DLL
+gleichen Namens kann einfach ausgetauscht werden.
+
+Lizenztext: https://www.gnu.org/licenses/lgpl-3.0.html
+Quellcode:  https://download.qt.io/archive/qt/5.13/
+
+
+3. OpenSSL  —  libcrypto-1_1-x64.dll, libssl-1_1-x64.dll
+------------------------------------------------------------------
+Copyright (C) The OpenSSL Project. Verwendet unter der Apache-Lizenz 2.0.
+
+Wird für HTTPS-Verbindungen benötigt (Wowhead-Anprobe, Armory-Import).
+Ohne diese Dateien startet das Programm, kann aber nichts aus dem Netz laden.
+
+Lizenztext: https://www.openssl.org/source/license.html
+
+
+4. StormLib und CascLib
+------------------------------------------------------------------
+Copyright (C) Ladislav Zezula. Verwendet unter der MIT-Lizenz.
+
+Lesen die Spielarchive von World of Warcraft (CASC). Fest in core.dll
+eingebunden, keine eigenen Dateien im Paket.
+
+Lizenztexte: upstream/ThirdParty/stormlib/LICENSE
+             upstream/ThirdParty/casclib/LICENSE
+
+
+5. GLEW und GLM
+------------------------------------------------------------------
+GLEW: Copyright (C) Milan Ikits, Marcelo Magallon u. a. — modifizierte
+BSD-/MIT-Lizenz. GLM: Copyright (C) G-Truc Creation — MIT-Lizenz.
+Beide fest eingebunden, keine eigenen Dateien im Paket.
+
+
+6. Microsoft Visual C++ Runtime
+------------------------------------------------------------------
+concrt140.dll, msvcp140*.dll, vcruntime140*.dll — Copyright (C) Microsoft
+Corporation, weitergegeben nach den Verteilbedingungen der Visual Studio
+Redistributable Files.
+
+
+7. listfile.csv  —  Dateinamen-Liste der Spieldateien
+------------------------------------------------------------------
+Herkunft: https://github.com/wowdev/wow-listfile  (Gemeinschaftsprojekt,
+CC0 / Public Domain)
+
+Eine von der Community gepflegte Zuordnung von Datei-IDs zu Dateinamen. Ohne
+sie zeigt der Modellbrowser keine lesbaren Namen. Die Datei enthält keine
+Spieldaten von Blizzard, nur Namen.
+
+
+8. extraEncryptionKeys.csv  —  TACT-Schlüssel
+------------------------------------------------------------------
+Herkunft: https://github.com/wowdev/TACTKeys  (Gemeinschaftsprojekt)
+
+Blizzard verschlüsselt einen Teil der Spieldateien im CASC-Archiv. Diese
+Sammlung von Schlüsseln wird beim Start an die Archiv-Bibliothek übergeben und
+macht solche Dateien lesbar — darunter Inhalte, die im Spiel noch nicht
+freigeschaltet sind.
+
+Die Schlüssel stammen nicht von diesem Projekt und werden nicht von Blizzard
+bereitgestellt. Wer das nicht möchte, kann die Datei aus dem Programmordner
+löschen: Fehlt sie, startet das Programm unverändert und lässt verschlüsselte
+Dateien einfach aus.
+
+
+9. World of Warcraft
+------------------------------------------------------------------
+World of Warcraft und alle zugehörigen Grafiken, Modelle, Texturen und Namen
+sind Eigentum der Blizzard Entertainment, Inc. Dieses Programm enthält KEINE
+Spieldaten — es liest die Dateien der Installation auf dem eigenen Rechner.
+Wer damit Inhalte exportiert, bleibt an Blizzards Nutzungsbedingungen gebunden.
+
+Dieses Projekt steht in keiner Verbindung zu Blizzard Entertainment und wird
+von Blizzard weder unterstützt noch geprüft.
+
+
+10. Quellcode (Angebot nach GPLv3 Abschnitt 6)
+------------------------------------------------------------------
+Der vollständige Quellcode dieses Programms ist öffentlich verfügbar:
+
+  Oberfläche (dieses Programm):
+    https://github.com/LouisBunt/wowmodelviewer-qt
+
+  Modell-, Render- und Datenschicht (core.dll, wow.dll, Plugins), als
+  Untermodul des obigen Repositorys eingebunden:
+    https://github.com/LouisBunt/wowmodelviewer   (Zweig: qt-frontend)
+
+  Ursprungsprojekt, von dem dieser Fork abstammt:
+    https://github.com/wowmodelviewer/wowmodelviewer
+
+Wer den Quellcode auf einem Datenträger möchte, wende sich an die im
+Repository genannte Kontaktadresse.
+
+
+11. Blender-Add-on  (blender_addon/io_import_wmv_fbx)
+------------------------------------------------------------------
+Teil dieses Projekts, ebenfalls unter GPLv3 — dieselbe Lizenz, die Blender-
+Add-ons ohnehin verlangen.
