@@ -7,7 +7,9 @@ phase*-trace.txt
 *.log
 
 # Phase screenshots -- large, and only meaningful next to their commit.
+# (resources/ is exempt: the splash and icon ship with the app.)
 *.png
+!resources/*.png
 
 # Editor / OS noise
 *.bak
