@@ -1562,14 +1562,18 @@ void MenuController::exportWithDialog()
 // --- contact and support details, in ONE place -------------------------------------------
 //
 // Deliberately empty where the real value is not known yet: buildContactRows() skips every
-// empty entry, so an unfilled field is simply absent instead of shipping as a placeholder
-// somebody would mistake for a real handle.
+// entry whose text AND url are both empty, so an unfilled field is simply absent instead of
+// shipping as a placeholder somebody would mistake for a real handle. Where a row has both a
+// label and a url, clear BOTH to remove it -- a label on its own would render as dead text.
 namespace {
 
 const char* kDiscordHandle = "peppawutz69";
 const char* kDiscordInvite = "";                  // no server yet -- handle only
-const char* kBattleTag     = "";                  // "Name#1234", once it is known
-const char* kSupportUrl    = "";                  // Ko-fi / PayPal / Patreon …
+const char* kBattleTag     = "peppawutz131#2465";
+const char* kRedditLabel   = "u/PeppaWutZ21";
+const char* kRedditUrl     = "https://www.reddit.com/user/PeppaWutZ21/";
+const char* kSupportLabel  = "Patreon";
+const char* kSupportUrl    = "https://www.patreon.com/c/LouisBunt";
 const char* kMusicLabel    = "ルイス・ブント";
 const char* kMusicUrl      = "https://on.soundcloud.com/cF8PsOmBw2fhkbSlbq";
 
@@ -1580,7 +1584,8 @@ QString buildContactRows()
   const struct { const char* label; const char* text; const char* url; } rows[] = {
     { QT_TR_NOOP("Discord"),      kDiscordHandle, kDiscordInvite },
     { QT_TR_NOOP("Battle.net"),   kBattleTag,     "" },
-    { QT_TR_NOOP("Unterstützen"), kSupportUrl,    kSupportUrl },
+    { QT_TR_NOOP("Reddit"),       kRedditLabel,   kRedditUrl },
+    { QT_TR_NOOP("Unterstützen"), kSupportLabel,  kSupportUrl },
     { QT_TR_NOOP("Musik"),        kMusicLabel,    kMusicUrl },
   };
 

@@ -16,6 +16,11 @@
 ; Output: installer\dist\MV-Midnight-Setup-<version>.exe
 
 #define MyAppName "ModelViewer: Midnight"
+; The same name WITHOUT the colon, for everywhere a path is built from it. Windows forbids
+; \ / : * ? " < > | in folder and file names, so the colon made Setup reject the Start-menu
+; group and both shortcut files -- the installation could not be completed at all. AppName
+; keeps the colon; that one is only ever displayed.
+#define MyAppNameFs "ModelViewer Midnight"
 #define MyAppVersion "1.7.0"
 #define MyAppVersionNumeric "1.7.0.0"
 #define MyAppPublisher "Skogdesign"
@@ -44,7 +49,7 @@ AppUpdatesURL={#MyAppURL}/releases
 VersionInfoVersion={#MyAppVersionNumeric}
 VersionInfoProductVersion={#MyAppVersionNumeric}
 DefaultDirName={autopf}\ModelViewer Midnight
-DefaultGroupName={#MyAppName}
+DefaultGroupName={#MyAppNameFs}
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 OutputDir=dist
@@ -62,6 +67,14 @@ ArchitecturesInstallIn64BitMode=x64compatible
 [Languages]
 Name: "german";  MessagesFile: "compiler:Languages\German.isl"
 Name: "english"; MessagesFile: "compiler:Default.isl"
+
+[Messages]
+; The directory page offers %LOCALAPPDATA%\Programs, because PrivilegesRequired=lowest
+; resolves {autopf} there. Browsing to C:\Program Files from that page looks like a normal
+; choice and then fails on permissions -- and the program writes its config, log and
+; database cache next to itself, so it genuinely needs a writable folder. Say so up front.
+german.SelectDirLabel3=Setup installiert [name] in den folgenden Ordner. Das Programm legt seine Einstellungen, das Protokoll und den Datenbank-Cache neben sich ab und braucht deshalb einen beschreibbaren Ordner — ohne Administratorrechte ist das der Benutzerordner, nicht "C:\Programme".
+english.SelectDirLabel3=Setup will install [name] into the following folder. The program keeps its settings, log and database cache next to itself and therefore needs a writable folder — without administrator rights that means your user folder, not "C:\Program Files".
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
@@ -90,9 +103,10 @@ Type: files; Name: "{app}\wowdb.sqlite.build"
 Source: "{#Stage}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
-Name: "{group}\Uninstall {#MyAppName}"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
+; MyAppNameFs, not MyAppName: these are file names on disk, and the colon is illegal there.
+Name: "{group}\{#MyAppNameFs}"; Filename: "{app}\{#MyAppExeName}"
+Name: "{group}\{#MyAppNameFs} deinstallieren"; Filename: "{uninstallexe}"
+Name: "{autodesktop}\{#MyAppNameFs}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
