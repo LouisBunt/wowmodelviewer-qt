@@ -581,7 +581,16 @@ std::vector<int> MenuController::parseWowheadItemIds(const QString& html, QStrin
   }
 
   // Older layouts only link the items; take those if the icons gave nothing.
+  //
+  // This stage matches /item=<id> ANYWHERE in the page, and a present-day Wowhead page
+  // carries that pattern in related items, comments, guide links and the sidebar. It only
+  // ever fires when both structured stages came up empty -- which is exactly what a layout
+  // change looks like -- so what it collects then is a page-wide scrape, not an outfit.
+  // Since the caller clears the character before applying, an unchecked result replaces a
+  // real outfit with whatever the page happened to mention.
+  bool wasFallback = false;
   if (ids.empty()) {
+    wasFallback = true;
     QRegularExpression alt("/item=(\\d+)");
     auto it2 = alt.globalMatch(html);
     while (it2.hasNext())
@@ -593,6 +602,22 @@ std::vector<int> MenuController::parseWowheadItemIds(const QString& html, QStrin
   for (int id : ids)
     if (id > 0 && std::find(unique.begin(), unique.end(), id) == unique.end())
       unique.push_back(id);
+
+  // A character has 14 usable slots even counting both weapons and the tabard. Anything
+  // far past that from the page-wide scrape is not an outfit, and equipping it would be
+  // worse than doing nothing.
+  const size_t kPlausibleMax = 20;
+  if (wasFallback && unique.size() > kPlausibleMax) {
+    trace(QString("wowhead: fallback scrape found %1 ids -- rejected as implausible")
+            .arg(unique.size()));
+    *error = tr("Diese Wowhead-Seite ist anders aufgebaut als erwartet — es wurden %1 "
+                "Gegenstände gefunden, was für ein Outfit zu viele sind.\n\nDer Import "
+                "wurde abgebrochen, damit nichts Falsches angelegt wird.").arg(unique.size());
+    return {};
+  }
+  if (wasFallback)
+    trace(QString("wowhead: structured parse failed, fallback scrape kept %1 ids")
+            .arg(unique.size()));
 
   if (unique.empty())
     *error = tr("Auf dieser Seite standen keine Gegenstände. Ist es wirklich ein "

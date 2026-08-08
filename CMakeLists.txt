@@ -22,7 +22,16 @@ set(CMAKE_AUTORCC ON)
 set(WMV_SRC   "${CMAKE_CURRENT_SOURCE_DIR}/upstream" CACHE PATH "WMV source tree")
 set(WMV_BUILD "${WMV_SRC}/build-x64"                 CACHE PATH "WMV build tree")
 set(QT_LOCATION "C:/Qt/Qt5.13.2/5.13.2/msvc2017_64" CACHE PATH "Qt5 installation")
-set(VCPKG_STATIC "C:/Users/braun/vcpkg/installed/x64-windows-static-md" CACHE PATH "vcpkg static triplet")
+
+# vcpkg (for GLEW). Defaulted from the VCPKG_ROOT environment variable rather than a path
+# inside one developer's user profile -- for a GPLv3 release the buildable source IS part of
+# what ships, and a hardcoded C:/Users/<name>/... makes it unbuildable everywhere else.
+if(DEFINED ENV{VCPKG_ROOT})
+  set(VCPKG_STATIC_DEFAULT "$ENV{VCPKG_ROOT}/installed/x64-windows-static-md")
+else()
+  set(VCPKG_STATIC_DEFAULT "C:/vcpkg/installed/x64-windows-static-md")
+endif()
+set(VCPKG_STATIC "${VCPKG_STATIC_DEFAULT}" CACHE PATH "vcpkg static triplet")
 
 # Fail early and legibly. Without this, a missing upstream tree surfaces as a wall of
 # "cannot open include file" or an unresolved-symbol dump much later in the build.
@@ -32,6 +41,21 @@ if(NOT EXISTS "${WMV_SRC}/Source/core")
     "Expected ${WMV_SRC}/Source/core to exist.\n"
     "If you just cloned this repository, fetch the submodule:\n"
     "    git submodule update --init --recursive")
+endif()
+
+if(NOT EXISTS "${QT_LOCATION}/lib/cmake/Qt5")
+  message(FATAL_ERROR
+    "Qt5 not found at: ${QT_LOCATION}\n"
+    "Install Qt 5.13.2 (msvc2017_64), or point at yours:\n"
+    "    cmake -S . -B build -DQT_LOCATION=<path to Qt/5.13.2/msvc2017_64>")
+endif()
+
+if(NOT EXISTS "${VCPKG_STATIC}/lib/libglew32.lib")
+  message(FATAL_ERROR
+    "GLEW not found under: ${VCPKG_STATIC}\n"
+    "Install it with vcpkg and set VCPKG_ROOT, or point at it directly:\n"
+    "    vcpkg install glew:x64-windows-static-md\n"
+    "    cmake -S . -B build -DVCPKG_STATIC=<vcpkg>/installed/x64-windows-static-md")
 endif()
 
 foreach(lib

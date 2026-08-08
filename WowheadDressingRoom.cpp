@@ -240,8 +240,19 @@ bool wowhead_parse_dressing_room(const QString& url, WowheadCharacter* out, QStr
     "wowhead\\.com/(classic|era|sod|tbc|wotlk|cata|mop)[-a-z]*/",
     QRegularExpression::CaseInsensitiveOption));
 
+  // v15 is strictly positional -- field 0 race, 3..102 the fifty customization pairs,
+  // equipment from 103 on. A single inserted field shifts everything behind it, and the
+  // only sanity check this decoder has is "race > 0", which a shifted layout passes
+  // easily. Accepting anything >= 15 therefore would not FAIL on a future Wowhead format:
+  // it would import a plausible-looking but wrong character. Refuse what is untested.
+  const int kNewestKnownVersion = 15;
+  if (version > kNewestKnownVersion)
+    return fail(QObject::tr("Dieser Anprobe-Link nutzt ein neueres Wowhead-Format (v%1), "
+                            "als diese Version lesen kann (bis v%2).")
+                  .arg(version).arg(kNewestKnownVersion));
+
   WowheadCharacter parsed;
-  if (version >= 15)
+  if (version == kNewestKnownVersion)
     parseV15(fields, version, &parsed, classicRanged);
   else
     parseLegacy(fields, version, &parsed);

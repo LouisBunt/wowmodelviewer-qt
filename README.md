@@ -74,14 +74,28 @@ cmake -S . -B build -G "Visual Studio 17 2022" -A x64
 cmake --build build --config Release
 ```
 
-If you keep the upstream tree elsewhere, override the paths:
+Four paths are configurable, and all four are checked at configure time so a wrong one
+fails with a named cause instead of a wall of compile errors later:
+
+| Variable | Default | What it needs to point at |
+|---|---|---|
+| `WMV_SRC` | `./upstream` | the WMV source tree (the submodule) |
+| `WMV_BUILD` | `$WMV_SRC/build-x64` | its build output, holding `core.lib` and `wow.lib` |
+| `QT_LOCATION` | `C:/Qt/Qt5.13.2/5.13.2/msvc2017_64` | a Qt 5.13 installation for MSVC x64 |
+| `VCPKG_STATIC` | `$VCPKG_ROOT/installed/x64-windows-static-md` | a vcpkg triplet with GLEW |
 
 ```
-cmake -S . -B build -DWMV_SRC=<tree> -DWMV_BUILD=<tree>/build-x64
+cmake -S . -B build -DWMV_SRC=<tree> -DWMV_BUILD=<tree>/build-x64 ^
+      -DQT_LOCATION=<qt>/5.13.2/msvc2017_64 ^
+      -DVCPKG_STATIC=<vcpkg>/installed/x64-windows-static-md
 ```
 
-Configure fails with a named cause if the source tree or either import library is
-missing, rather than surfacing it as compile errors later.
+`VCPKG_STATIC` defaults from the `VCPKG_ROOT` environment variable, so setting that once
+is usually enough:
+
+```
+vcpkg install glew:x64-windows-static-md
+```
 
 ## Running from the build tree
 
