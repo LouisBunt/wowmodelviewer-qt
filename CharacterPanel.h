@@ -1,6 +1,7 @@
 #ifndef CHARACTERPANEL_H
 #define CHARACTERPANEL_H
 
+#include <utility>
 #include <vector>
 
 #include <QWidget>
@@ -65,6 +66,14 @@ public:
   // the item view to show anything at all.
   bool slotHasOwnModel(int slot) const;
 
+  // Every worn slot that HAS geometry, with its German name -- what a chooser can offer.
+  // Empty means the item view has nothing it could show.
+  std::vector<std::pair<int, QString>> focusableSlots() const;
+
+  // The slot the item view last showed, so a plain on/off switch has something to turn
+  // back ON. -1 when nothing was ever focused for this model.
+  int lastFocusSlot() const { return lastFocusSlot_; }
+
   void randomise();
 
   // Public so the armory import can run the same check: it applies customizations
@@ -124,6 +133,7 @@ private:
   std::vector<QLabel*> clearButtons_; // the per-row "x", visible only when worn
   std::vector<QLabel*> focusButtons_; // the per-row eye: show only this piece
   int focusSlot_ = -1;                // -1 = whole character visible
+  int lastFocusSlot_ = -1;            // for the toolbar's on/off switch
   bool updating_ = false;      // guards against reacting to our own writes
 
 protected:

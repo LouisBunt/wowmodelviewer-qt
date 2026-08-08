@@ -319,6 +319,34 @@ QWidget* MainWindow::buildToolBar()
     b->installEventFilter(this);
     row->addWidget(b);
   }
+  // The item view used to be reachable only through a small mark deep in the equipment
+  // list. It is a view mode like any other, so it belongs where the view is switched.
+  // Same two-chip shape the item browser uses for "Einzelteile / Sets".
+  {
+    auto* sep = new QLabel;
+    sep->setFixedWidth(1);
+    sep->setFixedHeight(16);
+    sep->setStyleSheet(QString("background:%1;").arg(tok::kBorder));
+    row->addSpacing(6);
+    row->addWidget(sep);
+    row->addSpacing(6);
+
+    const struct { const char* label; bool onlyItem; } kViews[] = {
+      { "Charakter", false },
+      { "Nur Teil",  true  }
+    };
+    for (const auto& v : kViews) {
+      auto* c = new QLabel(QString::fromUtf8(v.label));
+      c->setFont(QFont(uiF(), 8));
+      c->setCursor(Qt::PointingHandCursor);
+      c->setProperty("viewChip", v.onlyItem);
+      c->installEventFilter(this);
+      row->addWidget(c);
+      (v.onlyItem ? viewItemChip_ : viewCharChip_) = c;
+    }
+    setItemFocusIndicator(-1);
+  }
+
   row->addStretch(1);
   pathLabel_ = mk("", monoF(), 8, tok::kDim);
   row->addWidget(pathLabel_);
@@ -527,6 +555,23 @@ void MainWindow::setModelActionsEnabled(bool on)
     emptyHint_->setVisible(!on);
 }
 
+void MainWindow::setItemFocusIndicator(int slot)
+{
+  const bool onlyItem = (slot >= 0);
+  const auto paint = [](QLabel* c, bool active) {
+    if (!c)
+      return;
+    c->setStyleSheet(active
+      ? QString("background:%1; border:1px solid %2; border-radius:9px;"
+                " padding:3px 10px; color:%3;")
+          .arg(tok::kAccentBg).arg(tok::kAccentBr).arg(tok::kAccent)
+      : QString("background:#12161b; border:1px solid %1; border-radius:9px;"
+                " padding:3px 10px; color:%2;").arg(tok::kBorder).arg(tok::kMuted));
+  };
+  paint(viewCharChip_, !onlyItem);
+  paint(viewItemChip_, onlyItem);
+}
+
 void MainWindow::setActiveCameraPreset(int index)
 {
   for (int i = 0; i < (int)camPresets_.size(); ++i) {
@@ -545,6 +590,11 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* e)
     const QVariant idx = obj->property("categoryIndex");
     if (idx.isValid()) {
       setCategory(idx.toInt());
+      return true;
+    }
+    const QVariant view = obj->property("viewChip");
+    if (view.isValid()) {
+      emit itemViewRequested(view.toBool());
       return true;
     }
     if (obj->property("exportButton").isValid()) {
