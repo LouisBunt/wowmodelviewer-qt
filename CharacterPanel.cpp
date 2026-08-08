@@ -881,10 +881,33 @@ void CharacterPanel::randomise()
 // id cannot be resolved to a file through the database. The target is derived from the
 // current model's own name instead and then checked against the archive, so a wrong guess
 // declines to act rather than loading something arbitrary.
-void CharacterPanel::checkPostureVariant(uint choiceId)
+void CharacterPanel::applyPostureFor(const std::vector<uint>& choiceIds)
+{
+  if (!model_)
+    return;
+
+  // The choice that actually carries a conditional model decides -- not whichever one
+  // happens to come last. Only if none of them does is a single call made anyway, so a
+  // model left standing on the upright variant by a previous character finds its way back.
+  for (uint id : choiceIds) {
+    auto r = GAMEDATABASE.sqlQuery(
+      QString("SELECT ChrCustomizationCondModelID FROM ChrCustomizationElement "
+              "WHERE ChrCustomizationChoiceID = %1").arg(id));
+    if (r.valid && !r.values.empty() && r.values[0][0].toInt() != 0) {
+      checkPostureVariant(id);       // may delete this model -- nothing after it
+      return;
+    }
+  }
+  if (!choiceIds.empty())
+    checkPostureVariant(choiceIds.front());
+}
+
+// Returns true when a model swap was requested -- the caller's WoWModel pointer is dead
+// from that moment on.
+bool CharacterPanel::checkPostureVariant(uint choiceId)
 {
   if (!model_ || !model_->gamefile)
-    return;
+    return false;
 
   auto r = GAMEDATABASE.sqlQuery(
     QString("SELECT ChrCustomizationCondModelID FROM ChrCustomizationElement "
@@ -898,23 +921,24 @@ void CharacterPanel::checkPostureVariant(uint choiceId)
   QString wanted;
   if (wantsVariant) {
     if (current.endsWith(kVariant, Qt::CaseInsensitive))
-      return;                                   // already on it
+      return false;                                   // already on it
     if (!current.endsWith(kBase, Qt::CaseInsensitive))
-      return;                                   // not a shape we know how to transform
+      return false;                                   // not a shape we know how to transform
     wanted = current.left(current.length() - kBase.length()) + kVariant;
   } else {
     if (!current.endsWith(kVariant, Qt::CaseInsensitive))
-      return;                                   // already on the base model
+      return false;                                   // already on the base model
     wanted = current.left(current.length() - kVariant.length()) + kBase;
   }
 
   if (!GAMEDIRECTORY.getFile(wanted)) {
     note(QString("posture: %1 does not exist -- staying on %2").arg(wanted).arg(current));
-    return;
+    return false;
   }
 
   note(QString("posture: %1 -> %2").arg(current).arg(wanted));
   emit postureModelRequested(wanted);
+  return true;
 }
 
 void CharacterPanel::onEvent(Event* e)

@@ -75,6 +75,8 @@ BlenderAddonInstaller::Result BlenderAddonInstaller::install()
   const QStringList sourceFiles =
     QDir(source).entryList(QDir::Files | QDir::NoDotAndDotDot);
 
+  QStringList failed;      // one entry per Blender version that could not be updated
+
   for (const QString& version : root.entryList(QDir::Dirs | QDir::NoDotAndDotDot)) {
     if (!isSupportedVersionFolder(version))
       continue;
@@ -83,25 +85,54 @@ BlenderAddonInstaller::Result BlenderAddonInstaller::install()
     // than skipping the version -- Blender scans it on start regardless.
     const QString target = root.filePath(version + "/scripts/addons/" + kAddonName);
 
-    // Replace, don't merge: a leftover file from an older add-on version (or a stale
-    // __pycache__) must not survive next to the new code.
-    QDir targetDir(target);
-    if (targetDir.exists())
-      targetDir.removeRecursively();
-    if (!QDir().mkpath(target)) {
-      result.error = QObject::tr("Konnte nicht nach %1 schreiben.").arg(target);
-      return result;
+    // Copy beside the target and swap only once everything has arrived. Deleting first was
+    // a trap: when anything went wrong afterwards -- Blender holding a file open is the
+    // everyday case -- the user was left with NO add-on where a working one had been.
+    //
+    // Replace rather than merge, so a leftover file from an older version (or a stale
+    // __pycache__) cannot survive next to the new code.
+    const QString staging = target + ".new";
+    QDir stagingDir(staging);
+    if (stagingDir.exists())
+      stagingDir.removeRecursively();
+    if (!QDir().mkpath(staging)) {
+      failed << QString("%1 (%2)").arg(version, QObject::tr("Ordner nicht anlegbar"));
+      continue;
     }
 
     bool copiedAll = true;
     for (const QString& file : sourceFiles)
-      copiedAll &= QFile::copy(source + "/" + file, target + "/" + file);
+      copiedAll &= QFile::copy(source + "/" + file, staging + "/" + file);
     if (!copiedAll) {
-      result.error = QObject::tr("Kopieren nach %1 ist fehlgeschlagen.").arg(target);
-      return result;
+      stagingDir.removeRecursively();
+      failed << QString("%1 (%2)").arg(version, QObject::tr("Kopieren fehlgeschlagen"));
+      continue;
+    }
+
+    QDir targetDir(target);
+    if (targetDir.exists() && !targetDir.removeRecursively()) {
+      // The old add-on is still in place and still works. Leave it, and say why.
+      stagingDir.removeRecursively();
+      failed << QString("%1 (%2)").arg(version,
+                                       QObject::tr("Datei in Benutzung, Blender schließen"));
+      continue;
+    }
+    if (!QDir().rename(staging, target)) {
+      failed << QString("%1 (%2)").arg(version, QObject::tr("Umbenennen fehlgeschlagen"));
+      continue;
     }
 
     result.installedVersions++;
+  }
+
+  // Report per version rather than abandoning the run at the first problem: with two
+  // Blender installations, one failure used to hide that the other had succeeded.
+  if (!failed.isEmpty()) {
+    result.error = result.installedVersions > 0
+        ? QObject::tr("In %1 Blender-Version(en) installiert; fehlgeschlagen: %2")
+            .arg(result.installedVersions).arg(failed.join(", "))
+        : QObject::tr("Installation fehlgeschlagen: %1").arg(failed.join(", "));
+    return result;
   }
 
   if (result.installedVersions == 0)

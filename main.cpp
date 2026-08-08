@@ -577,6 +577,10 @@ int main(int argc, char** argv)
       trace(r.error.isEmpty()
               ? QString("blender addon installed into %1 version(s)").arg(r.installedVersions)
               : QString("blender addon install FAILED: %1").arg(r.error));
+      // Documented as "install and quit", and it never did the quitting: the window came
+      // up and the process sat there until something killed it, which for a script means
+      // a timeout instead of a result. The exit code now carries the outcome.
+      return r.error.isEmpty() ? 0 : 1;
     }
   }
 
