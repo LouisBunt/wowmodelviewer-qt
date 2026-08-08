@@ -320,6 +320,7 @@ void CharacterPanel::setModel(WoWModel* model)
   // over would leave a row's eye lit for a view that is not active, and the first click on
   // it would toggle the focus OFF rather than on.
   focusSlot_ = -1;
+  lastFocusSlot_ = -1;
   if (!model_) {
     // Loading a creature used to tear down only the customization pickers and leave the
     // previous character's equipment list, tabard and toggles standing. They were inert
@@ -806,6 +807,8 @@ void CharacterPanel::setItemFocus(int slot)
     slot = -1;
 
   focusSlot_ = slot;
+  if (slot >= 0)
+    lastFocusSlot_ = slot;      // remembered so the toolbar switch can restore it
   model_->setItemFocus(slot);
 
   // refresh(), not just setItemFocus(): switching the view OFF has to put the hidden body,
@@ -831,6 +834,15 @@ bool CharacterPanel::slotHasOwnModel(int slot) const
       return true;
   }
   return false;
+}
+
+std::vector<std::pair<int, QString>> CharacterPanel::focusableSlots() const
+{
+  std::vector<std::pair<int, QString>> out;
+  for (const auto& s : kSlots)
+    if (slotHasOwnModel((int)s.slot))
+      out.emplace_back((int)s.slot, QString::fromUtf8(s.label));
+  return out;
 }
 
 void CharacterPanel::refresh()

@@ -78,6 +78,9 @@ public:
   // an empty start and led straight into "Kein Modell geladen".
   void setModelActionsEnabled(bool on);
 
+  // Reflect the item view's state in the toolbar. -1 = whole character.
+  void setItemFocusIndicator(int slot);
+
 signals:
   void fileActivated(GameFile* file);
   void fileIdActivated(int fileDataId);
@@ -88,6 +91,10 @@ signals:
   void backgroundRequested();
   void fitCameraRequested();
   void gridToggleRequested();
+
+  // The toolbar's view switch. true = show one piece only, false = the whole character.
+  // MainWindow does not know which piece; whoever owns the CharacterPanel decides that.
+  void itemViewRequested(bool onlyItem);
 
 protected:
   bool eventFilter(QObject* obj, QEvent* e) override;
@@ -111,6 +118,8 @@ private:
   QLabel* pathLabel_ = nullptr;
   QLabel* exportButton_ = nullptr;   // HUD, disabled while no model is loaded
   QLabel* emptyHint_ = nullptr;      // shown over the viewport while nothing is loaded
+  QLabel* viewCharChip_ = nullptr;   // toolbar: whole character
+  QLabel* viewItemChip_ = nullptr;   // toolbar: only the focused piece
   QLabel* statusPathLabel_ = nullptr;
   QLabel* resultLabel_ = nullptr;
   QLineEdit* search_ = nullptr;

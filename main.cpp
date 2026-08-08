@@ -25,6 +25,9 @@
 #include <QTimer>
 #include <QIcon>
 #include <QInputDialog>
+#include <QMenu>
+#include <QAction>
+#include <QCursor>
 #include <QMessageBox>
 #include <QString>
 #include <QVBoxLayout>
@@ -715,6 +718,49 @@ int main(int argc, char** argv)
   QObject::connect(win->characterPanel(), &CharacterPanel::postureModelRequested,
                    menus, &MenuController::swapModelPreservingState);
   menus->modelChanged();
+
+  // The toolbar's view switch. MainWindow only says "one piece" or "the character" -- it
+  // has no business knowing about slots, so the decision which piece is made here:
+  // whatever was shown last, otherwise the only candidate, otherwise let the user pick.
+  QObject::connect(win, &MainWindow::itemViewRequested, win, [win](bool onlyItem) {
+    CharacterPanel* cp = win->characterPanel();
+    if (!cp)
+      return;
+    if (!onlyItem) {
+      cp->setItemFocus(-1);
+      return;
+    }
+
+    const auto candidates = cp->focusableSlots();
+    if (candidates.empty()) {
+      win->setPathLabel(QObject::tr("Kein getragenes Teil hat ein eigenes Modell — "
+                                    "Brust, Beine und Hände sind auf die Haut gemalt."));
+      win->setItemFocusIndicator(-1);       // the chip must not stay lit on a no-op
+      return;
+    }
+    if (candidates.size() == 1) {
+      cp->setItemFocus(candidates.front().first);
+      return;
+    }
+    // More than one: offer them by name rather than guessing. The remembered slot goes
+    // first, so switching back and forth is one click once something has been chosen.
+    QMenu pick;
+    const int last = cp->lastFocusSlot();
+    for (const auto& c : candidates) {
+      QAction* a = pick.addAction(c.second);
+      a->setData(c.first);
+      if (c.first == last)
+        pick.setDefaultAction(a);
+    }
+    if (QAction* chosen = pick.exec(QCursor::pos()))
+      cp->setItemFocus(chosen->data().toInt());
+    else
+      win->setItemFocusIndicator(cp->itemFocus());   // cancelled: leave the chips as they were
+  });
+
+  // Keep the toolbar chips and the marks in the equipment list telling the same story.
+  QObject::connect(win->characterPanel(), &CharacterPanel::itemFocusChanged,
+                   win, &MainWindow::setItemFocusIndicator);
 
   // The item browser queries the item database directly, so it can only be filled once
   // that database exists.
