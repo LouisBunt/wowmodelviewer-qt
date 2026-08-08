@@ -509,11 +509,12 @@ std::vector<int> MenuController::fetchWowheadItemIds(const QString& url, QString
   // Qt loads OpenSSL lazily, so a build without libssl/libcrypto next to it fails every
   // HTTPS request with a generic transport error that says nothing about the cause. Name
   // it instead -- this is a packaging problem, not something the user did wrong.
-  if (url.startsWith("https", Qt::CaseInsensitive) && !QSslSocket::supportsSsl()) {
-    *error = tr("Diese Installation kann kein HTTPS: die OpenSSL-Bibliotheken "
-                "(libssl-1_1-x64.dll und libcrypto-1_1-x64.dll) liegen nicht neben der "
-                "Anwendung. Ohne sie funktioniert auch der Armory-Import nicht.");
-    return ids;
+  if (url.startsWith("https", Qt::CaseInsensitive)) {
+    const QString why = httpsUnavailableReason();
+    if (!why.isEmpty()) {
+      *error = why;
+      return ids;
+    }
   }
 
   QNetworkAccessManager net;
@@ -625,8 +626,31 @@ std::vector<int> MenuController::parseWowheadItemIds(const QString& html, QStrin
   return unique;
 }
 
+// Empty when HTTPS works, otherwise the reason. Every network entry point asks this first:
+// the clear message used to exist only on the --wowhead path, so the routes a user actually
+// clicks reported Qt's generic transport error and left them guessing at a missing DLL.
+QString MenuController::httpsUnavailableReason() const
+{
+  if (QSslSocket::supportsSsl())
+    return QString();
+  return tr("Diese Installation kann kein HTTPS: die OpenSSL-Bibliotheken "
+            "(libssl-1_1-x64.dll und libcrypto-1_1-x64.dll) liegen nicht neben der "
+            "Anwendung. Ohne sie funktionieren Wowhead-, Armory- und NPC-Import nicht.");
+}
+
 void MenuController::startWowheadFetch(const QString& url, const QString& label)
 {
+  if (url.startsWith("https", Qt::CaseInsensitive)) {
+    const QString why = httpsUnavailableReason();
+    if (!why.isEmpty()) {
+      // Same shape as the reply handler's failure path below: status line plus a dialog.
+      trace("wowhead fetch aborted: no SSL support");
+      win_->setPathLabel(tr("Kein HTTPS verfügbar."));
+      QMessageBox::warning(win_, label, why);
+      return;
+    }
+  }
+
   // A second request while one is in flight aborts the first -- its finished-handler
   // sees the abort error and stops; without this, two results race for the mannequin.
   if (activeReply_)
@@ -993,6 +1017,12 @@ void MenuController::importArmoryCharacter()
     QLineEdit::Normal, QString(), &ok);
   if (!ok || url.trimmed().isEmpty())
     return;
+
+  const QString why = httpsUnavailableReason();
+  if (!why.isEmpty()) {
+    QMessageBox::warning(win_, tr("Armory-Import"), why);
+    return;
+  }
 
   const QString err = importArmory(url.trimmed(), true);
   if (!err.isEmpty())

@@ -102,6 +102,12 @@ private:
   // Contact, support and music links -- the details live at the top of the .cpp.
   void contact();
 
+private:
+  // Empty when HTTPS is usable; otherwise the reason, for every network entry point.
+  QString httpsUnavailableReason() const;
+
+public slots:
+
   void loadCharacterFile(bool equipmentOnly);
   void saveCharacterFile(bool equipmentOnly);
 
