@@ -510,6 +510,23 @@ void MainWindow::setGridIndicator(bool on)
       .arg(on ? tok::kAccent : tok::kMuted).arg(on ? "#22282f" : "transparent"));
 }
 
+void MainWindow::setModelActionsEnabled(bool on)
+{
+  if (exportButton_) {
+    exportButton_->setStyleSheet(
+      on ? QString("background:%1; border:1px solid #d9b678; border-radius:7px;"
+                   "color:%2; padding:8px 14px;").arg(tok::kAccent).arg(tok::kOnAccent)
+         : QString("background: rgba(14,17,20,220); border:1px solid %1; border-radius:7px;"
+                   "color:%2; padding:8px 14px;").arg(tok::kBorder).arg(tok::kDim));
+    exportButton_->setProperty("enabledLook", on);
+    exportButton_->setCursor(on ? Qt::PointingHandCursor : Qt::ArrowCursor);
+    exportButton_->setToolTip(on ? QString() : tr("Erst ein Modell laden"));
+  }
+  // The hint owns the middle of an empty viewport; it would be in the way of a model.
+  if (emptyHint_)
+    emptyHint_->setVisible(!on);
+}
+
 void MainWindow::setActiveCameraPreset(int index)
 {
   for (int i = 0; i < (int)camPresets_.size(); ++i) {
@@ -531,6 +548,8 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* e)
       return true;
     }
     if (obj->property("exportButton").isValid()) {
+      if (!obj->property("enabledLook").toBool())
+        return true;                       // greyed out: nothing to export
       emit exportRequested();
       return true;
     }
@@ -628,6 +647,21 @@ QWidget* MainWindow::buildViewport()
   canvas_ = new GLHost(host);
   g->addWidget(canvas_, 0, 0, 3, 3);
 
+  // An empty viewport with nothing in it reads as "broken", not as "waiting". One quiet
+  // line in the middle says which of the two it is. Hidden as soon as a model arrives
+  // (setModelActionsEnabled), and an overlay like the rest of the HUD because GLHost is a
+  // native child window that would otherwise paint straight over it.
+  emptyHint_ = new QLabel(QString::fromUtf8(
+                            "Kein Modell geladen\n\n"
+                            "Links im Baum eines auswählen —\n"
+                            "unter „Charaktere“ nach Rasse, "
+                            "unter „Items“ nach Ausrüstung."), host);
+  emptyHint_->setAlignment(Qt::AlignCenter);
+  emptyHint_->setFont(QFont(uiF(), 10));
+  emptyHint_->setStyleSheet(QString("color:%1; background:transparent;").arg(tok::kMuted));
+  g->addWidget(emptyHint_, 0, 0, 3, 3, Qt::AlignCenter);
+  asOverlay(emptyHint_);
+
   auto* rail = new QFrame(host);
   rail->setStyleSheet(QString("QFrame { background: rgba(14,17,20,220); border:1px solid %1;"
                               " border-radius:9px; }").arg(tok::kBorder));
@@ -678,6 +712,7 @@ QWidget* MainWindow::buildViewport()
   exp->setProperty("exportButton", true);
   exp->installEventFilter(this);
   ar->addWidget(exp);
+  exportButton_ = exp;
   g->addWidget(actions, 0, 2, Qt::AlignTop | Qt::AlignRight);
   asOverlay(actions);
 

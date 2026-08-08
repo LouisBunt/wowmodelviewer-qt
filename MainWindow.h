@@ -73,6 +73,11 @@ public:
 
   void setGridIndicator(bool on);
 
+  // Grey out what cannot work without a model. The HUD's export button is a QLabel, not a
+  // QAction, so MenuController's needsModel_ list cannot reach it -- it stayed fully lit on
+  // an empty start and led straight into "Kein Modell geladen".
+  void setModelActionsEnabled(bool on);
+
 signals:
   void fileActivated(GameFile* file);
   void fileIdActivated(int fileDataId);
@@ -104,6 +109,8 @@ private:
   TimelinePanel* timeline_ = nullptr;
   QLabel* buildLabel_ = nullptr;
   QLabel* pathLabel_ = nullptr;
+  QLabel* exportButton_ = nullptr;   // HUD, disabled while no model is loaded
+  QLabel* emptyHint_ = nullptr;      // shown over the viewport while nothing is loaded
   QLabel* statusPathLabel_ = nullptr;
   QLabel* resultLabel_ = nullptr;
   QLineEdit* search_ = nullptr;

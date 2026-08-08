@@ -348,11 +348,16 @@ int main(int argc, char** argv)
     return 0;
   }
   const QStringList positional = positionalArgs(argc, argv);
-  // 1000001 was the Phase 1 probe id. It no longer resolves in current clients, so a
-  // plain double-click landed on "FileDataID not found" and stayed there. 917116 is
-  // the male orc -- the model the readme uses as its example.
+  // Nothing is loaded unless an id was asked for. Starting on a fixed model meant every
+  // launch began by throwing away someone else's orc: the first act was always to find
+  // the browser and replace it. An empty viewport with a pointer to the tree is the
+  // honest starting point.
+  //
+  // This is NOT the same id as MenuController's kMannequinFileId. That one is the figure
+  // an item gets put on when the browser is used without a character loaded, and it stays
+  // -- a piece of armour needs someone to wear it.
   const bool modelRequested = positional.size() > 1;
-  const uint fileId = modelRequested ? positional.at(1).toUInt() : 917116u;
+  const uint fileId = modelRequested ? positional.at(1).toUInt() : 0u;
 
   auto* win = new MainWindow;
   GLHost* host = win->canvas();
@@ -503,12 +508,13 @@ int main(int argc, char** argv)
     }
   }
 
-  trace("before getFile");
-  GameFile* file = GAMEDIRECTORY.getFile(fileId);
-  trace("getFile returned");
-  // An id the user asked for and did not get is worth stopping on. The default one
-  // failing is not: the browser is right there, so come up with an empty viewport and
-  // let them pick, instead of dead-ending on a message.
+  // Only look anything up when an id was actually given -- the normal start has none.
+  GameFile* file = nullptr;
+  if (modelRequested) {
+    trace("before getFile");
+    file = GAMEDIRECTORY.getFile(fileId);
+    trace("getFile returned");
+  }
   if (!file && modelRequested) {
     // Not a fatal folder problem: the client is fine, only this one id is not in it.
     // Say so and carry on with an empty viewport -- the browser is right there.
@@ -522,14 +528,15 @@ int main(int argc, char** argv)
     }
   }
   if (!file)
-    trace(QString("default model %1 not in this client -- starting empty").arg(fileId));
+    trace("starting with an empty viewport");
 
   // The model must be built only AFTER the GL context exists: WoWModel uploads its
   // textures during construction, and without a current context those uploads fail
   // silently -- geometry survives (CPU side) but everything renders untextured.
   // GLHost creates the context in showEvent, so show first, pump the event queue,
   // then load.
-  splashStage(splash, app, QString::fromUtf8("Modell wird geladen …"));
+  splashStage(splash, app, file ? QString::fromUtf8("Modell wird geladen …")
+                                : QString::fromUtf8("Fertig"));
   trace("before show (context comes up here)");
   win->show();
   splash->finish(win);

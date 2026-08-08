@@ -296,6 +296,9 @@ void MenuController::modelChanged()
 
   for (QAction* a : needsModel_)
     a->setEnabled(haveModel);
+  // The HUD's export button is not a QAction and needs telling separately.
+  if (win_)
+    win_->setModelActionsEnabled(haveModel);
   for (QAction* a : needsCharacter_)
     a->setEnabled(character != nullptr);
 
