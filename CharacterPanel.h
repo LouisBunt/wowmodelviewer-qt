@@ -73,7 +73,14 @@ public:
   // CAUTION: on a match this emits postureModelRequested, whose handler REPLACES the
   // model -- deleting the current one. Call it only when nothing is still holding a
   // WoWModel pointer.
-  void checkPostureVariant(uint choiceId);
+  bool checkPostureVariant(uint choiceId);
+
+  // Decide the posture ONCE for a whole set of imported choices. Calling
+  // checkPostureVariant() in a loop is wrong twice over: it is not idempotent (a choice
+  // without a CondModel sends an already-upright model back to the base one, so the last
+  // entry wins instead of the relevant one), and a match REPLACES the model, which leaves
+  // the rest of the loop running against a deleted object.
+  void applyPostureFor(const std::vector<uint>& choiceIds);
 
   WoWModel* model() const { return model_; }
 

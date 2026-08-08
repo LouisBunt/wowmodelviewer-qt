@@ -432,11 +432,28 @@ void ExportTab::refreshClips()
     return;
   }
 
-  // Same source the timeline uses: keyed by the model's animation index, which is what
-  // setAnimationsToExport() expects.
-  for (const auto& a : m->getAnimsMap()) {
-    auto* item = new QListWidgetItem(QString::fromStdWString(a.second));
-    item->setData(Qt::UserRole, (int)a.first);
+  // Built from anims[], NOT from getAnimsMap(). The comment here used to claim that map was
+  // "keyed by the model's animation index" -- it is not. Its key is AnimationData.ID, a
+  // database id running well past the end of anims[], while setAnimationsToExport() feeds
+  // these values straight into model->anims[] as indices. Ticking one clip could therefore
+  // export a different one, or none at all. TimelinePanel::rebuildAnimations() already gets
+  // this right; this is the same construction.
+  //
+  // The map stays the source for the readable NAME, looked up by each entry's own animID.
+  const std::map<int, std::wstring> names = m->getAnimsMap();
+  std::map<int, int> seen;                        // animID -> how often already listed
+  for (size_t i = 0; i < m->anims.size(); ++i) {
+    const int animId = m->anims[i].animID;
+    const auto nameIt = names.find(animId);
+    QString label = (nameIt != names.end()) ? QString::fromStdWString(nameIt->second)
+                                            : QString("Animation %1").arg(animId);
+    // Several variations share one name; without this they are indistinguishable rows.
+    const int n = ++seen[animId];
+    if (n > 1)
+      label += QString(" (%1)").arg(n);
+
+    auto* item = new QListWidgetItem(label);
+    item->setData(Qt::UserRole, (int)i);
     clipList_->addItem(item);
   }
 

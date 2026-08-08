@@ -1166,8 +1166,11 @@ QString MenuController::applyCharInfos(CharInfos* result, bool interactive,
   // Last, because a match replaces the model and deletes `m`. An imported character whose
   // posture is "upright" needs the variant MODEL, which cd.set() alone cannot deliver --
   // that is what made an imported upright orc come out hunched.
+  std::vector<uint> choiceIds;
+  choiceIds.reserve(own.size());
   for (const auto& c : own)
-    win_->characterPanel()->checkPostureVariant(c.second);
+    choiceIds.push_back(c.second);
+  win_->characterPanel()->applyPostureFor(choiceIds);
 
   return QString();
 }
