@@ -54,10 +54,11 @@ Beides laesst sich auch mitgeben, etwa fuer Skripte:
     WoWModelViewer-Qt.exe "<WoW-Ordner>" [FileDataID] [Optionen]
     WoWModelViewer-Qt.exe "D:\World of Warcraft" 917116
 
-Der zweite Parameter ist das Modell, das beim Start geladen wird; 917116 ist der
-maennliche Ork und zugleich der Standard. Wird ein Ordner auf der Befehlszeile
-angegeben, erscheint nie ein Dialog -- ein Skript soll fehlschlagen, nicht
-haengen bleiben. Dateipfade in --shot und --export bitte absolut angeben.
+Der zweite Parameter ist das Modell, das beim Start geladen wird. Ohne ihn startet
+das Programm mit leerer Ansicht -- links im Baum waehlst du dann selbst. Wird ein
+Ordner auf der Befehlszeile angegeben, erscheint nie ein Dialog: ein Skript soll
+fehlschlagen, nicht haengen bleiben. Dateipfade in --shot und --export bitte
+absolut angeben.
 
 Der erste Start dauert laenger als die folgenden: die Datenbank wird einmal aus
 den DB2-Dateien aufgebaut und danach als wowdb.sqlite zwischengespeichert. Der
@@ -103,8 +104,10 @@ Menueleiste oben: Datei, Ansicht, Charakter, Export, Hilfe -- mit Tastenkuerzeln
 (F7/F8 Charakter speichern und laden, F5/F6/F9 Ausruestung, F12 Screenshot,
 Strg+1..4 Kameraansichten, Strg+G Gitter).
 
-Werkzeugzeile darunter: Modell, Charakter, Licht, Kamera, Hintergrund -- das
-sind anklickbare Schalter, keine Beschriftungen.
+Werkzeugzeile darunter: Anpassen, Charakter, Licht, Kamera, Hintergrund -- das
+sind anklickbare Schalter, keine Beschriftungen. Rechts daneben "Charakter" und
+"Nur Teil": damit schaltest du zwischen ganzer Figur und einem einzelnen Teil um,
+ohne die Ausruestungsliste aufklappen zu muessen.
 
 Rechts im Inspector: Charakter (Anpassung, Ausruestung, sichtbare Teile,
 Daemonenjaeger-Schalter, Wappenrock), Licht (vier Lichtquellen mit Farbe, Typ
@@ -112,9 +115,9 @@ und Position), Import/Export und Blender.
 
 Unten die Zeitleiste: Animationsauswahl, Abspielsteuerung, Tempo und Scrubber.
 
-Fenster: Die Titelleiste ist selbstgezeichnet. Ziehen verschiebt, Doppelklick
-maximiert, die drei Punkte rechts sind Minimieren / Maximieren / Schliessen.
-Groessenaenderung geht ueber den Griff rechts unten.
+Fenster: Die Titelleiste ist selbstgezeichnet und zeigt Name und Version. Ziehen
+verschiebt, Doppelklick maximiert; rechts sitzen Minimieren, Maximieren und
+Schliessen. Groessenaenderung geht ueber den Griff rechts unten.
 
 
 Charakter aus der Wowhead-Anprobe holen
@@ -136,7 +139,11 @@ Nicht zuordenbare IDs werden gezaehlt und gemeldet, nicht verschluckt.
 
 Einzelnes Teil ansehen und exportieren
 --------------------------------------
-In der Ausruestungsliste hat jede belegte Zeile rechts zwei kleine Schalter:
+Am schnellsten oben in der Werkzeugzeile ueber "Nur Teil". Traegst du mehrere
+Teile mit eigenem Modell, fragt ein kleines Menue, welches gemeint ist; "Charakter"
+holt die ganze Figur zurueck.
+
+In der Ausruestungsliste hat zusaetzlich jede belegte Zeile rechts zwei Schalter:
 "x" legt das Teil ab, das Auge zeigt nur dieses Teil und blendet die Figur samt
 allem anderen aus. Die Kamera stellt sich dabei selbst auf das Teil ein; drehen
 und zoomen wie gewohnt. Erneutes Klicken holt den ganzen Charakter zurueck.
@@ -190,6 +197,13 @@ Neu in 1.6 und 1.7
   OpenGL wortlos.
 - userSettings\log.txt wird geschrieben. Vorher gingen alle Meldungen der
   Modell-, Archiv- und Exportschicht verloren.
+
+- Der Modellbrowser filtert zusaetzlich nach Ruestungsklasse (Platte, Kette,
+  Leder, Stoff).
+- Beim Start wird nichts mehr geladen: die Ansicht bleibt leer, bis du ein Modell
+  waehlst.
+- Neues Farbschema, Name und Version in der Titelleiste, deutlichere
+  Fensterknoepfe.
 
 
 Datenuebertragung
