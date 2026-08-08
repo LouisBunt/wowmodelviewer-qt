@@ -321,10 +321,25 @@ void CharacterPanel::setModel(WoWModel* model)
   // it would toggle the focus OFF rather than on.
   focusSlot_ = -1;
   if (!model_) {
+    // Loading a creature used to tear down only the customization pickers and leave the
+    // previous character's equipment list, tabard and toggles standing. They were inert
+    // (every handler null-checks) but said nothing about it -- a list of worn items under
+    // a model that wears none reads as a bug, not as "not applicable here".
     clearRows();
+    buildEquipment();      // both bail out after clearing when model_ is null
+    buildTabard();
+    equipHeader_->setVisible(false);
+    itemInput_->setVisible(false);
+    dhMode_->setVisible(false);
+    tabardHeader_->setVisible(false);
     subHeader_->setText(QString::fromUtf8("Kein Charaktermodell geladen."));
     return;
   }
+
+  equipHeader_->setVisible(true);
+  itemInput_->setVisible(true);
+  dhMode_->setVisible(true);
+  tabardHeader_->setVisible(true);
 
   // A raw M2 is not a character: without this setup only the always-visible geosets
   // draw and nothing is textured (which is exactly what Phase 1 produced).
