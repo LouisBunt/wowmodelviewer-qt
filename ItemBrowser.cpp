@@ -79,6 +79,21 @@ const struct { const char* label; int id; } kExpansions[] = {
   { "Midnight",            11 }
 };
 
+// Item.ClassID 4 is armour; SubclassID then says which material. Both columns are declared
+// in database.xml without store="no", so they exist in the cache already -- no schema bump,
+// no database rebuild. Weapons and everything else fall under "Alle Arten".
+//
+// -99 follows kExpansions' sentinel convention. Miscellaneous armour (ClassID 4,
+// SubclassID 0: rings, trinkets, cloaks) is deliberately not offered as its own entry --
+// it is not an armour class a player thinks in.
+const struct { const char* label; int subclass; } kArmorClasses[] = {
+  { "Alle Arten", -99 },
+  { "Stoff",        1 },
+  { "Leder",        2 },
+  { "Kette",        3 },
+  { "Platte",       4 }
+};
+
 const struct { const char* label; int id; } kQualities[] = {
   { "Alle Qualitäten", -1 },
   { "Schlecht",         0 },
@@ -235,6 +250,15 @@ ItemBrowser::ItemBrowser(QWidget* parent) : QWidget(parent)
           this, [this](int) { refresh(); });
   col->addWidget(expansion_);
 
+  armor_ = new QComboBox;
+  armor_->setFont(QFont(uiFamily(), 8));
+  armor_->setStyleSheet(comboStyle());
+  for (const auto& a : kArmorClasses)
+    armor_->addItem(QString::fromUtf8(a.label), a.subclass);
+  connect(armor_, QOverload<int>::of(&QComboBox::currentIndexChanged),
+          this, [this](int) { refresh(); });
+  col->addWidget(armor_);
+
   quality_ = new QComboBox;
   quality_->setFont(QFont(uiFamily(), 8));
   quality_->setStyleSheet(comboStyle());
@@ -306,8 +330,9 @@ void ItemBrowser::setMode(bool sets)
   setMode_ = sets;
   itemsChip_->setStyleSheet(chip("", !sets)->styleSheet());
   setsChip_->setStyleSheet(chip("", sets)->styleSheet());
-  // Sets are named collections; slot and quality do not apply to them.
+  // Sets are named collections; slot, armour class and quality do not apply to them.
   slot_->setEnabled(!sets);
+  armor_->setEnabled(!sets);
   expansion_->setEnabled(!sets);
   quality_->setEnabled(!sets);
   standalone_->setVisible(!sets);
@@ -355,6 +380,10 @@ void ItemBrowser::refreshItems()
   const int qual = quality_->currentData().toInt();
   if (qual != -1)
     where << QString("ItemSparse.OverallQualityID = %1").arg(qual);
+
+  const int armor = armor_->currentData().toInt();
+  if (armor != -99)
+    where << QString("Item.ClassID = 4 AND Item.SubclassID = %1").arg(armor);
 
   // A search that is only digits is meant as an item id -- that is how someone pastes
   // an id out of a link or a log. The name match stays in the OR so a numeric NAME

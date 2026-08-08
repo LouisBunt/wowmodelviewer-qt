@@ -54,6 +54,7 @@ private:
 
   QComboBox* slot_ = nullptr;
   QComboBox* expansion_ = nullptr;
+  QComboBox* armor_ = nullptr;      // armour class: cloth / leather / mail / plate
   QComboBox* quality_ = nullptr;
   QLineEdit* search_ = nullptr;
   QCheckBox* standalone_ = nullptr;
