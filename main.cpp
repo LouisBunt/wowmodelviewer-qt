@@ -41,6 +41,7 @@
 
 #include "Game.h"
 #include "GameFile.h"
+#include "GlobalSettings.h"
 #include "logger/LogOutputFile.h"
 #include "logger/Logger.h"
 #include "CharTexture.h"
@@ -307,6 +308,20 @@ int main(int argc, char** argv)
   // "see the log for details". Registered before anything else so early failures are caught.
   QDir().mkpath("userSettings");
   LOGGER.addChild(new WMVLog::LogOutputFile("userSettings/log.txt"));
+
+  // The armory importer talks to a proxy that queries Blizzard's API server-side. Its
+  // address is compiled into the plugin, and the runtime override existed only in the wx
+  // front-end -- so when that proxy was down, a user here had no way to point anywhere
+  // else and the plugin's own error text referred to a settings dialog that does not
+  // exist. Same key and same file the wx build uses, so the two agree.
+  {
+    QSettings settings(QString::fromLatin1(kSettingsFile), QSettings::IniFormat);
+    const QString proxy = settings.value("Armory/ProxyURL", "").toString();
+    if (!proxy.isEmpty()) {
+      GLOBALSETTINGS.setArmoryProxyURL(proxy.toStdString());
+      trace("armory proxy from settings: " + proxy);
+    }
+  }
 
   applyDarkPalette(app);
   // Window/taskbar icon for every top-level widget; the exe's Explorer icon comes

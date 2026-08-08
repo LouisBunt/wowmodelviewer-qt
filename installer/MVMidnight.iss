@@ -25,10 +25,15 @@
 #define IconsDir "..\upstream\bin_support\Icons"
 
 [Setup]
-; Same AppId as WoW Model Viewer Midnight on purpose: this build replaces the
-; wxWidgets one rather than installing beside it, so Inno finds the existing
-; installation and upgrades it in place.
-AppId={{B7E9F3A2-1C4D-4E8A-9F6B-2A3C5D7E9F10}
+; Own AppId. This used to reuse the one belonging to WoW Model Viewer Midnight, so the
+; setup silently took over THAT product's installation. That was defensible while this was
+; a private build replacing its own predecessor; as a public release under a different name
+; and publisher it is not -- a stranger installing it would have found another program's
+; installation overwritten and its executable deleted, without ever being asked.
+;
+; Consequence for anyone who installed a build before 1.7.0: this one lands in its own
+; directory, and the old entry stays in the program list until it is uninstalled.
+AppId={{7C3E9A41-58D2-4B6E-9E17-3F84A5C0D2B9}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppVerName={#MyAppName} {#MyAppVersion}
@@ -60,17 +65,20 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
+; Offered, never assumed. Deleting another installation's files is the user's call, and it
+; only makes sense when this is deliberately installed over an older WoW Model Viewer.
+Name: "cleanwx"; Description: "Dateien einer vorhandenen WoW-Model-Viewer-Installation im Zielordner entfernen"; Flags: unchecked
 
 [InstallDelete]
-; Upgrading over the wxWidgets installation: strip its executable and toolkit DLLs.
-; Left in place they are dead weight, and a stale wowmodelviewer.exe next to the new
-; build is an invitation to start the wrong one and report bugs against it.
-Type: files; Name: "{app}\wowmodelviewer.exe"
-Type: files; Name: "{app}\wxbase32u_*.dll"
-Type: files; Name: "{app}\wxmsw32u_*.dll"
-Type: files; Name: "{app}\jpeg62.dll"
-Type: files; Name: "{app}\libpng16.dll"
-Type: files; Name: "{app}\UpdateManager.exe"
+; Only when the user ticked the task above. A stale wowmodelviewer.exe beside the new build
+; is an invitation to start the wrong one and report bugs against it -- but that is a reason
+; to OFFER the cleanup, not to carry it out unasked on files this setup did not install.
+Type: files; Name: "{app}\wowmodelviewer.exe"; Tasks: cleanwx
+Type: files; Name: "{app}\wxbase32u_*.dll"; Tasks: cleanwx
+Type: files; Name: "{app}\wxmsw32u_*.dll"; Tasks: cleanwx
+Type: files; Name: "{app}\jpeg62.dll"; Tasks: cleanwx
+Type: files; Name: "{app}\libpng16.dll"; Tasks: cleanwx
+Type: files; Name: "{app}\UpdateManager.exe"; Tasks: cleanwx
 ; The database cache is keyed by WoW build and schema version, not by application
 ; version. Drop it on upgrade so a changed schema cannot be served from a cache the
 ; previous build wrote.

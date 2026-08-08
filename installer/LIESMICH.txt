@@ -218,8 +218,12 @@ Was noch fehlt
   mit: Stand, Gehen, Laufen, Springen, unbewaffneter Kampf und Fist1H. Waffen-
   spezifische Animationen, Tod und Betaeubung sind dort nicht verfuegbar.
 - Der Armory-Import haengt an einem Vermittler, der zeitweise nicht erreichbar
-  ist -- dann hilft nur ein zweiter Versuch. Fuer dessen Adresse gibt es hier
-  noch keine Einstellung.
+  ist -- dann hilft nur ein zweiter Versuch. Einen Einstellungsdialog dafuer gibt
+  es noch nicht; die Adresse laesst sich aber in userSettings\qt-frontend.ini
+  hinterlegen:
+
+      [Armory]
+      ProxyURL=https://beispiel.example/api
 - Der FBX-Export laeuft im selben Prozess. Die wx-Ausgabe kapselt ihn bewusst in
   einen Kindprozess, weil das FBX-SDK nicht threadsicher ist; stuerzt er hier ab,
   reisst er die Anwendung mit.

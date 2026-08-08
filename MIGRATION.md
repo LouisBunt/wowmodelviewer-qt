@@ -1,6 +1,14 @@
 # WMV Frontend-Umbau: wxWidgets → Qt
 
-Stand: 27.07.2026. Basis: `wowmodelviewer/wowmodelviewer` @ `adb2cb1` (develop).
+> **Historisches Dokument.** Das ist der Planungsstand vom 27.07.2026, geschrieben bevor
+> der Umbau begann; die Phasen 1 bis 8 sind inzwischen umgesetzt. Es steht hier, weil es
+> die Entscheidungen begründet, die die heutige Form erklären — nicht als Beschreibung
+> des aktuellen Standes. Was die Anwendung heute kann und was ihr fehlt, steht in
+> [installer/LIESMICH.txt](installer/LIESMICH.txt); die Eingriffe in die Engine, von denen
+> dieses Dokument noch annimmt, es werde keine geben, listet die
+> [README](README.md#engine-changes-carried-in-the-submodule).
+
+Basis: `wowmodelviewer/wowmodelviewer` @ `adb2cb1` (develop).
 
 ## Ausgangslage (gemessen, nicht geschätzt)
 
@@ -110,10 +118,3 @@ Mag'har-Fix — laufen dagegen weiter zusammen, weil diese Bibliotheken unangeta
 Wer das trägt, muss klar sein, bevor Phase 3 beginnt. Phase 1 und 2 sind billig genug, um sie
 als Experiment zu machen und danach zu entscheiden.
 
-## Verzeichnisse
-
-- `C:\Users\braun\wmv-src` — Upstream-Quellcode mit Mag'har-Fix (PR #17) und Dark Theme
-- `C:\Users\braun\wmv-qt-proto` — statischer Design-Prototyp (Attrappe, keine Daten)
-- `D:\CLAUDE\ModelViewer` — dieser Umbau (bis August 2026 unter `C:\Users\braun\wmv-qt`)
-- `D:\CLAUDE\ModelViewer-test` — Testinstallation mit Spieldaten (listfile, wowdb, dbd, games)
-- `D:\CLAUDE\ModelViewer-release` — fertige EXE-Pakete
