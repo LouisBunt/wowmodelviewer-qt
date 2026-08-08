@@ -1566,12 +1566,12 @@ void MenuController::exportWithDialog()
 // somebody would mistake for a real handle.
 namespace {
 
-const char* kDiscordHandle = "";   // e.g. "skogdesign"
-const char* kDiscordInvite = "";   // invite URL, if there is a server
-const char* kBattleTag     = "";   // e.g. "Name#1234"
-const char* kSupportUrl    = "";   // Ko-fi / PayPal / Patreon …
-const char* kMusicLabel    = "";   // what to call it, e.g. "Skogdesign auf Spotify"
-const char* kMusicUrl      = "";   // SoundCloud or Spotify
+const char* kDiscordHandle = "peppawutz69";
+const char* kDiscordInvite = "";                  // no server yet -- handle only
+const char* kBattleTag     = "";                  // "Name#1234", once it is known
+const char* kSupportUrl    = "";                  // Ko-fi / PayPal / Patreon …
+const char* kMusicLabel    = "ルイス・ブント";
+const char* kMusicUrl      = "https://on.soundcloud.com/cF8PsOmBw2fhkbSlbq";
 
 // One table row per filled-in entry. Handles are plain selectable text (a Discord name is
 // not a link), everything with a URL becomes a clickable anchor.

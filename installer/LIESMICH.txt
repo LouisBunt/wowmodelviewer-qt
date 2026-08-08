@@ -243,6 +243,15 @@ Fuer die fehlenden Bereiche ist die wxWidgets-Ausgabe weiterhin die
 vollstaendigere Anwendung.
 
 
+Kontakt
+-------
+Im Programm unter Hilfe > "Kontakt & Unterstuetzen".
+
+    Discord     peppawutz69
+    Musik       ルイス・ブント
+                https://on.soundcloud.com/cF8PsOmBw2fhkbSlbq
+
+
 Wenn etwas nicht geht
 ---------------------
 Bitte melden unter

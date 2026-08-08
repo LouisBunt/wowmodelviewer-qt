@@ -14,6 +14,15 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 
+# The sources are UTF-8 without a BOM. Left to itself MSVC reads them in the system code
+# page, which on a German Windows is CP1252: the umlauts throughout the German UI strings
+# only survived that by accident, and anything outside CP1252 -- the Japanese artist name
+# in the contact dialog, for one -- would not. Say it explicitly for source and execution
+# charset both, which is what Qt's tr() and fromUtf8() already assume.
+if(MSVC)
+  add_compile_options(/utf-8)
+endif()
+
 # Reuse the upstream tree: we link its core/wow libraries unchanged.
 #
 # The upstream checkout lives inside this repository (submodule "upstream"), so the
