@@ -1,3 +1,4 @@
+#include "Theme.h"
 #include "TimelinePanel.h"
 
 #include <map>
@@ -15,16 +16,6 @@
 #include "WoWModel.h"
 
 namespace {
-const char* kPanel  = "#0e1114";
-const char* kCard   = "#14181e";
-const char* kBord   = "#23282f";
-const char* kBord2  = "#1c2128";
-const char* kText   = "#e8eaee";
-const char* kMuted  = "#8a93a0";
-const char* kDim    = "#5f6874";
-const char* kAccent = "#c8a15a";
-const char* kOnAcc  = "#17130a";
-
 QString pick(std::initializer_list<const char*> names, const char* fallback)
 {
   const QStringList have = QFontDatabase().families();
@@ -45,7 +36,7 @@ TimelinePanel::TimelinePanel(QWidget* parent) : QWidget(parent)
 {
   setAttribute(Qt::WA_StyledBackground, true);
   setFixedHeight(104);
-  setStyleSheet(QString("background:%1; border-top:1px solid %2;").arg(kPanel).arg(kBord2));
+  setStyleSheet(QString("background:%1; border-top:1px solid %2;").arg(tok::kPanel).arg(tok::kBorder2));
 
   auto* col = new QVBoxLayout(this);
   col->setContentsMargins(16, 12, 16, 14);
@@ -76,7 +67,7 @@ TimelinePanel::TimelinePanel(QWidget* parent) : QWidget(parent)
   };
 
   tr->addWidget(makeButton(QString::fromUtf8("⏮"), 28, "#98a1ae", "transparent", 0));
-  playButton_ = makeButton(QString::fromUtf8("⏸"), 34, kOnAcc, kAccent, 1);
+  playButton_ = makeButton(QString::fromUtf8("⏸"), 34, tok::kOnAccent, tok::kAccent, 1);
   tr->addWidget(playButton_);
   tr->addWidget(makeButton(QString::fromUtf8("⏭"), 28, "#98a1ae", "transparent", 2));
   top->addWidget(transport);
@@ -86,7 +77,7 @@ TimelinePanel::TimelinePanel(QWidget* parent) : QWidget(parent)
   animWrap->setFixedHeight(28);
   animWrap->setMinimumWidth(230);
   animWrap->setStyleSheet(QString("QFrame { background:%1; border:1px solid %2;"
-                                  " border-radius:6px; }").arg(kCard).arg(kBord));
+                                  " border-radius:6px; }").arg(tok::kCard).arg(tok::kBorder));
   auto* aw = new QHBoxLayout(animWrap);
   aw->setContentsMargins(10, 0, 6, 0);
   aw->setSpacing(8);
@@ -94,7 +85,7 @@ TimelinePanel::TimelinePanel(QWidget* parent) : QWidget(parent)
   QFont tagFont(uiF(), 7);
   tagFont.setLetterSpacing(QFont::AbsoluteSpacing, 1.2);
   animTag->setFont(tagFont);
-  animTag->setStyleSheet(QString("color:%1; background:transparent; border:none;").arg(kDim));
+  animTag->setStyleSheet(QString("color:%1; background:transparent; border:none;").arg(tok::kDim));
   aw->addWidget(animTag);
 
   animList_ = new QComboBox;
@@ -103,8 +94,8 @@ TimelinePanel::TimelinePanel(QWidget* parent) : QWidget(parent)
     "QComboBox { background:transparent; border:none; color:%1; }"
     "QComboBox::drop-down { border:none; width:16px; }"
     "QComboBox QAbstractItemView { background:%2; border:1px solid %3;"
-    " selection-background-color:#181510; color:%1; }")
-    .arg(kText).arg(kCard).arg(kBord));
+    " selection-background-color:#1a1226; color:%1; }")
+    .arg(tok::kText).arg(tok::kCard).arg(tok::kBorder));
   connect(animList_, QOverload<int>::of(&QComboBox::currentIndexChanged),
           this, [this](int i) { if (!updating_) applyAnimation(i); });
   aw->addWidget(animList_, 1);
@@ -118,7 +109,7 @@ TimelinePanel::TimelinePanel(QWidget* parent) : QWidget(parent)
 
   auto* speedTag = new QLabel("Tempo");
   speedTag->setFont(QFont(uiF(), 8));
-  speedTag->setStyleSheet(QString("color:%1; background:transparent; border:none;").arg(kDim));
+  speedTag->setStyleSheet(QString("color:%1; background:transparent; border:none;").arg(tok::kDim));
   top->addWidget(speedTag);
 
   for (int i = 0; i < 4; ++i) {
@@ -143,9 +134,9 @@ TimelinePanel::TimelinePanel(QWidget* parent) : QWidget(parent)
     " border:1px solid %1; }"
     "QSlider::sub-page:horizontal { border-radius:6px;"
     " background: qlineargradient(x1:0,y1:0,x2:1,y2:0,"
-    " stop:0 rgba(200,161,90,120), stop:1 rgba(200,161,90,45)); }"
+    " stop:0 rgba(168,85,247,120), stop:1 rgba(168,85,247,45)); }"
     "QSlider::handle:horizontal { width:3px; margin:-1px 0; border-radius:1px;"
-    " background:%2; }").arg(kBord2).arg(kAccent));
+    " background:%2; }").arg(tok::kBorder2).arg(tok::kAccent));
   connect(scrubber_, &QSlider::sliderMoved, this, [this](int f) {
     if (!model_ || !model_->animManager)
       return;
@@ -160,10 +151,10 @@ TimelinePanel::TimelinePanel(QWidget* parent) : QWidget(parent)
   for (int i = 0; i < (int)speedChips_.size(); ++i) {
     const bool active = (i == 2);
     speedChips_[i]->setStyleSheet(active
-      ? QString("color:%1; background:#191509; border:1px solid #3a3222;"
-                " border-radius:5px; padding:3px 8px;").arg(kAccent)
+      ? QString("color:%1; background:#1e1030; border:1px solid #4c2a75;"
+                " border-radius:5px; padding:3px 8px;").arg(tok::kAccent)
       : QString("color:%1; background:#12161b; border:1px solid %2;"
-                " border-radius:5px; padding:3px 8px;").arg(kMuted).arg(kBord));
+                " border-radius:5px; padding:3px 8px;").arg(tok::kMuted).arg(tok::kBorder));
   }
 }
 
@@ -301,10 +292,10 @@ bool TimelinePanel::eventFilter(QObject* obj, QEvent* e)
     for (int i = 0; i < (int)speedChips_.size(); ++i) {
       const bool active = (i == idx);
       speedChips_[i]->setStyleSheet(active
-        ? QString("color:%1; background:#191509; border:1px solid #3a3222;"
-                  " border-radius:5px; padding:3px 8px;").arg(kAccent)
+        ? QString("color:%1; background:#1e1030; border:1px solid #4c2a75;"
+                  " border-radius:5px; padding:3px 8px;").arg(tok::kAccent)
         : QString("color:%1; background:#12161b; border:1px solid %2;"
-                  " border-radius:5px; padding:3px 8px;").arg(kMuted).arg(kBord));
+                  " border-radius:5px; padding:3px 8px;").arg(tok::kMuted).arg(tok::kBorder));
     }
     return true;
   }

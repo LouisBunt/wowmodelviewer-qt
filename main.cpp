@@ -186,7 +186,7 @@ static void applyDarkPalette(QApplication& app)
   app.setStyle(QStyleFactory::create("Fusion"));
 
   const QColor bg("#0f1216"), panel("#14181e"), text("#e8eaee"), dim("#5f6874");
-  const QColor accent("#c8a15a"), onAccent("#17130a");
+  const QColor accent("#a855f7"), onAccent("#ffffff");
 
   QPalette p;
   p.setColor(QPalette::Window,          panel);
@@ -228,7 +228,7 @@ static QSplashScreen* makeSplash()
     QPainter p(&pm);
     p.setPen(QColor("#23282f"));
     p.drawRect(0, 0, pm.width() - 1, pm.height() - 1);
-    p.setPen(QColor("#c8a15a"));
+    p.setPen(QColor("#a855f7"));
     QFont f("Segoe UI", 14, QFont::DemiBold);
     f.setLetterSpacing(QFont::AbsoluteSpacing, 2.0);
     p.setFont(f);
