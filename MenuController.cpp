@@ -37,6 +37,7 @@
 #include "ExportController.h"
 #include "GLHost.h"
 #include "MainWindow.h"
+#include "MVLinkCode.h"
 #include "WowheadDressingRoom.h"
 
 #include "CharDetails.h"
@@ -1231,6 +1232,87 @@ QString MenuController::applyCharInfos(CharInfos* result, bool interactive,
   win_->characterPanel()->applyPostureFor(choiceIds);
 
   return QString();
+}
+
+QString MenuController::importMVLinkCode(const QString& code, bool interactive)
+{
+  MVLinkLook look;
+  QString error;
+  if (!mvlink_parse_code(code, &look, &error)) {
+    trace("=== mvlink FAILED: " + error);
+    return error;
+  }
+
+  trace(QString("=== mvlink: v%1 race=%2 gender=%3, %4 pieces")
+          .arg(look.version).arg(look.race).arg(look.gender).arg((int)look.pieces.size()));
+
+  QScopedPointer<CharInfos> info(new CharInfos());
+  info->valid = true;
+  info->raceId = (unsigned int)look.race;
+  info->gender = (look.gender == 0) ? "Male" : "Female";
+  // What the addon read IS the appearance -- there is no "real" gear behind it to warn
+  // about, the same reasoning as for a dressing-room look.
+  info->hasTransmogGear = false;
+  info->eyeGlowType = EGT_DEFAULT;      // class is not in the code; no death-knight glow
+
+  info->equipment.assign(NUM_CHAR_SLOTS, 0);
+  info->itemModifierIds.assign(NUM_CHAR_SLOTS, 0);
+
+  int applied = 0;
+  for (const auto& p : look.pieces) {
+    if (p.slot < 0 || p.slot >= NUM_CHAR_SLOTS) {
+      trace(QString("  slot %1 out of range -- skipped").arg(p.slot));
+      continue;
+    }
+    // The slot comes from WoW's own inventory slot, so unlike Wowhead's positional
+    // counting it can be trusted. The item database is still asked, purely so a
+    // disagreement shows up in the log instead of as a helmet on the feet.
+    ItemRecord rec = items.getById(p.itemId);   // by value: slot() is not const
+    if (rec.id != 0 && rec.slot() != p.slot) {
+      trace(QString("  WARNING item %1 says slot %2, code says %3 -- following the code")
+              .arg(p.itemId).arg(rec.slot()).arg(p.slot));
+    }
+    info->equipment[p.slot] = p.itemId;
+    info->itemModifierIds[p.slot] = p.modifier;
+    ++applied;
+    trace(QString("  slot %1: item %2 modifier %3").arg(p.slot).arg(p.itemId).arg(p.modifier));
+  }
+
+  if (applied == 0)
+    return tr("Im Code stand kein Teil, das sich einem Slot zuordnen ließ.");
+
+  // take(), not data(): applyCharInfos deletes the CharInfos on every path. Handing it
+  // data() left the scoped pointer holding a freed object and deleting it a second time
+  // on return -- the import reported success and the application then went down with an
+  // access violation.
+  const QString err = applyCharInfos(info.take(), interactive, tr("MVLink"));
+  if (err.isEmpty())
+    trace("mvlink import OK");
+  return err;
+}
+
+QString MenuController::importMVLinkFromGame(const QString& outfitName, bool interactive)
+{
+  // The install folder the application already knows -- asking again would be a second
+  // place to get it wrong.
+  QSettings settings(QString::fromLatin1(kSettingsFile), QSettings::IniFormat);
+  const QString wow = settings.value("game/installFolder").toString();
+
+  const std::vector<QString> paths = mvlink_saved_variable_paths(wow);
+  if (paths.empty()) {
+    return tr("Keine MVLink-Daten gefunden.\n\nIst das Addon installiert und war es seit "
+              "dem letzten /reload einmal aktiv? Gesucht wurde unter\n%1")
+             .arg(QDir::toNativeSeparators(wow + "/WTF/Account/<Account>/SavedVariables/"));
+  }
+
+  // Newest first. With several accounts the one just played is the intended one; the
+  // path is traced so a wrong guess is visible rather than mysterious.
+  trace("mvlink savedvariables: " + paths.front());
+  QString code, error;
+  if (!mvlink_read_saved_variables(paths.front(), outfitName, &code, &error))
+    return error;
+
+  return importMVLinkCode(code, interactive);
 }
 
 QString MenuController::importWowheadDressingRoom(const QString& rawUrl, bool interactive)

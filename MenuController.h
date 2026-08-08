@@ -61,6 +61,13 @@ public:
   // success, otherwise the reason; drivable from the command line (--dressing-room).
   QString importWowheadDressingRoom(const QString& rawUrl, bool interactive);
 
+  // The code the in-game MVLink addon produces. Empty return means it worked.
+  QString importMVLinkCode(const QString& code, bool interactive);
+
+  // Same, but the code is fetched from the addon's SavedVariables file. `outfitName`
+  // empty takes the worn look.
+  QString importMVLinkFromGame(const QString& outfitName, bool interactive);
+
   // The .chr file dialogs. Public because the character tab offers the same two
   // buttons; both entry points run the identical code rather than a second copy.
   void loadCharacter() { loadCharacterFile(false); }
