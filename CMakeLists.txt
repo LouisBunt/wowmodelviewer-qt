@@ -4,7 +4,7 @@ project(WoWModelViewerQt VERSION 1.7.0)
 # The version the running application reports -- window title, About box, trace and log.
 # Without it a bug report cannot say which build it came from. Keep in step with
 # MyAppVersion in installer/BetterModelViewer.iss.
-set(WMV_QT_VERSION "1.7.0-beta")
+set(WMV_QT_VERSION "1.7.0")
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_AUTOMOC ON)
