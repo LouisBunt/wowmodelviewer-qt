@@ -1,4 +1,4 @@
-# Assemble the release payload for better Model Viewer.
+# Assemble the release payload for ModelViewer: Midnight.
 #
 # Every file is copied from the place that produces it -- build output, the Qt
 # installation, the VC redist folder, the tracked bin_support tree -- so the payload
