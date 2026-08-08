@@ -105,6 +105,7 @@ add_executable(WoWModelViewer-Qt WIN32
   TimelinePanel.h
   FileTreeModel.cpp
   FileTreeModel.h
+  MVLinkCode.cpp
   WowheadDressingRoom.cpp
   WowheadDressingRoom.h
   BlenderAddonInstaller.cpp

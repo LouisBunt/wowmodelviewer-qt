@@ -38,6 +38,7 @@
 #include "ExportController.h"
 #include "InspectorTabs.h"
 #include "ItemBrowser.h"
+#include "MVLinkCode.h"
 #include "MenuController.h"
 #include "TimelinePanel.h"
 #include "MainWindow.h"
@@ -793,6 +794,28 @@ int main(int argc, char** argv)
     const QString err = menus->importWowheadDressingRoom(url, false);
     trace(err.isEmpty() ? QString("dressing room import OK: %1").arg(url)
                         : QString("dressing room import FAILED: %1").arg(err));
+  }
+
+  // --mvlink <code|"game"> takes the appearance from the in-game addon: either the code
+  // itself, or the word "game" to read it out of the addon's SavedVariables.
+  for (int i = 1; i < argc - 1; ++i) {
+    if (QString(argv[i]) != "--mvlink")
+      continue;
+    const QString arg = QString::fromLocal8Bit(argv[i + 1]);
+    QString err;
+    if (arg.compare("game", Qt::CaseInsensitive) == 0) {
+      err = menus->importMVLinkFromGame(QString(), false);
+    } else if (arg.endsWith(".lua", Qt::CaseInsensitive) && QFile::exists(arg)) {
+      // A SavedVariables file given directly. Lets the file path be exercised against a
+      // scratch copy instead of only against a live WoW installation.
+      QString code;
+      if (mvlink_read_saved_variables(arg, QString(), &code, &err))
+        err = menus->importMVLinkCode(code, false);
+    } else {
+      err = menus->importMVLinkCode(arg, false);
+    }
+    trace(err.isEmpty() ? QString("mvlink import OK")
+                        : QString("mvlink import FAILED: %1").arg(err));
   }
 
   // --clips <id>[,<id>...] selects animation clips for the export below, by the same
