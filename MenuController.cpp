@@ -265,6 +265,7 @@ void MenuController::build()
   // --- Hilfe ---------------------------------------------------------------
   QMenu* help = addMenu(tr("&Hilfe"));
   add(help, tr("Über …"), QString(), &MenuController::about);
+  add(help, tr("Kontakt & Unterstützen …"), QString(), &MenuController::contact);
 
   // The viewport HUD, the toolbar and the rail all end up here rather than growing
   // their own copies of these actions.
@@ -1500,6 +1501,76 @@ void MenuController::exportWithDialog()
     QMessageBox::warning(win_, tr("Export"), err);
 }
 
+// --- contact and support details, in ONE place -------------------------------------------
+//
+// Deliberately empty where the real value is not known yet: buildContactRows() skips every
+// empty entry, so an unfilled field is simply absent instead of shipping as a placeholder
+// somebody would mistake for a real handle.
+namespace {
+
+const char* kDiscordHandle = "";   // e.g. "skogdesign"
+const char* kDiscordInvite = "";   // invite URL, if there is a server
+const char* kBattleTag     = "";   // e.g. "Name#1234"
+const char* kSupportUrl    = "";   // Ko-fi / PayPal / Patreon …
+const char* kMusicLabel    = "";   // what to call it, e.g. "Skogdesign auf Spotify"
+const char* kMusicUrl      = "";   // SoundCloud or Spotify
+
+// One table row per filled-in entry. Handles are plain selectable text (a Discord name is
+// not a link), everything with a URL becomes a clickable anchor.
+QString buildContactRows()
+{
+  const struct { const char* label; const char* text; const char* url; } rows[] = {
+    { QT_TR_NOOP("Discord"),      kDiscordHandle, kDiscordInvite },
+    { QT_TR_NOOP("Battle.net"),   kBattleTag,     "" },
+    { QT_TR_NOOP("Unterstützen"), kSupportUrl,    kSupportUrl },
+    { QT_TR_NOOP("Musik"),        kMusicLabel,    kMusicUrl },
+  };
+
+  QString html;
+  for (const auto& r : rows) {
+    const QString text(QString::fromUtf8(r.text));
+    const QString url(QString::fromUtf8(r.url));
+    if (text.isEmpty() && url.isEmpty())
+      continue;
+    const QString shown = text.isEmpty() ? url : text;
+    const QString cell = url.isEmpty()
+        ? shown.toHtmlEscaped()
+        : QString("<a href=\"%1\">%2</a>").arg(url.toHtmlEscaped(), shown.toHtmlEscaped());
+    html += QString("<tr><td style='padding-right:14px'><b>%1</b></td><td>%2</td></tr>")
+              .arg(QObject::tr(r.label), cell);
+  }
+  return html;
+}
+
+} // namespace
+
+void MenuController::contact()
+{
+  const QString rows = buildContactRows();
+
+  QMessageBox box(win_);
+  box.setWindowTitle(tr("Kontakt & Unterstützen"));
+  box.setTextFormat(Qt::RichText);
+  // Without this the anchors render but do nothing when clicked.
+  box.setTextInteractionFlags(Qt::TextBrowserInteraction);
+  box.setIconPixmap(QPixmap(":/appicon.png").scaled(64, 64, Qt::KeepAspectRatio,
+                                                    Qt::SmoothTransformation));
+
+  if (rows.isEmpty()) {
+    box.setText(tr("<b>%1</b><br><br>Für diese Fassung sind noch keine Kontaktdaten "
+                   "hinterlegt.").arg(WMV_APP_NAME));
+  } else {
+    box.setText(tr("<b>%1</b><br>"
+                   "Entwickelt von Skogdesign.<br><br>"
+                   "<table>%2</table><br>"
+                   "Fehler und Wünsche gerne über GitHub:<br>"
+                   "<a href=\"%3/issues\">%3/issues</a>")
+                  .arg(WMV_APP_NAME, rows, QStringLiteral(WMV_PROJECT_URL)));
+  }
+  box.setStandardButtons(QMessageBox::Ok);
+  box.exec();
+}
+
 void MenuController::about()
 {
   QStringList formats;
@@ -1508,8 +1579,8 @@ void MenuController::about()
       formats << f.label;
 
   QMessageBox::about(
-    win_, tr("Über better Model Viewer"),
-    tr("<b>better Model Viewer %1</b><br>"
+    win_, tr("Über %1").arg(WMV_APP_NAME),
+    tr("<b>%1 %2</b><br>"
        "Qt-Frontend für WoW Model Viewer.<br><br>"
        "Modell-, Render- und Datenschicht (core.dll / wow.dll) stammen aus dem "
        "Ursprungsprojekt und sind bis auf wenige gezielte Eingriffe unverändert; "

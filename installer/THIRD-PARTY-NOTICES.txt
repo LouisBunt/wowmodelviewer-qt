@@ -1,4 +1,4 @@
-better Model Viewer — Hinweise zu mitgelieferten Fremdkomponenten
+ModelViewer: Midnight — Hinweise zu mitgelieferten Fremdkomponenten
 ==================================================================
 
 Dieses Programm selbst steht unter der GNU General Public License, Version 3

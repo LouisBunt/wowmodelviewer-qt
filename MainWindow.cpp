@@ -157,7 +157,7 @@ MainWindow::MainWindow()
     .arg(tok::kBorder).arg(tok::kAccent).arg(tok::kOnAccent));
   // The version belongs in the title: a screenshot in a bug report then carries it
   // without the reporter having to look it up.
-  setWindowTitle(QString("better Model Viewer %1").arg(WMV_QT_VERSION));
+  setWindowTitle(QString("%1 %2").arg(WMV_APP_NAME).arg(WMV_QT_VERSION));
   resize(1480, 900);
 
   // The design has its own title bar, so the native frame goes away. On Windows this

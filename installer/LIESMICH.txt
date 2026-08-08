@@ -1,4 +1,4 @@
-better Model Viewer 1.7.0 (Early Access)
+ModelViewer: Midnight 1.7.0 (Early Access)
 ========================================
 
 Was das ist

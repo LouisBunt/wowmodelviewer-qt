@@ -99,6 +99,9 @@ private:
   // --- Hilfe
   void about();
 
+  // Contact, support and music links -- the details live at the top of the .cpp.
+  void contact();
+
   void loadCharacterFile(bool equipmentOnly);
   void saveCharacterFile(bool equipmentOnly);
 

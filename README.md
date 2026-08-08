@@ -1,4 +1,4 @@
-# better Model Viewer
+# ModelViewer: Midnight
 
 A Qt front-end for [WoW Model Viewer](https://github.com/wowmodelviewer/wowmodelviewer),
 replacing the wxWidgets one. The model, render and data layers are reused rather than
@@ -127,7 +127,7 @@ reported by `dumpbin`, not inherited from the wx package.
 
 ```
 powershell -ExecutionPolicy Bypass -File installer\stage.ps1
-"%LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe" installer\BetterModelViewer.iss
+"%LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe" installer\MVMidnight.iss
 ```
 
 The setup carries the same `AppId` as WoW Model Viewer Midnight, so it upgrades that

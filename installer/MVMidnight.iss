@@ -1,4 +1,4 @@
-﻿; better Model Viewer - Inno Setup installer script
+﻿; ModelViewer: Midnight - Inno Setup installer script
 ; -----------------------------------------------------------------------------
 ; Per-user installer, no admin required. The application writes its config, log and
 ; database cache next to its own executable, so it must live somewhere the user can
@@ -11,11 +11,11 @@
 ; being duplicated and drifting here.
 ;
 ;   powershell -ExecutionPolicy Bypass -File installer\stage.ps1
-;   "%LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe" installer\BetterModelViewer.iss
+;   "%LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe" installer\MVMidnight.iss
 ;
-; Output: installer\dist\better-Model-Viewer-Setup-<version>.exe
+; Output: installer\dist\MV-Midnight-Setup-<version>.exe
 
-#define MyAppName "better Model Viewer"
+#define MyAppName "ModelViewer: Midnight"
 #define MyAppVersion "1.7.0"
 #define MyAppVersionNumeric "1.7.0.0"
 #define MyAppPublisher "Skogdesign"
@@ -38,12 +38,12 @@ AppSupportURL={#MyAppURL}/issues
 AppUpdatesURL={#MyAppURL}/releases
 VersionInfoVersion={#MyAppVersionNumeric}
 VersionInfoProductVersion={#MyAppVersionNumeric}
-DefaultDirName={autopf}\better Model Viewer
+DefaultDirName={autopf}\ModelViewer Midnight
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 OutputDir=dist
-OutputBaseFilename=better-Model-Viewer-Setup-{#MyAppVersion}
+OutputBaseFilename=MV-Midnight-Setup-{#MyAppVersion}
 SetupIconFile=..\resources\appicon.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
 ; GPLv3 -- shown during setup and installed alongside the binary.

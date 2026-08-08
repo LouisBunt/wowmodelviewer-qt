@@ -266,11 +266,14 @@ static int fatalStart(QSplashScreen* splash, QWidget* win, const QString& what,
     return 1;
   }
 
-  QMessageBox box(QMessageBox::Critical, QObject::tr("better Model Viewer"), what, QMessageBox::Ok);
+  QMessageBox box(QMessageBox::Critical, QString(WMV_APP_NAME), what, QMessageBox::Ok);
   box.setInformativeText(
-      QObject::tr("Erwartet wird der Ordner der WoW-Installation, also der mit dem "
-                  "Unterordner \"Data\" darin (zum Beispiel "
-                  "C:\\Program Files (x86)\\World of Warcraft\\_retail_).\n\n"
+      // NOT "_retail_": that folder holds no .build.info, which is exactly the file
+      // looksLikeWoWInstall() tests for -- naming it here would have sent the user
+      // straight back into the rejection they just got.
+      QObject::tr("Erwartet wird der Ordner der WoW-Installation, in dem die Datei "
+                  ".build.info liegt — das ist \"World of Warcraft\" selbst, nicht der "
+                  "Unterordner \"_retail_\" und nicht \"Data\".\n\n"
                   "Der zuletzt gewählte Ordner ist in userSettings\\qt-frontend.ini "
                   "gespeichert; nach dem Löschen dieser Zeile fragt das Programm beim "
                   "nächsten Start erneut."));
@@ -285,7 +288,7 @@ static int fatalStart(QSplashScreen* splash, QWidget* win, const QString& what,
 
 int main(int argc, char** argv)
 {
-  trace(QString("main entered -- better Model Viewer %1").arg(WMV_QT_VERSION));
+  trace(QString("main entered -- %1 %2").arg(WMV_APP_NAME).arg(WMV_QT_VERSION));
   QApplication app(argc, argv);
 
   // Every data path -- listfile.csv, games/wow/<ver>/database.xml, ./plugins, wowdb.sqlite,
@@ -497,7 +500,7 @@ int main(int argc, char** argv)
     trace(QString("requested FileDataID %1 not in this client").arg(fileId));
     if (!g_scripted) {
       splash->close();
-      QMessageBox::warning(nullptr, QObject::tr("better Model Viewer"),
+      QMessageBox::warning(nullptr, QString(WMV_APP_NAME),
                            QObject::tr("Das Modell mit der ID %1 gibt es in dieser "
                                        "WoW-Version nicht.\n\nDer Modellbrowser links "
                                        "zeigt, was vorhanden ist.").arg(fileId));
@@ -900,7 +903,7 @@ int main(int argc, char** argv)
     // without GPU passthrough, an ancient display driver. Writing it only to a file the user
     // does not know about made the application appear to vanish two seconds after launch.
     if (!g_scripted) {
-      QMessageBox box(QMessageBox::Critical, QObject::tr("better Model Viewer"),
+      QMessageBox box(QMessageBox::Critical, QString(WMV_APP_NAME),
                       QObject::tr("Die 3D-Ansicht konnte nicht gestartet werden."),
                       QMessageBox::Ok);
       box.setInformativeText(

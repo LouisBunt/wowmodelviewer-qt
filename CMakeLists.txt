@@ -3,8 +3,12 @@ project(WoWModelViewerQt VERSION 1.7.0)
 
 # The version the running application reports -- window title, About box, trace and log.
 # Without it a bug report cannot say which build it came from. Keep in step with
-# MyAppVersion in installer/BetterModelViewer.iss.
+# MyAppVersion in installer/MVMidnight.iss.
 set(WMV_QT_VERSION "1.7.0")
+
+# The product name, in one place. It reached five files last time it changed.
+set(WMV_APP_NAME "ModelViewer: Midnight")
+set(WMV_PROJECT_URL "https://github.com/LouisBunt/wowmodelviewer-qt")
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_AUTOMOC ON)
@@ -89,7 +93,9 @@ target_include_directories(WoWModelViewer-Qt PRIVATE
 # headers plus the same static lib so the symbols resolve consistently.
 target_compile_definitions(WoWModelViewer-Qt PRIVATE
   GLEW_STATIC
-  WMV_QT_VERSION="${WMV_QT_VERSION}")
+  WMV_QT_VERSION="${WMV_QT_VERSION}"
+  WMV_APP_NAME="${WMV_APP_NAME}"
+  WMV_PROJECT_URL="${WMV_PROJECT_URL}")
 
 target_link_libraries(WoWModelViewer-Qt
   Qt5::Core Qt5::Gui Qt5::Widgets Qt5::Network
