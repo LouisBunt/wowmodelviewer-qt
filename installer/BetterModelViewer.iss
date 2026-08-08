@@ -16,7 +16,7 @@
 ; Output: installer\dist\better-Model-Viewer-Setup-<version>.exe
 
 #define MyAppName "better Model Viewer"
-#define MyAppVersion "1.7.0-beta"
+#define MyAppVersion "1.7.0"
 #define MyAppVersionNumeric "1.7.0.0"
 #define MyAppPublisher "Skogdesign"
 #define MyAppExeName "WoWModelViewer-Qt.exe"

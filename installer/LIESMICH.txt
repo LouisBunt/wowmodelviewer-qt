@@ -1,5 +1,5 @@
-better Model Viewer 1.7.0-beta (Early Access)
-============================================
+better Model Viewer 1.7.0 (Early Access)
+========================================
 
 Was das ist
 -----------
