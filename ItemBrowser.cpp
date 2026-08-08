@@ -1,3 +1,4 @@
+#include "Theme.h"
 #include "ItemBrowser.h"
 
 #include <map>
@@ -19,13 +20,6 @@
 #include "GameDatabase.h"
 
 namespace {
-const char* kText   = "#e8eaee";
-const char* kMuted  = "#8a93a0";
-const char* kDim    = "#5f6874";
-const char* kCard   = "#14181e";
-const char* kBord   = "#23282f";
-const char* kAccent = "#c8a15a";
-
 // A list this long has to be capped: 139k rows would take longer to build as widgets than
 // the query takes to run, and nobody scrolls that far. The footer says what was cut.
 const int kMaxRows = 500;
@@ -129,8 +123,8 @@ QString comboStyle()
     " padding:3px 7px; color:%3; }"
     "QComboBox::drop-down { border:none; width:16px; }"
     "QComboBox QAbstractItemView { background:%1; border:1px solid %2;"
-    " selection-background-color:#181510; color:%3; }")
-    .arg(kCard).arg(kBord).arg(kText);
+    " selection-background-color:#1a1226; color:%3; }")
+    .arg(tok::kCard).arg(tok::kBorder).arg(tok::kText);
 }
 
 QLabel* chip(const QString& text, bool active)
@@ -140,10 +134,10 @@ QLabel* chip(const QString& text, bool active)
   l->setAlignment(Qt::AlignCenter);
   l->setCursor(Qt::PointingHandCursor);
   l->setStyleSheet(active
-    ? QString("color:%1; background:#191509; border:1px solid #3a3222;"
-              " border-radius:9px; padding:3px 10px;").arg(kAccent)
+    ? QString("color:%1; background:#1e1030; border:1px solid #4c2a75;"
+              " border-radius:9px; padding:3px 10px;").arg(tok::kAccent)
     : QString("color:%1; background:#12161b; border:1px solid %2;"
-              " border-radius:9px; padding:3px 10px;").arg(kMuted).arg(kBord));
+              " border-radius:9px; padding:3px 10px;").arg(tok::kMuted).arg(tok::kBorder));
   return l;
 }
 
@@ -216,7 +210,7 @@ ItemBrowser::ItemBrowser(QWidget* parent) : QWidget(parent)
   search_->setStyleSheet(QString(
     "QLineEdit { background:%1; border:1px solid %2; border-radius:6px;"
     " padding:0 8px; color:%3; }"
-    "QLineEdit:focus { border-color:#3a434f; }").arg(kCard).arg(kBord).arg(kText));
+    "QLineEdit:focus { border-color:#3a434f; }").arg(tok::kCard).arg(tok::kBorder).arg(tok::kText));
   // Typing filters straight away. Every keystroke would mean a query against a table
   // of 110k rows, so the query waits until the typing pauses; Enter skips the wait.
   searchDelay_ = new QTimer(this);
@@ -275,7 +269,7 @@ ItemBrowser::ItemBrowser(QWidget* parent) : QWidget(parent)
     "QCheckBox::indicator { width:13px; height:13px; border-radius:3px;"
     " border:1px solid %2; background:%3; }"
     "QCheckBox::indicator:checked { background:%4; border-color:%4; }")
-    .arg(kMuted).arg(kBord).arg(kCard).arg(kAccent));
+    .arg(tok::kMuted).arg(tok::kBorder).arg(tok::kCard).arg(tok::kAccent));
   standalone_->setToolTip(QString::fromUtf8(
     "Zeigt das eigene Modell des Items. Nur Kopf, Schulter, Umhang und Waffen haben "
     "eines -- Brust, Beine, Hände und so weiter sind Texturen auf dem Körper und "
@@ -294,7 +288,7 @@ ItemBrowser::ItemBrowser(QWidget* parent) : QWidget(parent)
   QFont cf(uiFamily(), 7);
   cf.setLetterSpacing(QFont::AbsoluteSpacing, 1.3);
   count_->setFont(cf);
-  count_->setStyleSheet(QString("color:%1; background:transparent;").arg(kDim));
+  count_->setStyleSheet(QString("color:%1; background:transparent;").arg(tok::kDim));
   col->addWidget(count_);
 
   list_ = new QListWidget;
@@ -303,7 +297,7 @@ ItemBrowser::ItemBrowser(QWidget* parent) : QWidget(parent)
     "QListWidget { background:transparent; border:none; outline:none; }"
     "QListWidget::item { padding:3px 4px; border-radius:4px; }"
     "QListWidget::item:hover { background:#181d23; }"
-    "QListWidget::item:selected { background:#181510; }"
+    "QListWidget::item:selected { background:#1a1226; }"
     "QScrollBar:vertical { background:transparent; width:10px; }"
     "QScrollBar::handle:vertical { background:#262c35; border-radius:5px; min-height:30px; }"
     "QScrollBar::add-line, QScrollBar::sub-line { height:0; }"));
@@ -432,7 +426,7 @@ void ItemBrowser::refreshItems()
     QFont hf(uiFamily(), 7);
     hf.setLetterSpacing(QFont::AbsoluteSpacing, 1.3);
     head->setFont(hf);
-    head->setForeground(QColor(kDim));
+    head->setForeground(QColor(tok::kDim));
     head->setFlags(Qt::NoItemFlags);      // a heading is not a thing one can equip
     list_->addItem(head);
     for (const auto* row : entry.second)
@@ -486,7 +480,7 @@ void ItemBrowser::refreshSets()
       auto* item = new QListWidgetItem(
         QString::fromUtf8("%1  · %2 Teile").arg(row[1]).arg(pieces));
       item->setData(Qt::UserRole, row[0].toInt());
-      item->setForeground(QColor(kText));
+      item->setForeground(QColor(tok::kText));
       item->setToolTip(QString::fromUtf8("Set %1").arg(row[0]));
       list_->addItem(item);
     }

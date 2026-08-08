@@ -1,3 +1,4 @@
+#include "Theme.h"
 #include "InspectorTabs.h"
 
 #include <QApplication>
@@ -19,14 +20,6 @@
 #include "modelheaders.h"
 
 namespace {
-const char* kText   = "#e8eaee";
-const char* kSoft   = "#b6bdc8";
-const char* kDim    = "#5f6874";
-const char* kCard   = "#14181e";
-const char* kBord   = "#23282f";
-const char* kAccent = "#c8a15a";
-const char* kOnAcc  = "#17130a";
-
 QString uiFamily()
 {
   const QStringList have = QFontDatabase().families();
@@ -52,7 +45,7 @@ QString checkboxStyle()
     "QCheckBox::indicator { width:13px; height:13px; border-radius:3px;"
     " border:1px solid %2; background:%3; }"
     "QCheckBox::indicator:checked { background:%4; border-color:%4; }")
-    .arg(kSoft).arg(kBord).arg(kCard).arg(kAccent);
+    .arg(tok::kTextSoft).arg(tok::kBorder).arg(tok::kCard).arg(tok::kAccent);
 }
 
 QLabel* sectionLabel(const QString& text)
@@ -61,7 +54,7 @@ QLabel* sectionLabel(const QString& text)
   QFont f(uiFamily(), 7);
   f.setLetterSpacing(QFont::AbsoluteSpacing, 1.4);
   l->setFont(f);
-  l->setStyleSheet(QString("color:%1; background:transparent;").arg(kDim));
+  l->setStyleSheet(QString("color:%1; background:transparent;").arg(tok::kDim));
   return l;
 }
 }
@@ -78,7 +71,7 @@ QLineEdit* urlField(const QString& placeholder)
   e->setStyleSheet(QString(
     "QLineEdit { background:%1; border:1px solid %2; border-radius:6px;"
     " padding:0 8px; color:%3; }"
-    "QLineEdit:focus { border-color:#3a434f; }").arg(kCard).arg(kBord).arg(kText));
+    "QLineEdit:focus { border-color:#3a434f; }").arg(tok::kCard).arg(tok::kBorder).arg(tok::kText));
   return e;
 }
 
@@ -90,9 +83,9 @@ QPushButton* accentButton(const QString& text)
   b->setStyleSheet(QString(
     "QPushButton { background:%1; border:none; border-radius:7px;"
     " color:%2; padding:8px 12px; }"
-    "QPushButton:hover { background:#d9b678; }"
+    "QPushButton:hover { background:#c084fc; }"
     "QPushButton:disabled { background:#252b34; color:#5f6874; }")
-    .arg(kAccent).arg(kOnAcc));
+    .arg(tok::kAccent).arg(tok::kOnAccent));
   return b;
 }
 
@@ -105,7 +98,7 @@ QPushButton* quietButton(const QString& text)
     "QPushButton { background:%1; border:1px solid %2; border-radius:7px;"
     " color:%3; padding:8px 12px; }"
     "QPushButton:hover { border-color:#3a434f; }")
-    .arg(kCard).arg(kBord).arg(kSoft));
+    .arg(tok::kCard).arg(tok::kBorder).arg(tok::kTextSoft));
   return b;
 }
 }
@@ -129,7 +122,7 @@ CharacterIoTab::CharacterIoTab(MenuController* menus, ExportController* exporter
     "Der Link muss das '#' enthalten — dahinter steckt der ganze Look."));
   whHint->setFont(QFont(uiFamily(), 8));
   whHint->setWordWrap(true);
-  whHint->setStyleSheet(QString("color:%1; background:transparent;").arg(kDim));
+  whHint->setStyleSheet(QString("color:%1; background:transparent;").arg(tok::kDim));
   col->addWidget(whHint);
   auto* whBtn = accentButton(QString::fromUtf8("Anprobe importieren"));
   connect(whBtn, &QPushButton::clicked, this, &CharacterIoTab::importWowhead);
@@ -173,7 +166,7 @@ CharacterIoTab::CharacterIoTab(MenuController* menus, ExportController* exporter
     "Blender ist FBX der Weg. Animationen wählst du im Reiter „Export“."));
   blHint->setFont(QFont(uiFamily(), 8));
   blHint->setWordWrap(true);
-  blHint->setStyleSheet(QString("color:%1; background:transparent;").arg(kDim));
+  blHint->setStyleSheet(QString("color:%1; background:transparent;").arg(tok::kDim));
   col->addWidget(blHint);
   auto* blBtn = accentButton(QString::fromUtf8("Als FBX exportieren"));
   connect(blBtn, &QPushButton::clicked, this, &CharacterIoTab::exportForBlender);
@@ -197,7 +190,7 @@ CharacterIoTab::CharacterIoTab(MenuController* menus, ExportController* exporter
   status_ = new QLabel;
   status_->setFont(QFont(uiFamily(), 8));
   status_->setWordWrap(true);
-  status_->setStyleSheet(QString("color:%1; background:transparent;").arg(kDim));
+  status_->setStyleSheet(QString("color:%1; background:transparent;").arg(tok::kDim));
   col->addWidget(status_);
 
   col->addStretch(1);
@@ -208,7 +201,7 @@ void CharacterIoTab::setStatus(const QString& text, bool error)
   if (!status_)
     return;
   status_->setStyleSheet(QString("color:%1; background:transparent;")
-                           .arg(error ? "#d98b6a" : kSoft));
+                           .arg(error ? "#d98b6a" : tok::kTextSoft));
   status_->setText(text);
 }
 
@@ -312,8 +305,8 @@ ExportTab::ExportTab(ExportController* exporters, GLHost* canvas, QWidget* paren
     " padding:4px 8px; color:%3; }"
     "QComboBox::drop-down { border:none; width:18px; }"
     "QComboBox QAbstractItemView { background:%1; border:1px solid %2;"
-    " selection-background-color:#181510; color:%3; }")
-    .arg(kCard).arg(kBord).arg(kText));
+    " selection-background-color:#1a1226; color:%3; }")
+    .arg(tok::kCard).arg(tok::kBorder).arg(tok::kText));
   col->addWidget(format_);
 
   col->addWidget(sectionLabel(QString::fromUtf8("OPTIONEN")));
@@ -343,18 +336,18 @@ ExportTab::ExportTab(ExportController* exporters, GLHost* canvas, QWidget* paren
   clipList_->setStyleSheet(QString(
     "QListWidget { background:%1; border:1px solid %2; border-radius:6px; color:%3; }"
     "QListWidget::item { padding:3px 5px; }"
-    "QListWidget::item:selected { background:#181510; color:%4; }"
+    "QListWidget::item:selected { background:#1a1226; color:%4; }"
     "QScrollBar:vertical { background:transparent; width:9px; }"
     "QScrollBar::handle:vertical { background:#262c35; border-radius:4px; min-height:24px; }"
     "QScrollBar::add-line, QScrollBar::sub-line { height:0; }")
-    .arg(kCard).arg(kBord).arg(kText).arg(kAccent));
+    .arg(tok::kCard).arg(tok::kBorder).arg(tok::kText).arg(tok::kAccent));
   clipList_->setVisible(false);
   col->addWidget(clipList_);
 
   clipHint_ = new QLabel;
   clipHint_->setFont(QFont(uiFamily(), 8));
   clipHint_->setWordWrap(true);
-  clipHint_->setStyleSheet(QString("color:%1; background:transparent;").arg(kDim));
+  clipHint_->setStyleSheet(QString("color:%1; background:transparent;").arg(tok::kDim));
   clipHint_->setVisible(false);
   col->addWidget(clipHint_);
 
@@ -369,17 +362,17 @@ ExportTab::ExportTab(ExportController* exporters, GLHost* canvas, QWidget* paren
   button->setFont(QFont(uiFamily(), 9, QFont::DemiBold));
   button->setCursor(Qt::PointingHandCursor);
   button->setStyleSheet(QString(
-    "QPushButton { background:%1; border:1px solid #d9b678; border-radius:8px;"
+    "QPushButton { background:%1; border:1px solid #c084fc; border-radius:8px;"
     " color:%2; padding:9px 14px; }"
-    "QPushButton:hover { background:#d9b678; }"
+    "QPushButton:hover { background:#c084fc; }"
     "QPushButton:disabled { background:#252b34; border-color:%3; color:#5f6874; }")
-    .arg(kAccent).arg(kOnAcc).arg(kBord));
+    .arg(tok::kAccent).arg(tok::kOnAccent).arg(tok::kBorder));
   col->addWidget(button);
 
   status_ = new QLabel;
   status_->setFont(QFont(uiFamily(), 8));
   status_->setWordWrap(true);
-  status_->setStyleSheet(QString("color:%1; background:transparent;").arg(kDim));
+  status_->setStyleSheet(QString("color:%1; background:transparent;").arg(tok::kDim));
   col->addWidget(status_);
 
   connect(button, &QPushButton::clicked, this, [this]() {

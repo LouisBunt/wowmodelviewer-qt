@@ -1,3 +1,4 @@
+#include "Theme.h"
 #include "CharacterPanel.h"
 
 #include <QCheckBox>
@@ -30,13 +31,6 @@
 #include "modelheaders.h"
 
 namespace {
-const char* kText = "#e8eaee";
-const char* kSoft = "#b6bdc8";
-const char* kDim  = "#5f6874";
-const char* kCard = "#14181e";
-const char* kBord = "#23282f";
-const char* kAccent = "#c8a15a";
-
 // ChrCustomizationChoice.SwatchColor is packed 0xAARRGGBB. Build the same little
 // swatch the wx panel drew: a solid fill, a left/right split for dual-colour
 // choices, or a crossed-out box for "no colour".
@@ -108,12 +102,12 @@ CharacterPanel::CharacterPanel(QWidget* parent) : QWidget(parent)
   QFont hf(uiFamily(), 7);
   hf.setLetterSpacing(QFont::AbsoluteSpacing, 1.4);
   header_->setFont(hf);
-  header_->setStyleSheet(QString("color:%1; background:transparent;").arg(kDim));
+  header_->setStyleSheet(QString("color:%1; background:transparent;").arg(tok::kDim));
   col->addWidget(header_);
 
   subHeader_ = new QLabel;
   subHeader_->setFont(QFont(uiFamily(), 8));
-  subHeader_->setStyleSheet(QString("color:%1; background:transparent;").arg(kDim));
+  subHeader_->setStyleSheet(QString("color:%1; background:transparent;").arg(tok::kDim));
   subHeader_->setWordWrap(true);
   col->addWidget(subHeader_);
 
@@ -123,7 +117,7 @@ CharacterPanel::CharacterPanel(QWidget* parent) : QWidget(parent)
 
   equipHeader_ = new QLabel;
   equipHeader_->setFont(hf);
-  equipHeader_->setStyleSheet(QString("color:%1; background:transparent;").arg(kDim));
+  equipHeader_->setStyleSheet(QString("color:%1; background:transparent;").arg(tok::kDim));
   equipHeader_->setText(QString::fromUtf8("AUSRÜSTUNG"));
   col->addWidget(equipHeader_);
 
@@ -134,7 +128,7 @@ CharacterPanel::CharacterPanel(QWidget* parent) : QWidget(parent)
   itemInput_->setFont(QFont(uiFamily(), 8));
   itemInput_->setStyleSheet(QString(
     "QLineEdit { background:%1; border:1px solid %2; border-radius:6px;"
-    " padding:4px 8px; color:%3; }").arg(kCard).arg(kBord).arg(kText));
+    " padding:4px 8px; color:%3; }").arg(tok::kCard).arg(tok::kBorder).arg(tok::kText));
   connect(itemInput_, &QLineEdit::returnPressed, this, [this]() {
     bool ok = false;
     const int id = itemInput_->text().trimmed().toInt(&ok);
@@ -158,7 +152,7 @@ CharacterPanel::CharacterPanel(QWidget* parent) : QWidget(parent)
     "QCheckBox::indicator { width:13px; height:13px; border-radius:3px;"
     " border:1px solid %2; background:%3; }"
     "QCheckBox::indicator:checked { background:%4; border-color:%4; }"
-    "QCheckBox:disabled { color:#414852; }").arg(kSoft).arg(kBord).arg(kCard).arg(kAccent));
+    "QCheckBox:disabled { color:#414852; }").arg(tok::kTextSoft).arg(tok::kBorder).arg(tok::kCard).arg(tok::kAccent));
   connect(dhMode_, &QCheckBox::toggled, this, [this](bool on) {
     if (updating_ || !model_)
       return;
@@ -171,7 +165,7 @@ CharacterPanel::CharacterPanel(QWidget* parent) : QWidget(parent)
   // texture from them.
   tabardHeader_ = new QLabel(QString::fromUtf8("WAPPENROCK"));
   tabardHeader_->setFont(hf);
-  tabardHeader_->setStyleSheet(QString("color:%1; background:transparent;").arg(kDim));
+  tabardHeader_->setStyleSheet(QString("color:%1; background:transparent;").arg(tok::kDim));
   col->addWidget(tabardHeader_);
 
   tabardRows_ = new QVBoxLayout;
@@ -183,7 +177,7 @@ CharacterPanel::CharacterPanel(QWidget* parent) : QWidget(parent)
   // next to the rest of the character, under the name of the part they hide.
   geosetHeader_ = new QLabel(QString::fromUtf8("SICHTBARE TEILE"));
   geosetHeader_->setFont(hf);
-  geosetHeader_->setStyleSheet(QString("color:%1; background:transparent;").arg(kDim));
+  geosetHeader_->setStyleSheet(QString("color:%1; background:transparent;").arg(tok::kDim));
   col->addWidget(geosetHeader_);
 
   geosetRows_ = new QVBoxLayout;
@@ -277,7 +271,7 @@ void CharacterPanel::buildGeosets()
       "QCheckBox::indicator { width:13px; height:13px; border-radius:3px;"
       " border:1px solid %2; background:%3; }"
       "QCheckBox::indicator:checked { background:%4; border-color:%4; }")
-      .arg(kSoft).arg(kBord).arg(kCard).arg(kAccent));
+      .arg(tok::kTextSoft).arg(tok::kBorder).arg(tok::kCard).arg(tok::kAccent));
     cb->setChecked(g->display);
     cb->setToolTip(QString::fromUtf8("Geoset %1 · %2 Dreiecke").arg(g->id).arg(g->icount / 3));
     // Captures the INDEX, not the ModelGeosetHD*. The vector is rebuilt whenever the
@@ -428,10 +422,10 @@ void CharacterPanel::rebuild()
     auto* head = new QHBoxLayout;
     auto* name = new QLabel(label);
     name->setFont(QFont(uiFamily(), 9));
-    name->setStyleSheet(QString("color:%1; background:transparent;").arg(kSoft));
+    name->setStyleSheet(QString("color:%1; background:transparent;").arg(tok::kTextSoft));
     auto* count = new QLabel(QString::number(choices.size()));
     count->setFont(QFont(uiFamily(), 8));
-    count->setStyleSheet(QString("color:%1; background:transparent;").arg(kDim));
+    count->setStyleSheet(QString("color:%1; background:transparent;").arg(tok::kDim));
     head->addWidget(name);
     head->addStretch(1);
     head->addWidget(count);
@@ -444,8 +438,8 @@ void CharacterPanel::rebuild()
       " padding:4px 8px; color:%3; }"
       "QComboBox::drop-down { border:none; width:18px; }"
       "QComboBox QAbstractItemView { background:%1; border:1px solid %2;"
-      " selection-background-color:#181510; color:%3; }")
-      .arg(kCard).arg(kBord).arg(kText));
+      " selection-background-color:#1a1226; color:%3; }")
+      .arg(tok::kCard).arg(tok::kBorder).arg(tok::kText));
 
     const uint current = model_->cd.get(optionId);
     int currentIndex = 0;
@@ -561,7 +555,7 @@ void CharacterPanel::buildTabard()
     auto* name = new QLabel(QString::fromUtf8(p.label));
     name->setFont(QFont(uiFamily(), 8));
     name->setFixedWidth(88);
-    name->setStyleSheet(QString("color:%1; background:transparent;").arg(kSoft));
+    name->setStyleSheet(QString("color:%1; background:transparent;").arg(tok::kTextSoft));
     rr->addWidget(name);
 
     auto* spin = new QSpinBox;
@@ -570,7 +564,7 @@ void CharacterPanel::buildTabard()
     spin->setFont(QFont(uiFamily(), 8));
     spin->setStyleSheet(QString(
       "QSpinBox { background:%1; border:1px solid %2; border-radius:6px;"
-      " padding:2px 6px; color:%3; }").arg(kCard).arg(kBord).arg(kText));
+      " padding:2px 6px; color:%3; }").arg(tok::kCard).arg(tok::kBorder).arg(tok::kText));
     const int which = p.which;
     connect(spin, QOverload<int>::of(&QSpinBox::valueChanged), this, [this, which](int v) {
       if (updating_ || !model_)
@@ -625,13 +619,13 @@ void CharacterPanel::buildEquipment()
     sf.setLetterSpacing(QFont::AbsoluteSpacing, 0.7);
     slotName->setFont(sf);
     slotName->setFixedWidth(88);
-    slotName->setStyleSheet(QString("color:%1; background:transparent;").arg(kDim));
+    slotName->setStyleSheet(QString("color:%1; background:transparent;").arg(tok::kDim));
     rr->addWidget(slotName);
 
     auto* itemName = new QLabel(QString::fromUtf8("—"));
     itemName->setFont(QFont(uiFamily(), 8));
     itemName->setMinimumWidth(1);
-    itemName->setStyleSheet(QString("color:%1; background:transparent;").arg(kDim));
+    itemName->setStyleSheet(QString("color:%1; background:transparent;").arg(tok::kDim));
     rr->addWidget(itemName, 1);
 
     // Item view: show only this piece, the figure and the rest switched off. Toggles,
@@ -640,7 +634,7 @@ void CharacterPanel::buildEquipment()
     focus->setFont(QFont(uiFamily(), 8));
     focus->setCursor(Qt::PointingHandCursor);
     focus->setToolTip(QString::fromUtf8("Nur dieses Teil zeigen"));
-    focus->setStyleSheet(QString("color:%1; background:transparent;").arg(kDim));
+    focus->setStyleSheet(QString("color:%1; background:transparent;").arg(tok::kDim));
     focus->setProperty("focusSlot", (int)s.slot);
     focus->installEventFilter(this);
     focus->setVisible(false);
@@ -653,7 +647,7 @@ void CharacterPanel::buildEquipment()
     clear->setFont(QFont(uiFamily(), 9));
     clear->setCursor(Qt::PointingHandCursor);
     clear->setToolTip(QString::fromUtf8("Ablegen"));
-    clear->setStyleSheet(QString("color:%1; background:transparent;").arg(kDim));
+    clear->setStyleSheet(QString("color:%1; background:transparent;").arg(tok::kDim));
     clear->setProperty("charSlot", (int)s.slot);
     clear->installEventFilter(this);
     clear->setVisible(false);
@@ -737,13 +731,13 @@ void CharacterPanel::refreshEquipment()
       focus->setVisible(showable);
       const bool active = (focusSlot_ == (int)s.slot);
       focus->setStyleSheet(QString("color:%1; background:transparent;")
-                             .arg(active ? kAccent : kDim));
+                             .arg(active ? tok::kAccent : tok::kDim));
       focus->setToolTip(active ? QString::fromUtf8("Wieder alles zeigen")
                                : QString::fromUtf8("Nur dieses Teil zeigen"));
     }
     if (!worn) {
       lbl->setText(QString::fromUtf8("—"));
-      lbl->setStyleSheet(QString("color:%1; background:transparent;").arg(kDim));
+      lbl->setStyleSheet(QString("color:%1; background:transparent;").arg(tok::kDim));
       continue;
     }
 

@@ -81,6 +81,13 @@ public:
   // Reflect the item view's state in the toolbar. -1 = whole character.
   void setItemFocusIndicator(int slot);
 
+private:
+  // Window button look. Quiet at rest so the title bar stays calm; on hover the close
+  // button turns red and the other two lift, which is what tells them apart at a glance.
+  static void paintWindowButton(QLabel* b, bool hovered);
+
+public:
+
 signals:
   void fileActivated(GameFile* file);
   void fileIdActivated(int fileDataId);

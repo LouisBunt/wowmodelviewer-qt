@@ -23,23 +23,10 @@
 #include "InspectorTabs.h"
 #include "ItemBrowser.h"
 #include "LightPanel.h"
+#include "Theme.h"
 #include "TimelinePanel.h"
 
-namespace tok {
-const char* kApp      = "#0b0d10";
-const char* kPanel    = "#0e1114";
-const char* kCard     = "#14181e";
-const char* kBorder   = "#23282f";
-const char* kBorder2  = "#1c2128";
-const char* kText     = "#e8eaee";
-const char* kTextSoft = "#b6bdc8";
-const char* kMuted    = "#8a93a0";
-const char* kDim      = "#5f6874";
-const char* kAccent   = "#c8a15a";
-const char* kAccentBg = "#191509";
-const char* kAccentBr = "#3a3222";
-const char* kOnAccent = "#17130a";
-}
+
 
 static QString pick(std::initializer_list<const char*> names, const char* fallback)
 {
@@ -221,7 +208,10 @@ QWidget* MainWindow::buildTitleBar()
   auto* brand = new QHBoxLayout;
   brand->setSpacing(8);
   brand->addWidget(icon(QString::fromUtf8("◆"), 16, tok::kAccent, "transparent"));
-  brand->addWidget(mk("MODEL VIEWER", dispF(), 9, "#d7c39a", true, 1.3));
+  // The name the product actually carries, not a fixed string that stopped being true
+  // when it was renamed. Version beside it, quieter, so a screenshot always carries both.
+  brand->addWidget(mk(QString(WMV_APP_NAME).toUpper(), dispF(), 9, "#c9b6e8", true, 1.3));
+  brand->addWidget(mk(WMV_QT_VERSION, monoF(), 7, tok::kDim));
   row->addLayout(brand);
 
   // A real QMenuBar rather than the mock-up's five labels: it brings hover states,
@@ -236,8 +226,10 @@ QWidget* MainWindow::buildTitleBar()
   menuBar_->setFont(QFont(uiF(), 9));
   menuBar_->setStyleSheet(QString(
     "QMenuBar { background:transparent; border:none; color:#99a2af; }"
-    "QMenuBar::item { background:transparent; padding:5px 9px; margin:0 1px;"
-    " border-radius:5px; }"
+    // Tiles rather than bare words: a visible surface, a border and room to breathe.
+    // Still a real QMenuBar, so Alt mnemonics and keyboard navigation survive.
+    "QMenuBar::item { background:%6; border:1px solid %7; padding:5px 13px;"
+    " margin:0 3px; border-radius:7px; }"
     "QMenuBar::item:selected { background:#1c2229; color:%1; }"
     "QMenuBar::item:pressed { background:%2; color:%3; }"
     "QMenu { background:%4; border:1px solid %5; padding:5px; color:#cdd3dc; }"
@@ -247,7 +239,8 @@ QWidget* MainWindow::buildTitleBar()
     "QMenu::separator { height:1px; background:%5; margin:5px 8px; }"
     "QMenu::indicator { width:12px; height:12px; left:7px; }")
     .arg(tok::kText).arg(tok::kAccentBg).arg(tok::kAccent)
-    .arg(tok::kCard).arg(tok::kBorder));
+    .arg(tok::kCard).arg(tok::kBorder)
+    .arg(tok::kCardAlt).arg(tok::kBorder2));
   row->addWidget(menuBar_);
   row->addStretch(1);
 
@@ -264,20 +257,33 @@ QWidget* MainWindow::buildTitleBar()
   pr->addWidget(buildLabel_);
   row->addWidget(pill);
 
-  // Window buttons. The dots from the mock-up, now actually wired up.
-  const struct { const char* colour; int action; } buttons[] = {
-    { "#2a3038", 0 },   // minimise
-    { "#2a3038", 1 },   // maximise / restore
-    { "#3a2a2a", 2 }    // close
-  };
-  for (const auto& b : buttons) {
-    auto* d = new QLabel;
-    d->setFixedSize(11, 11);
-    d->setCursor(Qt::PointingHandCursor);
-    d->setStyleSheet(QString("background:%1; border:none; border-radius:5px;").arg(b.colour));
-    d->setProperty("windowAction", b.action);
-    d->installEventFilter(this);
-    row->addWidget(d);
+  // Window buttons. They were three unlabelled dots in near-identical greys with no hover
+  // state -- you had to know which was which and aim at 11 pixels. Now they carry the
+  // glyphs everyone recognises, have a proper target, and light up when pointed at, red
+  // for close the way Chrome and most Linux desktops do it.
+  {
+    auto* group = new QWidget;
+    group->setStyleSheet("background:transparent;");
+    auto* gr = new QHBoxLayout(group);
+    gr->setContentsMargins(0, 0, 0, 0);
+    gr->setSpacing(2);                    // a group, not three scattered dots
+    const struct { const char* glyph; int action; } buttons[] = {
+      { "─", 0 },   // minimise
+      { "□", 1 },   // maximise / restore
+      { "×", 2 }    // close
+    };
+    for (const auto& b : buttons) {
+      auto* d = new QLabel(QString::fromUtf8(b.glyph));
+      d->setFixedSize(30, 22);
+      d->setAlignment(Qt::AlignCenter);
+      d->setFont(QFont(iconF(), 9));
+      d->setCursor(Qt::PointingHandCursor);
+      d->setProperty("windowAction", b.action);
+      d->installEventFilter(this);
+      paintWindowButton(d, false);
+      gr->addWidget(d);
+    }
+    row->addWidget(group);
   }
 
   // Dragging the bar moves the window, since there is no native caption to grab.
@@ -430,7 +436,7 @@ QWidget* MainWindow::buildBrowser()
     "QTreeView { background:transparent; border:none; outline:none; }"
     "QTreeView::item { padding:3px 2px; border-radius:4px; }"
     "QTreeView::item:hover { background:#181d23; }"
-    "QTreeView::item:selected { background:#181510; color:%1; }"
+    "QTreeView::item:selected { background:#1a1226; color:%1; }"
     "QScrollBar:vertical { background:transparent; width:10px; }"
     "QScrollBar::handle:vertical { background:#262c35; border-radius:5px; min-height:30px; }"
     "QScrollBar::add-line, QScrollBar::sub-line { height:0; }").arg(tok::kAccent));
@@ -542,7 +548,7 @@ void MainWindow::setModelActionsEnabled(bool on)
 {
   if (exportButton_) {
     exportButton_->setStyleSheet(
-      on ? QString("background:%1; border:1px solid #d9b678; border-radius:7px;"
+      on ? QString("background:%1; border:1px solid #c084fc; border-radius:7px;"
                    "color:%2; padding:8px 14px;").arg(tok::kAccent).arg(tok::kOnAccent)
          : QString("background: rgba(14,17,20,220); border:1px solid %1; border-radius:7px;"
                    "color:%2; padding:8px 14px;").arg(tok::kBorder).arg(tok::kDim));
@@ -553,6 +559,17 @@ void MainWindow::setModelActionsEnabled(bool on)
   // The hint owns the middle of an empty viewport; it would be in the way of a model.
   if (emptyHint_)
     emptyHint_->setVisible(!on);
+}
+
+void MainWindow::paintWindowButton(QLabel* b, bool hovered)
+{
+  if (!b)
+    return;
+  const bool isClose = (b->property("windowAction").toInt() == 2);
+  const char* bg  = !hovered ? "transparent" : (isClose ? tok::kDanger : tok::kRaised2);
+  const char* fg  = !hovered ? tok::kMuted   : (isClose ? "#ffffff"   : tok::kText);
+  b->setStyleSheet(QString("background:%1; color:%2; border:none; border-radius:5px;")
+                     .arg(bg).arg(fg));
 }
 
 void MainWindow::setItemFocusIndicator(int slot)
@@ -577,7 +594,7 @@ void MainWindow::setActiveCameraPreset(int index)
   for (int i = 0; i < (int)camPresets_.size(); ++i) {
     const bool active = (i == index);
     camPresets_[i]->setStyleSheet(active
-      ? QString("background: rgba(40,32,14,235); border:1px solid #4a3f28; border-radius:6px;"
+      ? QString("background: rgba(30,16,48,235); border:1px solid #4c2a75; border-radius:6px;"
                 "color:%1; padding:6px 11px;").arg(tok::kAccent)
       : QString("background: rgba(14,17,20,220); border:1px solid %1; border-radius:6px;"
                 "color:#98a1ae; padding:6px 11px;").arg(tok::kBorder));
@@ -586,6 +603,16 @@ void MainWindow::setActiveCameraPreset(int index)
 
 bool MainWindow::eventFilter(QObject* obj, QEvent* e)
 {
+  // Hover for the window buttons. They are QLabels, which have no hover state of their
+  // own and no :hover selector without a stylesheet already on them.
+  if (e->type() == QEvent::Enter || e->type() == QEvent::Leave) {
+    if (auto* b = qobject_cast<QLabel*>(obj))
+      if (b->property("windowAction").isValid()) {
+        paintWindowButton(b, e->type() == QEvent::Enter);
+        return false;                    // let the label handle it too
+      }
+  }
+
   if (e->type() == QEvent::MouseButtonRelease) {
     const QVariant idx = obj->property("categoryIndex");
     if (idx.isValid()) {
@@ -708,7 +735,11 @@ QWidget* MainWindow::buildViewport()
                             "unter „Items“ nach Ausrüstung."), host);
   emptyHint_->setAlignment(Qt::AlignCenter);
   emptyHint_->setFont(QFont(uiF(), 10));
-  emptyHint_->setStyleSheet(QString("color:%1; background:transparent;").arg(tok::kMuted));
+  // Not transparent: asOverlay() gives this its own native window, which cannot inherit
+  // the parent's paint and would show up as a black box. Matching the GL clear colour
+  // (GLHost's bg_) makes it sit invisibly on the viewport instead.
+  emptyHint_->setStyleSheet(QString("color:%1; background:%2; padding:20px;")
+                              .arg(tok::kMuted).arg(tok::kApp));
   g->addWidget(emptyHint_, 0, 0, 3, 3, Qt::AlignCenter);
   asOverlay(emptyHint_);
 
@@ -757,7 +788,7 @@ QWidget* MainWindow::buildViewport()
   exp->setFont(QFont(uiF(), 9, QFont::DemiBold));
   exp->setAlignment(Qt::AlignCenter);
   exp->setCursor(Qt::PointingHandCursor);
-  exp->setStyleSheet(QString("background:%1; border:1px solid #d9b678; border-radius:7px;"
+  exp->setStyleSheet(QString("background:%1; border:1px solid #c084fc; border-radius:7px;"
                              "color:%2; padding:8px 14px;").arg(tok::kAccent).arg(tok::kOnAccent));
   exp->setProperty("exportButton", true);
   exp->installEventFilter(this);
