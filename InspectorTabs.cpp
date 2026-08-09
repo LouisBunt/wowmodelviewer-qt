@@ -114,40 +114,44 @@ CharacterIoTab::CharacterIoTab(MenuController* menus, ExportController* exporter
   col->setContentsMargins(0, 0, 0, 0);
   col->setSpacing(10);
 
-  // --- Wowhead
-  col->addWidget(sectionLabel(QString::fromUtf8("WOWHEAD-ANPROBE")));
-  wowheadUrl_ = urlField(QString::fromUtf8("https://www.wowhead.com/dressing-room#…"));
-  col->addWidget(wowheadUrl_);
-  auto* whHint = new QLabel(QString::fromUtf8(
-    "Der Link muss das '#' enthalten — dahinter steckt der ganze Look."));
-  whHint->setFont(QFont(uiFamily(), 8));
-  whHint->setWordWrap(true);
-  whHint->setStyleSheet(QString("color:%1; background:transparent;").arg(tok::kDim));
-  col->addWidget(whHint);
-  auto* whBtn = accentButton(QString::fromUtf8("Anprobe importieren"));
-  connect(whBtn, &QPushButton::clicked, this, &CharacterIoTab::importWowhead);
-  connect(wowheadUrl_, &QLineEdit::returnPressed, this, &CharacterIoTab::importWowhead);
-  col->addWidget(whBtn);
-
   // --- Aus dem Spiel (MVLink)
-  col->addSpacing(4);
+  //
+  // This replaced the Wowhead dressing-room field. That route needed the look rebuilt on
+  // a website and pasted back; the addon reads what the character is actually wearing,
+  // which is the same job done in one step. The decoder and the --dressing-room flag stay
+  // for scripts and for the 56-case test corpus -- only the control is gone.
   col->addWidget(sectionLabel(QString::fromUtf8("AUS DEM SPIEL")));
-  mvlinkCode_ = urlField(QString::fromUtf8("MVM1:R=…  — Code aus dem MVLink-Addon"));
+  auto* mvTop = new QLabel(QString::fromUtf8(
+    "Zwei Wege — beide führen zum selben Ergebnis:"));
+  mvTop->setFont(QFont(uiFamily(), 8));
+  mvTop->setWordWrap(true);
+  mvTop->setStyleSheet(QString("color:%1; background:transparent;").arg(tok::kTextSoft));
+  col->addWidget(mvTop);
+
+  auto* mvFileBtn2 = accentButton(QString::fromUtf8("Direkt aus WoW holen"));
+  connect(mvFileBtn2, &QPushButton::clicked, this, &CharacterIoTab::importMVLinkFromGame);
+  col->addWidget(mvFileBtn2);
+  auto* mvFileHint = new QLabel(QString::fromUtf8(
+    "Liest, was das Addon abgelegt hat — Stand des letzten /reload oder Ausloggens."));
+  mvFileHint->setFont(QFont(uiFamily(), 8));
+  mvFileHint->setWordWrap(true);
+  mvFileHint->setStyleSheet(QString("color:%1; background:transparent;").arg(tok::kDim));
+  col->addWidget(mvFileHint);
+
+  mvlinkCode_ = urlField(QString::fromUtf8("… oder Code hier einfügen: MVM1:R=…"));
   col->addWidget(mvlinkCode_);
   auto* mvHint = new QLabel(QString::fromUtf8(
-    "Im Spiel /mvlink eingeben, Code kopieren, hier einfügen. Gesicht und Frisur kann "
-    "ein Addon nicht auslesen — die bleiben, wie sie hier eingestellt sind."));
+    "Im Spiel /mvlink öffnen, Code markieren (Strg+C), hier einfügen — wirkt sofort, "
+    "ohne /reload. Gesicht und Frisur kann ein Addon nicht auslesen; die bleiben, wie "
+    "sie hier eingestellt sind."));
   mvHint->setFont(QFont(uiFamily(), 8));
   mvHint->setWordWrap(true);
   mvHint->setStyleSheet(QString("color:%1; background:transparent;").arg(tok::kDim));
   col->addWidget(mvHint);
-  auto* mvBtn = accentButton(QString::fromUtf8("Code übernehmen"));
+  auto* mvBtn = quietButton(QString::fromUtf8("Code übernehmen"));
   connect(mvBtn, &QPushButton::clicked, this, &CharacterIoTab::importMVLink);
   connect(mvlinkCode_, &QLineEdit::returnPressed, this, &CharacterIoTab::importMVLink);
   col->addWidget(mvBtn);
-  auto* mvFileBtn = quietButton(QString::fromUtf8("Aus WoW übernehmen (ohne Kopieren)"));
-  connect(mvFileBtn, &QPushButton::clicked, this, &CharacterIoTab::importMVLinkFromGame);
-  col->addWidget(mvFileBtn);
 
   // --- Armory
   col->addSpacing(4);
@@ -223,25 +227,6 @@ void CharacterIoTab::setStatus(const QString& text, bool error)
   status_->setStyleSheet(QString("color:%1; background:transparent;")
                            .arg(error ? "#d98b6a" : tok::kTextSoft));
   status_->setText(text);
-}
-
-void CharacterIoTab::importWowhead()
-{
-  if (!menus_)
-    return;
-  const QString url = wowheadUrl_->text().trimmed();
-  if (url.isEmpty()) {
-    setStatus(QString::fromUtf8("Bitte zuerst einen Anprobe-Link einsetzen."), true);
-    return;
-  }
-  setStatus(QString::fromUtf8("Importiere …"), false);
-  // The import blocks this thread. Without a paint pass the label never appears and the
-  // window simply freezes until the result is in.
-  QApplication::processEvents();
-  // interactive=false: the tab reports into its own status line, so the extra message
-  // box the menu path shows would only be a second thing to click away.
-  const QString err = menus_->importWowheadDressingRoom(url, false);
-  setStatus(err.isEmpty() ? QString::fromUtf8("Charakter übernommen.") : err, !err.isEmpty());
 }
 
 void CharacterIoTab::importMVLink()

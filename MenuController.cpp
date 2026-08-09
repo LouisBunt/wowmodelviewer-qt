@@ -190,10 +190,12 @@ void MenuController::build()
       &MenuController::importArmoryCharacter);
   add(characterMenu_, tr("NPC von URL importieren …"), QString(),
       &MenuController::importNpcFromUrl);
-  add(characterMenu_, tr("Wowhead-Anprobe importieren …"), QString(),
-      &MenuController::importWowheadDressingRoomDialog);
-  add(characterMenu_, tr("Wowhead-Look importieren …"), QString(),
-      &MenuController::importWowheadLook);
+  // The two Wowhead entries are gone: rebuilding a look on a website and pasting the link
+  // back is the long way round now that the in-game addon reads what the character is
+  // actually wearing. The decoder and --dressing-room stay for scripts and for the test
+  // corpus; only the way in through the menu is removed.
+  add(characterMenu_, tr("Aussehen aus WoW holen (MVLink) …"), QString(),
+      &MenuController::importMVLinkDialog);
   characterMenu_->addSeparator();
   needsCharacter_.push_back(
     add(characterMenu_, tr("Ausrüstung speichern …"), "F5", &MenuController::saveEquipment));
@@ -1232,6 +1234,30 @@ QString MenuController::applyCharInfos(CharInfos* result, bool interactive,
   win_->characterPanel()->applyPostureFor(choiceIds);
 
   return QString();
+}
+
+void MenuController::importMVLinkDialog()
+{
+  // Try the file first without asking: if the addon has been used at all, this is the
+  // whole interaction. Only when nothing is there does the dialog appear -- pasting a
+  // code should not be the price of admission for people who have it set up.
+  const QString fileErr = importMVLinkFromGame(QString(), false);
+  if (fileErr.isEmpty()) {
+    win_->setPathLabel(tr("Aussehen aus WoW übernommen (Stand: letztes /reload)."));
+    return;
+  }
+
+  bool ok = false;
+  const QString code = QInputDialog::getText(
+    win_, tr("Aussehen aus WoW"),
+    tr("%1\n\nCode aus dem Addon einfügen (im Spiel: /mvlink):").arg(fileErr),
+    QLineEdit::Normal, QString(), &ok);
+  if (!ok || code.trimmed().isEmpty())
+    return;
+
+  const QString err = importMVLinkCode(code.trimmed(), true);
+  if (!err.isEmpty())
+    QMessageBox::warning(win_, tr("MVLink"), err);
 }
 
 QString MenuController::importMVLinkCode(const QString& code, bool interactive)

@@ -12,12 +12,14 @@ local ADDON, MVLink = ...
 -- Palette from the mockup.
 local C = {
   bg      = { 0.039, 0.051, 0.071 },   -- #0a0d12
-  panel   = { 0.016, 0.078, 0.122 },   -- #04141f
+  panel   = { 0.118, 0.063, 0.188 },   -- #1e1030  MV's accent surface
   row     = { 0.047, 0.063, 0.082 },   -- #0c1015
-  line    = { 0.110, 0.329, 0.502 },   -- #1c5480
-  cyan    = { 0.229, 0.886, 1.000 },   -- #3ae2ff
-  cyanDim = { 0.490, 0.918, 1.000 },   -- #7deaff
-  violet  = { 0.780, 0.490, 1.000 },   -- #c77dff
+  line    = { 0.298, 0.165, 0.459 },   -- #4c2a75  MV's accent border
+  -- Violet, the same accent ModelViewer: Midnight uses, so the two look like one product.
+  -- The names stay "cyan" because they are referenced throughout; only the values moved.
+  cyan    = { 0.659, 0.333, 0.969 },   -- #a855f7  ModelViewer's accent
+  cyanDim = { 0.753, 0.518, 0.988 },   -- #c084fc  its hover tone
+  violet  = { 0.831, 0.616, 1.000 },   -- #d49dff  lighter, for the format tag
   text    = { 0.933, 0.953, 0.968 },   -- #eef3f7
   dim     = { 0.373, 0.490, 0.584 },   -- #5f7d95
   warn    = { 1.000, 0.239, 0.133 },   -- #ff3d22
@@ -130,7 +132,13 @@ function MVLink:BuildUI()
   f:SetMovable(true); f:EnableMouse(true); f:RegisterForDrag("LeftButton")
   f:SetScript("OnDragStart", f.StartMoving)
   f:SetScript("OnDragStop", f.StopMovingOrSizing)
-  f:SetFrameStrata("DIALOG")
+  -- DIALOG alone is not enough: the transmog frame and most other windows live there too,
+  -- so whichever was drawn last covered the other and the window looked like it vanished.
+  -- SetToplevel raises it above its siblings whenever it is clicked, which is what every
+  -- movable Blizzard window does.
+  f:SetFrameStrata("HIGH")
+  f:SetToplevel(true)
+  f:SetScript("OnMouseDown", function(s) s:Raise() end)
   f:Hide()
   tint(f, C.bg, 0.96)
   hairline(f, C.line, 0.8)
@@ -257,7 +265,7 @@ function MVLink:BuildUI()
     MVLink:Store()
     -- "Gespeichert" would be a lie: WoW flushes SavedVariables on /reload and logout and
     -- at no other time. Saying so is the difference between a wait and a bug report.
-    print("|cff3ae2ffMVLink|r: bereitgelegt — wirksam nach |cffffffff/reload|r oder "
+    print("|cffa855f7MVLink|r: bereitgelegt — wirksam nach |cffffffff/reload|r oder "
           .. "Ausloggen. Danach in ModelViewer auf \"Aus WoW übernehmen\".")
   end)
 
@@ -466,7 +474,10 @@ function MVLink:BuildSettings()
   f:SetMovable(true); f:EnableMouse(true); f:RegisterForDrag("LeftButton")
   f:SetScript("OnDragStart", f.StartMoving)
   f:SetScript("OnDragStop", f.StopMovingOrSizing)
-  f:SetFrameStrata("DIALOG")
+  -- One step above the main window: it is opened FROM that window and must not land behind it.
+  f:SetFrameStrata("FULLSCREEN_DIALOG")
+  f:SetToplevel(true)
+  f:SetScript("OnMouseDown", function(s) s:Raise() end)
   f:Hide()
   tint(f, C.bg, 0.96)
   hairline(f, C.line, 0.8)
@@ -513,7 +524,7 @@ function MVLink:BuildSettings()
   storeNow:SetScript("OnClick", function()
     MVLink:Store()
     MVLink:RefreshSettings()
-    print("|cff3ae2ffMVLink|r: bereitgelegt — wirksam nach /reload oder Ausloggen.")
+    print("|cffa855f7MVLink|r: bereitgelegt — wirksam nach /reload oder Ausloggen.")
   end)
 
   heading(f, "03", "SLASH", w):SetPoint("TOPLEFT", 16, -240)

@@ -99,7 +99,10 @@ private:
   void clearEquipment();
   void randomiseCharacter();
   void importArmoryCharacter();   // the dialog wrapper around importArmory()
-  void importWowheadDressingRoomDialog();  // ... around importWowheadDressingRoom()
+  void importWowheadDressingRoomDialog();
+
+  // Menu route: offers the file first, then a code, in one dialog.
+  void importMVLinkDialog();  // ... around importWowheadDressingRoom()
   void importNpcFromUrl();
   void importWowheadLook();
 

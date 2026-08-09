@@ -208,7 +208,7 @@ function MVLink:OutfitIDs()
       end
     end
     if not self.outfitFn then
-      print("|cff3ae2ffMVLink|r: gespeicherte Outfits sind in dieser Spielversion nicht "
+      print("|cffa855f7MVLink|r: gespeicherte Outfits sind in dieser Spielversion nicht "
             .. "abrufbar — der getragene Look funktioniert normal.")
     end
   end
@@ -256,11 +256,11 @@ SlashCmdList["MVLINK"] = function(msg)
   local cmd = (msg or ""):lower():match("^%s*(%S*)")
   if cmd == "store" then
     MVLink:Store()
-    print("|cff3ae2ffMVLink|r: bereitgelegt — wirksam nach /reload oder Ausloggen.")
+    print("|cffa855f7MVLink|r: bereitgelegt — wirksam nach /reload oder Ausloggen.")
   elseif cmd == "debug" then
     -- One line per slot, for when the window says something the code does not.
     local look = MVLink:ReadWornLook()
-    print(("|cff3ae2ffMVLink|r: race=%d sex=%d, %d Teile, %d ohne Aussehen")
+    print(("|cffa855f7MVLink|r: race=%d sex=%d, %d Teile, %d ohne Aussehen")
             :format(look.raceID, look.sex, MVLink:CountPieces(look), look.missing))
     for _, invSlot in ipairs(MVLink.SLOT_ORDER) do
       local p = look.pieces[MVLink.SLOT_MAP[invSlot]]
