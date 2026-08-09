@@ -516,7 +516,10 @@ function MVLink:RefreshSettings()
   if not f then return end
   -- GetRealmName/account: the folder is WTF\Account\<ACCOUNT>\SavedVariables. The account
   -- name is not exposed to addons, so the placeholder is honest about that.
-  f.pathText:SetText("WTF\Account\<Account>\SavedVariables\MVLink.lua")
+  -- Long-bracket string: the path is full of backslashes, and every one of them would
+  -- otherwise need escaping. \A is not a valid Lua escape, and getting that wrong costs
+  -- the WHOLE file -- a syntax error anywhere means WoW loads none of it.
+  f.pathText:SetText([[WTF\Account\<Account>\SavedVariables\MVLink.lua]])
   f.stamp:SetText(MVLinkDB and MVLinkDB.updatedAt
                     and ("Zuletzt geschrieben " .. MVLinkDB.updatedAt)
                     or "Noch nichts abgelegt")
