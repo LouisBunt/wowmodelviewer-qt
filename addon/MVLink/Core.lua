@@ -48,29 +48,55 @@ local function pieceFromSource(sourceID)
   return { itemID = info.itemID, modID = info.itemModID or 0 }
 end
 
--- One slot, from whichever source this client actually offers.
---
--- The first attempt reads the TRANSMOG appearance, which is what should travel. On this
--- machine that came back empty for every slot -- the encoded look was "MVM1:R=9:S=0" with
--- no pieces at all -- so the worn item is used as a fallback rather than producing an
--- empty code. A look without its transmog is still far better than nothing, and
--- /mvlink debug names which source each slot came from.
+-- One slot, from whichever source this client actually offers. /mvlink debug names the
+-- source per slot, so a wrong path shows up as [equipped] where [transmog] belongs.
 function MVLink:ReadSlot(invSlot)
-  -- 1) the applied transmog appearance
-  if TransmogUtil and TransmogUtil.GetInfoForEquippedSlot then
-    local ok, applied = pcall(TransmogUtil.GetInfoForEquippedSlot, invSlot)
-    if ok and applied then
-      local p = pieceFromSource(applied)
-      if p then p.src = "transmog"; return p end
-    end
+  -- Both transmog calls take a TransmogLocation TABLE, not a slot number. Passing the
+  -- number made them throw, the pcall swallowed it, and every slot silently fell through
+  -- to the equipped item -- which is why the encoded look came out as "MVM1:R=9:S=0" with
+  -- no pieces and why nothing ever carried a transmog. I blamed the client for that; the
+  -- signature was wrong.
+  local loc
+  if TransmogUtil and TransmogUtil.GetTransmogLocation and Enum and Enum.TransmogType then
+    local ok, made = pcall(TransmogUtil.GetTransmogLocation, invSlot,
+                           Enum.TransmogType.Appearance,
+                           Enum.TransmogModification and Enum.TransmogModification.Main or 0)
+    if ok then loc = made end
   end
 
-  -- 2) the transmog info attached to the equipped item
-  if C_Transmog and C_Transmog.GetSlotVisualInfo then
-    local ok, appliedID = pcall(C_Transmog.GetSlotVisualInfo, invSlot, 0)
-    if ok and appliedID then
-      local p = pieceFromSource(appliedID)
-      if p then p.src = "slotvisual"; return p end
+  -- A source id can arrive as a plain number or, on newer clients, inside a table. Both
+  -- shapes are unwrapped here, INSIDE the guarded path -- doing it afterwards would hand
+  -- a table to GetSourceInfo and turn a quiet fallback into a hard error.
+  local function fromAny(v)
+    if type(v) == "table" then
+      v = v.appliedSourceID or v.sourceID or v.baseSourceID or v.appearanceID
+    end
+    if type(v) ~= "number" then return nil end
+    return pieceFromSource(v)
+  end
+
+  if loc then
+    -- 1) the applied transmog appearance
+    if TransmogUtil.GetInfoForEquippedSlot then
+      local ok, a, b = pcall(TransmogUtil.GetInfoForEquippedSlot, loc)
+      if ok then
+        -- Returns appliedSourceID first; b is the visual id and only used as a fallback
+        -- when the first came back empty.
+        local p = fromAny(a) or fromAny(b)
+        if p then p.src = "transmog"; return p end
+      elseif not self.warned then
+        self.warned = true
+        print("|cffa855f7MVLink|r: Transmog-Abfrage fehlgeschlagen: " .. tostring(a))
+      end
+    end
+
+    -- 2) the slot's visual info
+    if C_Transmog and C_Transmog.GetSlotVisualInfo then
+      local ok, r = pcall(C_Transmog.GetSlotVisualInfo, loc)
+      if ok then
+        local p = fromAny(r)
+        if p then p.src = "slotvisual"; return p end
+      end
     end
   end
 
