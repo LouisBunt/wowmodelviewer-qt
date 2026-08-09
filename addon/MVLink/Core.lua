@@ -48,6 +48,41 @@ local function pieceFromSource(sourceID)
   return { itemID = info.itemID, modID = info.itemModID or 0 }
 end
 
+-- One slot, from whichever source this client actually offers.
+--
+-- The first attempt reads the TRANSMOG appearance, which is what should travel. On this
+-- machine that came back empty for every slot -- the encoded look was "MVM1:R=9:S=0" with
+-- no pieces at all -- so the worn item is used as a fallback rather than producing an
+-- empty code. A look without its transmog is still far better than nothing, and
+-- /mvlink debug names which source each slot came from.
+function MVLink:ReadSlot(invSlot)
+  -- 1) the applied transmog appearance
+  if TransmogUtil and TransmogUtil.GetInfoForEquippedSlot then
+    local ok, applied = pcall(TransmogUtil.GetInfoForEquippedSlot, invSlot)
+    if ok and applied then
+      local p = pieceFromSource(applied)
+      if p then p.src = "transmog"; return p end
+    end
+  end
+
+  -- 2) the transmog info attached to the equipped item
+  if C_Transmog and C_Transmog.GetSlotVisualInfo then
+    local ok, appliedID = pcall(C_Transmog.GetSlotVisualInfo, invSlot, 0)
+    if ok and appliedID then
+      local p = pieceFromSource(appliedID)
+      if p then p.src = "slotvisual"; return p end
+    end
+  end
+
+  -- 3) whatever is actually equipped. No appearance modifier is available this way, so
+  --    the colour variant defaults to 0 -- the base look of that item.
+  local itemID = GetInventoryItemID("player", invSlot)
+  if itemID then
+    return { itemID = itemID, modID = 0, src = "equipped" }
+  end
+  return nil
+end
+
 -- What the character is wearing right now, including unsaved changes in the transmog
 -- window -- which is the whole point, and the one thing the armory route cannot do.
 function MVLink:ReadWornLook()
@@ -60,16 +95,13 @@ function MVLink:ReadWornLook()
   }
 
   for _, invSlot in ipairs(self.SLOT_ORDER) do
-    local ok, applied = pcall(TransmogUtil.GetInfoForEquippedSlot, invSlot)
-    if ok and applied then
-      local piece = pieceFromSource(applied)
-      if piece then
-        look.pieces[self.SLOT_MAP[invSlot]] = piece
-      elseif GetInventoryItemID("player", invSlot) then
-        -- Something IS worn here but produced no appearance. Counted rather than
-        -- silently dropped, so the window can say the look is incomplete.
-        look.missing = look.missing + 1
-      end
+    local piece = self:ReadSlot(invSlot)
+    if piece then
+      look.pieces[self.SLOT_MAP[invSlot]] = piece
+    elseif GetInventoryItemID("player", invSlot) then
+      -- Something IS worn here but produced nothing usable. Counted rather than silently
+      -- dropped, so the window can say the look is incomplete.
+      look.missing = look.missing + 1
     end
   end
   return look
@@ -78,7 +110,10 @@ end
 -- A saved wardrobe outfit. GetOutfitItemTransmogInfoList returns one entry per slot in
 -- the game's own slot order, so the index has to be turned back into an inventory slot.
 function MVLink:ReadOutfit(outfitID)
-  local name = C_TransmogCollection.GetOutfitInfo(outfitID)
+  local okName, name = pcall(function()
+    return C_TransmogCollection.GetOutfitInfo and C_TransmogCollection.GetOutfitInfo(outfitID)
+  end)
+  if not okName then name = nil end
   local look = {
     name = name or "Unbenannt",
     raceID = select(3, UnitRace("player")) or 0,
@@ -87,8 +122,11 @@ function MVLink:ReadOutfit(outfitID)
     missing = 0,
   }
 
-  local list = C_TransmogCollection.GetOutfitItemTransmogInfoList(outfitID)
-  if not list then
+  local okList, list = pcall(function()
+    return C_TransmogCollection.GetOutfitItemTransmogInfoList
+           and C_TransmogCollection.GetOutfitItemTransmogInfoList(outfitID)
+  end)
+  if not okList or not list then
     return look
   end
   -- The list is indexed by transmog slot, which is the inventory slot for everything we
@@ -146,27 +184,48 @@ function MVLink:Store()
   MVLinkDB.current = self:Encode(self:ReadWornLook())
 
   MVLinkDB.outfits = {}
-  local ids = C_TransmogCollection.GetOutfits()
-  if ids then
-    for _, id in ipairs(ids) do
-      local look = self:ReadOutfit(id)
-      if self:CountPieces(look) > 0 then
-        MVLinkDB.outfits[look.name] = self:Encode(look)
-      end
+  for _, id in ipairs(self:OutfitIDs()) do
+    local look = self:ReadOutfit(id)
+    if self:CountPieces(look) > 0 then
+      MVLinkDB.outfits[look.name] = self:Encode(look)
     end
   end
+end
+
+-- The list of saved outfits, whatever this client calls it.
+--
+-- C_TransmogCollection.GetOutfits() does NOT exist -- calling it is what took the addon
+-- down with "attempt to call a nil value" in both Store() and AllLooks(). The name varies
+-- between clients, so it is resolved once at runtime instead of assumed, and a client
+-- that has none of them simply offers no saved outfits rather than erroring.
+function MVLink:OutfitIDs()
+  if self.outfitFn == nil then
+    self.outfitFn = false
+    for _, name in ipairs({ "GetOutfits", "GetOutfitIDs", "GetAllOutfitIDs" }) do
+      if C_TransmogCollection and type(C_TransmogCollection[name]) == "function" then
+        self.outfitFn = name
+        break
+      end
+    end
+    if not self.outfitFn then
+      print("|cff3ae2ffMVLink|r: gespeicherte Outfits sind in dieser Spielversion nicht "
+            .. "abrufbar — der getragene Look funktioniert normal.")
+    end
+  end
+  if not self.outfitFn then
+    return {}
+  end
+  local ok, ids = pcall(C_TransmogCollection[self.outfitFn])
+  return (ok and type(ids) == "table") and ids or {}
 end
 
 -- Collect everything the window offers: the worn look first, then saved outfits by name.
 function MVLink:AllLooks()
   local looks = { self:ReadWornLook() }
-  local ids = C_TransmogCollection.GetOutfits()
-  if ids then
-    for _, id in ipairs(ids) do
-      local look = self:ReadOutfit(id)
-      if self:CountPieces(look) > 0 then
-        looks[#looks + 1] = look
-      end
+  for _, id in ipairs(self:OutfitIDs()) do
+    local look = self:ReadOutfit(id)
+    if self:CountPieces(look) > 0 then
+      looks[#looks + 1] = look
     end
   end
   return looks
@@ -206,9 +265,9 @@ SlashCmdList["MVLINK"] = function(msg)
     for _, invSlot in ipairs(MVLink.SLOT_ORDER) do
       local p = look.pieces[MVLink.SLOT_MAP[invSlot]]
       if p then
-        print(("  %-12s inv=%d mv=%d item=%d mod=%d")
+        print(("  %-12s inv=%d mv=%d item=%d mod=%d  [%s]")
                 :format(MVLink.SLOT_NAME[invSlot] or "?", invSlot,
-                        MVLink.SLOT_MAP[invSlot], p.itemID, p.modID))
+                        MVLink.SLOT_MAP[invSlot], p.itemID, p.modID, p.src or "?"))
       end
     end
     print(MVLink:Encode(look))
