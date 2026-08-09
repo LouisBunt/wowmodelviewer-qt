@@ -22,8 +22,18 @@ MVLink.FORMAT = "MVM1"
 -- (ItemAppearanceModifierID). That is why the colour variant needs no translation at all.
 --
 -- Returns nil when the slot is empty, hidden, or holds something with no appearance.
+-- "No transmog" is Constants.Transmog.NoTransmogID where that table exists, and the
+-- literal 0 or -1 where it does not. Reaching straight into Constants.Transmog would
+-- raise on any client that spells it differently, and an error here kills the whole
+-- read -- which looks exactly like "the addon does nothing".
+local NO_TRANSMOG = (Constants and Constants.Transmog and Constants.Transmog.NoTransmogID)
+                    or -1
+
 local function pieceFromSource(sourceID)
-  if not sourceID or sourceID == 0 or sourceID == Constants.Transmog.NoTransmogID then
+  if not sourceID or sourceID == 0 or sourceID == NO_TRANSMOG then
+    return nil
+  end
+  if not C_TransmogCollection or not C_TransmogCollection.GetSourceInfo then
     return nil
   end
   local info = C_TransmogCollection.GetSourceInfo(sourceID)
@@ -171,6 +181,7 @@ f:RegisterEvent("PLAYER_LOGOUT")
 f:SetScript("OnEvent", function(_, event)
   if event == "PLAYER_LOGIN" then
     MVLink:BuildUI()
+    MVLink:BuildMinimapButton()
     -- Refreshed at login too, so the file holds something sensible even if the window is
     -- never opened this session.
     MVLink:Store()
@@ -182,6 +193,26 @@ f:SetScript("OnEvent", function(_, event)
 end)
 
 SLASH_MVLINK1 = "/mvlink"
-SlashCmdList["MVLINK"] = function()
-  MVLink:Toggle()
+SlashCmdList["MVLINK"] = function(msg)
+  local cmd = (msg or ""):lower():match("^%s*(%S*)")
+  if cmd == "store" then
+    MVLink:Store()
+    print("|cff3ae2ffMVLink|r: bereitgelegt — wirksam nach /reload oder Ausloggen.")
+  elseif cmd == "debug" then
+    -- One line per slot, for when the window says something the code does not.
+    local look = MVLink:ReadWornLook()
+    print(("|cff3ae2ffMVLink|r: race=%d sex=%d, %d Teile, %d ohne Aussehen")
+            :format(look.raceID, look.sex, MVLink:CountPieces(look), look.missing))
+    for _, invSlot in ipairs(MVLink.SLOT_ORDER) do
+      local p = look.pieces[MVLink.SLOT_MAP[invSlot]]
+      if p then
+        print(("  %-12s inv=%d mv=%d item=%d mod=%d")
+                :format(MVLink.SLOT_NAME[invSlot] or "?", invSlot,
+                        MVLink.SLOT_MAP[invSlot], p.itemID, p.modID))
+      end
+    end
+    print(MVLink:Encode(look))
+  else
+    MVLink:Toggle()
+  end
 end
