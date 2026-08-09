@@ -129,6 +129,26 @@ CharacterIoTab::CharacterIoTab(MenuController* menus, ExportController* exporter
   connect(wowheadUrl_, &QLineEdit::returnPressed, this, &CharacterIoTab::importWowhead);
   col->addWidget(whBtn);
 
+  // --- Aus dem Spiel (MVLink)
+  col->addSpacing(4);
+  col->addWidget(sectionLabel(QString::fromUtf8("AUS DEM SPIEL")));
+  mvlinkCode_ = urlField(QString::fromUtf8("MVM1:R=…  — Code aus dem MVLink-Addon"));
+  col->addWidget(mvlinkCode_);
+  auto* mvHint = new QLabel(QString::fromUtf8(
+    "Im Spiel /mvlink eingeben, Code kopieren, hier einfügen. Gesicht und Frisur kann "
+    "ein Addon nicht auslesen — die bleiben, wie sie hier eingestellt sind."));
+  mvHint->setFont(QFont(uiFamily(), 8));
+  mvHint->setWordWrap(true);
+  mvHint->setStyleSheet(QString("color:%1; background:transparent;").arg(tok::kDim));
+  col->addWidget(mvHint);
+  auto* mvBtn = accentButton(QString::fromUtf8("Code übernehmen"));
+  connect(mvBtn, &QPushButton::clicked, this, &CharacterIoTab::importMVLink);
+  connect(mvlinkCode_, &QLineEdit::returnPressed, this, &CharacterIoTab::importMVLink);
+  col->addWidget(mvBtn);
+  auto* mvFileBtn = quietButton(QString::fromUtf8("Aus WoW übernehmen (ohne Kopieren)"));
+  connect(mvFileBtn, &QPushButton::clicked, this, &CharacterIoTab::importMVLinkFromGame);
+  col->addWidget(mvFileBtn);
+
   // --- Armory
   col->addSpacing(4);
   col->addWidget(sectionLabel(QString::fromUtf8("ARMORY")));
@@ -222,6 +242,37 @@ void CharacterIoTab::importWowhead()
   // box the menu path shows would only be a second thing to click away.
   const QString err = menus_->importWowheadDressingRoom(url, false);
   setStatus(err.isEmpty() ? QString::fromUtf8("Charakter übernommen.") : err, !err.isEmpty());
+}
+
+void CharacterIoTab::importMVLink()
+{
+  if (!menus_)
+    return;
+  const QString code = mvlinkCode_->text().trimmed();
+  if (code.isEmpty()) {
+    setStatus(QString::fromUtf8("Bitte zuerst den Code aus dem Addon einfügen."), true);
+    return;
+  }
+  const QString err = menus_->importMVLinkCode(code, true);
+  if (err.isEmpty())
+    setStatus(QString::fromUtf8("Look aus dem Spiel übernommen."), false);
+  else
+    setStatus(err, true);
+}
+
+void CharacterIoTab::importMVLinkFromGame()
+{
+  if (!menus_)
+    return;
+  // No copying: read the addon's SavedVariables directly. Only as fresh as the last
+  // /reload or logout, because that is when WoW writes the file -- the status line says
+  // so rather than leaving the user wondering why nothing changed.
+  const QString err = menus_->importMVLinkFromGame(QString(), true);
+  if (err.isEmpty())
+    setStatus(QString::fromUtf8("Look aus WoW übernommen (Stand: letztes /reload "
+                                "oder Ausloggen)."), false);
+  else
+    setStatus(err, true);
 }
 
 void CharacterIoTab::importArmory()
