@@ -232,6 +232,10 @@ function MVLink:BuildUI()
     f.edit:SetFocus(); f.edit:HighlightText()
   end)
 
+  local setBtn = button("EINSTELLUNGEN", 130, false)
+  setBtn:SetPoint("BOTTOMLEFT", showBtn, "BOTTOMRIGHT", 8, 0)
+  setBtn:SetScript("OnClick", function() MVLink:ToggleSettings() end)
+
   local storeBtn = button("FÜR MODELVIEWER ABLEGEN", 220, false)
   storeBtn:SetPoint("BOTTOMRIGHT", -16, 14)
   storeBtn:SetScript("OnClick", function()
@@ -416,3 +420,109 @@ loader:SetScript("OnEvent", function(_, _, name)
   b:SetScript("OnLeave", GameTooltip_Hide)
   MVLink.wardrobeButton = b
 end)
+
+-- --------------------------------------------------------------------------------------
+-- Settings and history (mockups 1d / 1e), reachable from the main window.
+
+local function checkbox(parent, label, key, default)
+  local c = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
+  c:SetSize(20, 20)
+  local t = fs(c, 10, C.text)
+  t:SetPoint("LEFT", c, "RIGHT", 4, 0)
+  t:SetText(label)
+  c:SetScript("OnShow", function(s)
+    MVLinkDB = MVLinkDB or {}
+    if MVLinkDB[key] == nil then MVLinkDB[key] = default end
+    s:SetChecked(MVLinkDB[key])
+  end)
+  c:SetScript("OnClick", function(s)
+    MVLinkDB = MVLinkDB or {}
+    MVLinkDB[key] = s:GetChecked() and true or false
+  end)
+  return c
+end
+
+function MVLink:BuildSettings()
+  if self.settings then return self.settings end
+
+  local f = CreateFrame("Frame", "MVLinkSettings", UIParent)
+  f:SetSize(430, 300)
+  f:SetPoint("CENTER", 120, 0)
+  f:SetMovable(true); f:EnableMouse(true); f:RegisterForDrag("LeftButton")
+  f:SetScript("OnDragStart", f.StartMoving)
+  f:SetScript("OnDragStop", f.StopMovingOrSizing)
+  f:SetFrameStrata("DIALOG")
+  f:Hide()
+  tint(f, C.bg, 0.96)
+  hairline(f, C.line, 0.8)
+  tinsert(UISpecialFrames, "MVLinkSettings")
+
+  local title = fs(f, 12, C.text, "OUTLINE")
+  title:SetPoint("TOPLEFT", 16, -14)
+  title:SetText("EINSTELLUNGEN")
+
+  local close = CreateFrame("Button", nil, f, "UIPanelCloseButton")
+  close:SetPoint("TOPRIGHT", -4, -4)
+  close:SetScript("OnClick", function() f:Hide() end)
+
+  local w = 430 - 32
+  heading(f, "01", "VERHALTEN", w):SetPoint("TOPLEFT", 16, -44)
+
+  local cb1 = checkbox(f, "Beim Ausloggen automatisch ablegen", "autoStore", true)
+  cb1:SetPoint("TOPLEFT", 16, -62)
+  local cb2 = checkbox(f, "Minimap-Knopf zeigen", "minimap", true)
+  cb2:SetPoint("TOPLEFT", 16, -86)
+  cb2:HookScript("OnClick", function(s)
+    if MVLink.minimapButton then MVLink.minimapButton:SetShown(s:GetChecked()) end
+  end)
+
+  heading(f, "02", "ABLAGE FÜR MODELVIEWER", w):SetPoint("TOPLEFT", 16, -122)
+
+  -- The path is built from the account name, which is the one piece ModelViewer has to
+  -- find on its own -- showing it here turns "it cannot find the file" into something
+  -- the user can compare against.
+  local pathBox = panel(f, w, 40)
+  pathBox:SetPoint("TOPLEFT", 16, -140)
+  f.pathText = fs(pathBox, 9, C.cyanDim)
+  f.pathText:SetPoint("TOPLEFT", 8, -6)
+  f.pathText:SetWidth(w - 16)
+  f.pathText:SetJustifyH("LEFT")
+  f.stamp = fs(f, 9, C.dim)
+  f.stamp:SetPoint("TOPLEFT", 16, -186)
+
+  local storeNow = CreateFrame("Button", nil, f)
+  storeNow:SetSize(140, 22)
+  storeNow:SetPoint("TOPLEFT", 16, -206)
+  tint(storeNow, C.cyan, 0.22); hairline(storeNow, C.cyan, 0.9)
+  local sn = fs(storeNow, 10, C.cyanDim); sn:SetPoint("CENTER"); sn:SetText("JETZT ABLEGEN")
+  storeNow:SetScript("OnClick", function()
+    MVLink:Store()
+    MVLink:RefreshSettings()
+    print("|cff3ae2ffMVLink|r: bereitgelegt — wirksam nach /reload oder Ausloggen.")
+  end)
+
+  heading(f, "03", "SLASH", w):SetPoint("TOPLEFT", 16, -240)
+  local cmds = fs(f, 9, C.dim)
+  cmds:SetPoint("TOPLEFT", 16, -258)
+  cmds:SetJustifyH("LEFT")
+  cmds:SetText("/mvlink — Fenster\n/mvlink store — ablegen\n/mvlink debug — Slots im Chat")
+
+  self.settings = f
+  return f
+end
+
+function MVLink:RefreshSettings()
+  local f = self.settings
+  if not f then return end
+  -- GetRealmName/account: the folder is WTF\Account\<ACCOUNT>\SavedVariables. The account
+  -- name is not exposed to addons, so the placeholder is honest about that.
+  f.pathText:SetText("WTF\Account\<Account>\SavedVariables\MVLink.lua")
+  f.stamp:SetText(MVLinkDB and MVLinkDB.updatedAt
+                    and ("Zuletzt geschrieben " .. MVLinkDB.updatedAt)
+                    or "Noch nichts abgelegt")
+end
+
+function MVLink:ToggleSettings()
+  local f = self:BuildSettings()
+  if f:IsShown() then f:Hide() else self:RefreshSettings(); f:Show() end
+end
