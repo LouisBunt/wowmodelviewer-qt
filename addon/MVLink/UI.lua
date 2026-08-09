@@ -52,9 +52,24 @@ local function panel(parent, w, h)
   return f
 end
 
+-- SetFont takes (file, height, flags) and all three are required: passing nil for flags
+-- raises "bad argument #3", and since every label in the window goes through here, that
+-- one nil produced a window with nothing in it. Empty string is the "no flags" value.
+-- The font file is resolved defensively too -- STANDARD_TEXT_FONT is not guaranteed to
+-- exist on every client, and a nil there fails the same way.
+local FONT = STANDARD_TEXT_FONT or [[Fonts\FRIZQT__.TTF]]
+
+local function setFont(obj, size, flags)
+  local ok = pcall(obj.SetFont, obj, FONT, size, flags or "")
+  if not ok then
+    -- Whatever went wrong, a readable default beats an invisible frame.
+    pcall(obj.SetFontObject, obj, "GameFontNormal")
+  end
+end
+
 local function fs(parent, size, colour, flags)
   local t = parent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-  t:SetFont(STANDARD_TEXT_FONT, size, flags)
+  setFont(t, size, flags)
   t:SetTextColor(unpack(colour or C.text))
   return t
 end
@@ -196,7 +211,7 @@ function MVLink:BuildUI()
   local edit = CreateFrame("EditBox", nil, codeBox)
   edit:SetPoint("TOPLEFT", 8, -6); edit:SetSize(W - 52, 34)
   edit:SetMultiLine(true)
-  edit:SetFont(STANDARD_TEXT_FONT, 10)
+  setFont(edit, 10)
   edit:SetTextColor(unpack(C.cyanDim))
   edit:SetAutoFocus(false)
   edit:SetScript("OnEscapePressed", function(s) s:ClearFocus(); f:Hide() end)
@@ -406,7 +421,7 @@ loader:SetScript("OnEvent", function(_, _, name)
   bg:SetAllPoints()
   bg:SetColorTexture(C.cyan[1], C.cyan[2], C.cyan[3], 0.20)
   local t = b:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-  t:SetFont(STANDARD_TEXT_FONT, 11)
+  setFont(t, 11)
   t:SetTextColor(unpack(C.cyanDim))
   t:SetPoint("CENTER")
   t:SetText("AN MODELVIEWER")
