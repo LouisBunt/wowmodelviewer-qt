@@ -35,6 +35,8 @@ public:
 
 private:
   void importWowhead();
+  void importMVLink();          // code from the in-game addon
+  void importMVLinkFromGame();  // ... or straight out of its SavedVariables
   void importArmory();
   void exportForBlender();
   void setStatus(const QString& text, bool error);
@@ -47,6 +49,7 @@ private:
   ExportController* exporters_ = nullptr;
   GLHost* canvas_ = nullptr;
   QLineEdit* wowheadUrl_ = nullptr;
+  QLineEdit* mvlinkCode_ = nullptr;
   QLineEdit* armoryUrl_ = nullptr;
   QLabel* status_ = nullptr;
 };
