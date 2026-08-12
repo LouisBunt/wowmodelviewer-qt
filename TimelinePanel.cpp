@@ -1,6 +1,7 @@
 #include "Theme.h"
 #include "TimelinePanel.h"
 
+#include <algorithm>
 #include <map>
 
 #include <QComboBox>
@@ -233,8 +234,12 @@ void TimelinePanel::applyAnimation(int index)
   // The neutral row (no item data): hold the bind pose.
   const QVariant id = animList_->itemData(index);
   if (!id.isValid()) {
+    // SetAnim before Pause, and reset currentAnim with it: animList[0].AnimID otherwise
+    // still points at the clip chosen last, and GLHost's per-frame follow-up would drag
+    // the pose straight back to it instead of holding the rest pose.
+    am->SetAnim(0, 0, 0);
     am->Pause(true);
-    am->SetFrame(0);
+    model_->currentAnim = 0;
     scrubber_->setRange(0, 0);
     scrubber_->setValue(0);
     if (playButton_)
@@ -248,12 +253,17 @@ void TimelinePanel::applyAnimation(int index)
   const int animIndex = id.toInt();
   if (animIndex < 0 || animIndex >= (int)model_->anims.size())
     return;                                     // SetAnim would index anims[] out of range
+  // Set alongside the AnimManager, so the very first frame after the choice is already the
+  // right pose; GLHost keeps it in step from then on.
+  model_->currentAnim = (size_t)animIndex;
   am->SetAnim(0, (unsigned int)animIndex, 0);
   am->Play();
   if (playButton_)
     playButton_->setText(QString::fromUtf8("⏸"));
 
-  scrubber_->setRange(0, (int)am->GetFrameCount());
+  // Last valid frame is length-1, and a clip reporting 0 frames would otherwise produce
+  // setRange(0, -1).
+  scrubber_->setRange(0, std::max(0, (int)am->GetFrameCount() - 1));
 }
 
 void TimelinePanel::tick()

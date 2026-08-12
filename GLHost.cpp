@@ -366,8 +366,36 @@ void GLHost::tick()
 {
   if (!videoReady_)
     return;
-  if (model_)
-    model_->update(16);
+
+  // Three things the wx canvas did here and this one never did (ModelCanvas::Render,
+  // modelcanvas.cpp:1497-1521). Each was a separate visible fault:
+  //
+  // 1. AnimManager::Tick() does not check Paused itself -- the gate sat in the canvas.
+  //    Without it the pause button only ever changed its own glyph.
+  // 2. Only model_ was ticked, never root_. Attachment::tick() passes update() down to
+  //    the children, so weapons and shoulders stood frozen on frame 0 while the body moved.
+  // 3. WoWModel::draw() renders anims[currentAnim] exclusively (WoWModel.cpp:2495/2501),
+  //    and currentAnim was left at its constructed 0 forever. The clock ran on the clip you
+  //    picked, the pose came from clip 0 -- which is why every animation looked like the
+  //    same short loop no matter what was selected.
+  //
+  // update(0) rather than skipping the call: ParticleSystem::update(0) still refreshes
+  // particle colours after a skin change, so a paused model does not go stale.
+  int dt = 16;
+  if (model_ && model_->animManager && model_->animManager->IsPaused())
+    dt = 0;
+
+  if (root_)
+    root_->tick((float)dt);
+  else if (model_)
+    model_->update(dt);
+
+  // GetAnim() returns animList[PlayIndex].AnimID -- the same anims[] index SetAnim takes
+  // (AnimManager.cpp:71), so this follows chained sequences too. Here rather than in the
+  // timeline's 60 ms UI timer, because the renderer reads it every frame.
+  if (model_ && model_->animManager && model_->animated)
+    model_->currentAnim = model_->animManager->GetAnim();
+
   ++frame_;
   render();
 
