@@ -2,6 +2,7 @@
 
 #include <algorithm>
 
+#include <QCoreApplication>
 #include <QDateTime>
 #include <QDir>
 #include <QFile>
@@ -172,4 +173,89 @@ std::vector<QString> mvlink_saved_variable_paths(const QString& wowInstallFolder
     return QFileInfo(a).lastModified() > QFileInfo(b).lastModified();
   });
   return found;
+}
+
+// --------------------------------------------------------------------------------------
+
+namespace {
+
+// Beside the exe once installed; in the source tree while developing.
+QString addonSourceDir()
+{
+  const QString packaged = QCoreApplication::applicationDirPath() + "/addon/MVLink";
+  if (QFileInfo(packaged + "/MVLink.toc").isFile())
+    return packaged;
+  const QString dev = QStringLiteral("addon/MVLink");
+  if (QFileInfo(dev + "/MVLink.toc").isFile())
+    return QFileInfo(dev).absoluteFilePath();
+  return QString();
+}
+
+// Only the addon's own files, and only the kinds it consists of. A blanket recursive copy
+// would happily carry along whatever else ended up in that folder.
+bool copyAddonTree(const QString& from, const QString& to, QString* error)
+{
+  QDir().mkpath(to);
+  QDir src(from);
+  for (const QFileInfo& fi :
+       src.entryInfoList(QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot)) {
+    const QString target = to + "/" + fi.fileName();
+    if (fi.isDir()) {
+      if (!copyAddonTree(fi.absoluteFilePath(), target, error))
+        return false;
+      continue;
+    }
+    if (fi.suffix() != "lua" && fi.suffix() != "toc" && fi.suffix() != "xml")
+      continue;
+    // Overwrite: this is an update as often as it is a first install, and QFile::copy
+    // refuses to write over an existing file.
+    QFile::remove(target);
+    if (!QFile::copy(fi.absoluteFilePath(), target)) {
+      if (error)
+        *error = QObject::tr("»%1« ließ sich nicht schreiben. Läuft WoW gerade, oder fehlen "
+                             "Schreibrechte im Spielordner?")
+                   .arg(QDir::toNativeSeparators(target));
+      return false;
+    }
+  }
+  return true;
+}
+
+}  // namespace
+
+QString mvlink_install_addon(const QString& wowInstallFolder, QString* error)
+{
+  if (wowInstallFolder.isEmpty()) {
+    fail(error, QObject::tr("Der WoW-Ordner ist nicht bekannt."));
+    return QString();
+  }
+
+  const QString source = addonSourceDir();
+  if (source.isEmpty()) {
+    fail(error, QObject::tr("Das MVLink-Addon liegt nicht neben der Anwendung "
+                            "(Ordner »addon\\MVLink«)."));
+    return QString();
+  }
+
+  // The flavour folder, not the installation root: addons live under _retail_ (or _classic_
+  // and friends). Retail first, because that is what the addon's Interface version targets;
+  // if this installation has none, there is nowhere sensible to put it.
+  QString flavour;
+  const QDir base(wowInstallFolder);
+  const QStringList flavours = base.entryList(QStringList() << "_*_", QDir::Dirs);
+  if (flavours.contains("_retail_"))
+    flavour = "_retail_";
+  else if (!flavours.isEmpty())
+    flavour = flavours.first();
+  else {
+    fail(error, QObject::tr("In »%1« steckt kein Spielordner wie »_retail_«. Ist das wirklich "
+                            "der Ordner, in dem World of Warcraft installiert ist?")
+                  .arg(QDir::toNativeSeparators(wowInstallFolder)));
+    return QString();
+  }
+
+  const QString dest = wowInstallFolder + "/" + flavour + "/Interface/AddOns/MVLink";
+  if (!copyAddonTree(source, dest, error))
+    return QString();
+  return QDir::toNativeSeparators(dest);
 }
