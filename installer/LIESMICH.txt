@@ -81,12 +81,19 @@ Weitere Optionen, vor allem zum Pruefen ohne Mausbedienung:
     --set <id>                 Item-Set anlegen
     --wowhead <url|liste>      Outfit/Transmog-Set abrufen oder Item-Liste anlegen
     --dressing-room <url>      Anprobe-Link importieren (mit Ausruestung)
+    --mvlink <code|datei>      Aussehen aus dem MVLink-Addon uebernehmen: entweder der
+                               Code selbst (MVM1:...) oder der Pfad auf dessen
+                               SavedVariables-Datei
+    --install-mvlink-addon     MVLink-Addon nach WoW installieren und beenden
     --clips <id>[,<id>...]     Animationsclips fuer den Export waehlen
     --export <format>,<datei>  ohne Dialog exportieren
     --armory <url>             Armory-Charakter ohne Dialog importieren
     --install-blender-addon    Blender-Add-on installieren und beenden
     --grid                     Gitter einschalten
     --shot <datei.png>         nach ~1,5 s das GL-Bild speichern und beenden
+    --shot-frame <n>           statt nach ~1,5 s bei Bild n auslesen. Der Takt ist fest,
+                               Bild n also immer derselbe Moment -- zwei Laeufe mit
+                               verschiedenen Nummern zeigen, ob sich etwas bewegt
 
 
 Bedienung
@@ -104,37 +111,53 @@ Menueleiste oben: Datei, Ansicht, Charakter, Export, Hilfe -- mit Tastenkuerzeln
 (F7/F8 Charakter speichern und laden, F5/F6/F9 Ausruestung, F12 Screenshot,
 Strg+1..4 Kameraansichten, Strg+G Gitter).
 
-Werkzeugzeile darunter: Anpassen, Charakter, Licht, Kamera, Hintergrund -- das
-sind anklickbare Schalter, keine Beschriftungen. Rechts daneben "Charakter" und
+Werkzeugzeile darunter: Anpassen, Import, Licht, Kamera, Hintergrund -- das sind
+anklickbare Schalter, keine Beschriftungen. Rechts daneben "Charakter" und
 "Nur Teil": damit schaltest du zwischen ganzer Figur und einem einzelnen Teil um,
 ohne die Ausruestungsliste aufklappen zu muessen.
 
-Rechts im Inspector: Charakter (Anpassung, Ausruestung, sichtbare Teile,
-Daemonenjaeger-Schalter, Wappenrock), Licht (vier Lichtquellen mit Farbe, Typ
-und Position), Import/Export und Blender.
+Rechts im Inspector: Anpassen (Aussehen, Ausruestung, sichtbare Teile,
+Daemonenjaeger-Schalter, Wappenrock), Import (MVLink, Armory, gespeicherte
+Charaktere, Blender), Licht (vier Lichtquellen mit Farbe, Typ und Position)
+und Export.
 
 Unten die Zeitleiste: Animationsauswahl, Abspielsteuerung, Tempo und Scrubber.
+Ohne Auswahl steht das Modell in der Ruhepose und bewegt sich nicht -- das ist
+der Zustand fuer Standbilder und Export. Die Pause haelt eine laufende Animation
+dort an, wo sie gerade ist.
 
-Fenster: Die Titelleiste ist selbstgezeichnet und zeigt Name und Version. Ziehen
-verschiebt, Doppelklick maximiert; rechts sitzen Minimieren, Maximieren und
-Schliessen. Groessenaenderung geht ueber den Griff rechts unten.
+Fenster: Die Titelleiste ist selbstgezeichnet und zeigt Name und Version. Steht
+World of Warcraft zur Verfuegung, wird der Schriftzug in der Zierschrift des
+Spiels gesetzt; sonst in der mitgelieferten. Ziehen verschiebt, Doppelklick
+maximiert; rechts sitzen Minimieren, Maximieren und Schliessen.
+Groessenaenderung geht ueber den Griff rechts unten.
 
 
-Charakter aus der Wowhead-Anprobe holen
----------------------------------------
-Charakter > "Wowhead-Look importieren", dann den Link einfuegen. Angenommen
-werden:
+Aussehen direkt aus dem Spiel holen (MVLink)
+-------------------------------------------
+MVLink ist ein kleines WoW-Addon, das mitgeliefert wird. Es liest, was deine
+Figur gerade traegt -- auch das, was du im Transmog-Fenster nur anprobiert und
+noch nicht gekauft hast -- und macht daraus einen kurzen Code.
 
-- Anprobe-Links (dressing-room), also die mit dem '#' und einer langen
-  Zeichenfolge dahinter. Der Look steckt komplett in diesem Teil der Adresse und
-  wird lokal ausgewertet -- es wird dafuer nichts abgerufen. Rasse, Geschlecht,
-  Anpassungen und die getragenen Teile samt Farbvariante kommen mit.
-- Links auf ein gespeichertes Outfit oder ein Transmog-Set. Diese Seiten werden
-  abgerufen; bei einer Set-Seite wird pro Slot das erste Stueck genommen, da
-  solche Seiten mehrere Varianten je Slot listen.
-- eine einfach eingefuegte Liste von Item-IDs.
+Einrichten: Reiter "Import", Knopf "MVLink-Addon in WoW installieren". Danach im
+Spiel unter Addons aktivieren und einmal /reload. Das Addon selbst oeffnest du
+mit /mvlink oder ueber den Knopf an der Minimap.
 
-Nicht zuordenbare IDs werden gezaehlt und gemeldet, nicht verschluckt.
+Zwei Wege, dasselbe Ergebnis:
+
+- Code kopieren. Im Spiel /mvlink, Code markieren, Strg+C, hier im Reiter
+  "Import" einfuegen. Wirkt sofort.
+- Ablage lesen. Knopf "Direkt aus WoW holen" -- das Programm sucht die Datei
+  des Addons selbst. Achtung: WoW schreibt sie erst beim /reload oder Ausloggen,
+  der Stand ist also so alt wie dein letztes /reload.
+
+Uebertragen werden Rasse, Geschlecht und die getragenen Teile samt Farbvariante
+(normal, heroisch, mythisch, LFR). Gesicht, Frisur und Hautfarbe kann ein Addon
+nicht auslesen -- die bleiben so, wie sie hier eingestellt sind.
+
+Kommt ein Code ohne ein einziges Teil an, wird er abgelehnt statt stillschweigend
+eine nackte Figur zu bauen. Im Spiel zeigt /mvlink debug dann Slot fuer Slot, was
+das Addon vorgefunden hat.
 
 
 Einzelnes Teil ansehen und exportieren
