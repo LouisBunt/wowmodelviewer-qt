@@ -42,6 +42,11 @@ public:
   void setBuildLabel(const QString& text);
   void setPathLabel(const QString& text);
 
+  // Re-set the brand line in a different family. Separate from construction because the
+  // face we want lives in the game archives, which are not mounted when this window is
+  // built. Does nothing if the family is empty, so the caller need not check.
+  void setDisplayFont(const QString& family, int pointSize = -1);
+
   // Fill the browser from the game directory once CASC is mounted.
   void populateTree();
   void setCategory(int index);
@@ -121,6 +126,7 @@ private:
   GLHost* canvas_ = nullptr;
   CharacterPanel* charPanel_ = nullptr;
   TimelinePanel* timeline_ = nullptr;
+  QLabel* brandLabel_ = nullptr;     // the product name in the title bar
   QLabel* buildLabel_ = nullptr;
   QLabel* pathLabel_ = nullptr;
   QLabel* exportButton_ = nullptr;   // HUD, disabled while no model is loaded

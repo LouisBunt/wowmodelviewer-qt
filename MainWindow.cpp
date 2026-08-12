@@ -6,6 +6,7 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QMouseEvent>
+#include <QPainter>
 #include <QSizeGrip>
 #include <QLineEdit>
 #include <QMenuBar>
@@ -42,6 +43,65 @@ static QString dispF() { static QString f = pick({"Cinzel", "Georgia"}, "serif")
 static QString iconF() { static QString f = pick({"Segoe UI Symbol", "Segoe UI"}, "sans-serif"); return f; }
 
 static void styled(QWidget* w) { w->setAttribute(Qt::WA_StyledBackground, true); }
+
+// The title bar's surface.
+//
+// Painted rather than styled: a stylesheet can do a gradient but not a texture, and the
+// other way round -- a PNG in a .qrc -- would add a binary asset, a resource file and a
+// build step for something that is twenty lines of arithmetic. The grain is fixed-seed
+// value noise, so the pattern is identical on every run and screenshots stay comparable.
+//
+// To the rest of the window this has to remain an ordinary QWidget: MainWindow installs an
+// event filter on it and reads the "isTitleBar" property to drag and to maximise. Handling
+// mouse events here would take them away from that filter.
+class TitleBarSurface : public QWidget
+{
+public:
+  explicit TitleBarSurface(QWidget* parent = nullptr) : QWidget(parent) {}
+
+protected:
+  void paintEvent(QPaintEvent*) override
+  {
+    QPainter p(this);
+    QLinearGradient g(0, 0, 0, height());
+    g.setColorAt(0.0, QColor(tok::kTitleTop));
+    g.setColorAt(1.0, QColor(tok::kTitleBot));
+    p.fillRect(rect(), g);
+    p.fillRect(rect(), QBrush(grain()));
+    // The underline the stylesheet used to carry. Drawn last so the grain cannot mottle it.
+    p.fillRect(0, height() - 1, width(), 1, QColor(tok::kBorder2));
+  }
+
+private:
+  // Cached as a QImage rather than a QPixmap on purpose: a function-local static QPixmap is
+  // destroyed after QApplication has gone, and tearing down a pixmap without a platform
+  // plugin is a well-known way to crash on exit. QBrush takes a QImage directly, so there
+  // is no reason to hold a pixmap at all.
+  static const QImage& grain()
+  {
+    static const QImage tile = [] {
+      const int n = 64;
+      QImage img(n, n, QImage::Format_ARGB32_Premultiplied);
+      img.fill(Qt::transparent);
+      quint32 s = 0x9e3779b9u;                  // fixed seed -- same grain every run
+      for (int y = 0; y < n; ++y) {
+        for (int x = 0; x < n; ++x) {
+          s ^= s << 13; s ^= s >> 17; s ^= s << 5;
+          const int v = int(s % 16u);
+          if (v < 10)
+            continue;                           // most pixels stay clean
+          // Both directions, and barely: across 38 px the bar should read as having a
+          // surface, not as being dirty. Lighter specks are rarer than darker ones.
+          const bool light = (s & 0x30000u) == 0;
+          img.setPixelColor(x, y, light ? QColor(255, 255, 255, v - 8)
+                                        : QColor(0, 0, 0, v + 6));
+        }
+      }
+      return img;
+    }();
+    return tile;
+  }
+};
 
 // Every inspector page scrolls; they are all longer than the column.
 static QWidget* wrapScroll(QWidget* body)
@@ -179,6 +239,25 @@ MainWindow::MainWindow()
   col->addWidget(buildStatusBar());
 }
 
+void MainWindow::setDisplayFont(const QString& family, int pointSize)
+{
+  if (!brandLabel_ || family.isEmpty())
+    return;
+  QFont f = brandLabel_->font();
+  f.setFamily(family);
+  if (pointSize > 0)
+    f.setPointSize(pointSize);
+  // mk() sets the brand line DemiBold, which suits Cinzel. A display face out of the game
+  // archives ships one weight, and Qt would fake the bold by smearing the outlines -- so
+  // ask for the weight the file actually has.
+  f.setBold(false);
+  f.setWeight(QFont::Normal);
+  // The 1.3 px of tracking is tuned for Cinzel's caps; a face with its own wide
+  // sidebearings only reads as gappy at that value.
+  f.setLetterSpacing(QFont::AbsoluteSpacing, 0.6);
+  brandLabel_->setFont(f);
+}
+
 void MainWindow::setBuildLabel(const QString& text)
 {
   if (buildLabel_)
@@ -195,12 +274,11 @@ void MainWindow::setPathLabel(const QString& text)
 
 QWidget* MainWindow::buildTitleBar()
 {
-  auto* w = new QWidget;
-  styled(w);
+  // No stylesheet and no WA_StyledBackground here: TitleBarSurface::paintEvent draws the
+  // ground, the grain and the underline itself, and a stylesheet background would sit on
+  // top of all three.
+  auto* w = new TitleBarSurface;
   w->setFixedHeight(38);
-  w->setStyleSheet(QString(
-    "background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #14181e, stop:1 #0f1216);"
-    "border-bottom:1px solid %1;").arg(tok::kBorder2));
   auto* row = new QHBoxLayout(w);
   row->setContentsMargins(14, 0, 12, 0);
   row->setSpacing(14);
@@ -210,7 +288,10 @@ QWidget* MainWindow::buildTitleBar()
   brand->addWidget(icon(QString::fromUtf8("◆"), 16, tok::kAccent, "transparent"));
   // The name the product actually carries, not a fixed string that stopped being true
   // when it was renamed. Version beside it, quieter, so a screenshot always carries both.
-  brand->addWidget(mk(QString(WMV_APP_NAME).toUpper(), dispF(), 9, "#c9b6e8", true, 1.3));
+  // Kept, because the game's own display face is only reachable once the archives are
+  // mounted -- long after this runs. setDisplayFont() swaps it in then, or leaves it alone.
+  brandLabel_ = mk(QString(WMV_APP_NAME).toUpper(), dispF(), 9, "#c9b6e8", true, 1.3);
+  brand->addWidget(brandLabel_);
   brand->addWidget(mk(WMV_QT_VERSION, monoF(), 7, tok::kDim));
   row->addLayout(brand);
 

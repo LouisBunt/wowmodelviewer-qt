@@ -17,6 +17,7 @@
 #include <QDir>
 #include <QFile>
 #include <QFileDialog>
+#include <QFontDatabase>
 #include <QLabel>
 #include <QPainter>
 #include <QSettings>
@@ -469,6 +470,45 @@ int main(int argc, char** argv)
   trace("before initFromListfile");
   GAMEDIRECTORY.initFromListfile("../../../listfile.csv");
   trace("initFromListfile returned");
+
+  // The game's own display face for the title bar, read out of the player's installation
+  // exactly like every other asset. MORPHEUS.TTF belongs to Blizzard and is never shipped
+  // with this program -- if it is not there, this does nothing and the bundled face stays.
+  //
+  // Both routes are tried, not just the name: a name that fails to resolve is one failure
+  // mode, but a streaming installation can resolve it and then have no data behind it.
+  {
+    auto readAsset = [](GameFile* f) -> QByteArray {
+      if (!f || !f->open())
+        return QByteArray();
+      // Deep copy. GameFile::close() releases the buffer with delete[], so handing Qt a
+      // fromRawData view would leave it reading freed memory. The GameFile itself belongs
+      // to GAMEDIRECTORY and must not be deleted here.
+      const QByteArray bytes(reinterpret_cast<const char*>(f->getBuffer()),
+                             static_cast<int>(f->getSize()));
+      f->close();
+      return bytes;
+    };
+
+    QByteArray ttf = readAsset(GAMEDIRECTORY.getFile(QString("fonts/morpheus.ttf")));
+    if (ttf.isEmpty())
+      ttf = readAsset(GAMEDIRECTORY.getFile((uint)615962));      // fonts/morpheus.ttf
+    if (ttf.isEmpty()) {
+      trace("morpheus.ttf not in the game data -- keeping the bundled display face");
+    } else {
+      const int fid = QFontDatabase::addApplicationFontFromData(ttf);
+      const QStringList fams = fid >= 0 ? QFontDatabase::applicationFontFamilies(fid)
+                                        : QStringList();
+      if (fams.isEmpty()) {
+        trace("morpheus.ttf read but rejected by Qt -- keeping the bundled display face");
+      } else {
+        // The family name comes from the file, never guessed: Qt registers whatever the
+        // face calls itself, and asking for the wrong name silently substitutes.
+        win->setDisplayFont(fams.first(), 12);
+        trace("title face from the game data: " + fams.first());
+      }
+    }
+  }
 
   // The database, texture regions and race registry. Without these WoWModel cannot
   // resolve a model file to a race, infos.raceID stays -1, and character models draw
