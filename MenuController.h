@@ -68,6 +68,11 @@ public:
   // empty takes the worn look.
   QString importMVLinkFromGame(const QString& outfitName, bool interactive);
 
+  // Copies the bundled MVLink addon into the game's AddOns folder. Empty return means it
+  // worked, and `destOut` then holds where it landed -- worth showing, because someone with
+  // two installations needs to know which one just got it.
+  QString installMVLinkAddon(QString* destOut = nullptr);
+
   // The .chr file dialogs. Public because the character tab offers the same two
   // buttons; both entry points run the identical code rather than a second copy.
   void loadCharacter() { loadCharacterFile(false); }

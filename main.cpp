@@ -337,7 +337,8 @@ int main(int argc, char** argv)
   // Scripted runs must never stop on a modal dialog; decided here, before anything can fail.
   for (int i = 1; i < argc; ++i) {
     const QString a = QString::fromLocal8Bit(argv[i]);
-    if (a == "--shot" || a == "--export" || a == "--install-blender-addon") {
+    if (a == "--shot" || a == "--export" || a == "--install-blender-addon"
+        || a == "--install-mvlink-addon") {
       g_scripted = true;
       break;
     }
@@ -667,7 +668,20 @@ int main(int argc, char** argv)
     }
   }
 
-  // --tab <0..3> opens an inspector tab (0 Anpassen, 1 Charakter, 2 Licht, 3 Export).
+  // The same for the game side of MVLink. Install and quit, exit code carries the outcome.
+  for (int i = 1; i < argc; ++i) {
+    if (QString(argv[i]) == "--install-mvlink-addon") {
+      // dataFolder, not the settings key: it is the folder this run actually resolved,
+      // command line included, so the flag installs where this run is looking.
+      QString err;
+      const QString dest = mvlink_install_addon(dataFolder, &err);
+      trace(dest.isEmpty() ? QString("mvlink addon install FAILED: %1").arg(err)
+                           : QString("mvlink addon installed into %1").arg(dest));
+      return dest.isEmpty() ? 1 : 0;
+    }
+  }
+
+  // --tab <0..3> opens an inspector tab (0 Anpassen, 1 Import, 2 Licht, 3 Export).
   // Same purpose as --category: a tab that can only be reached by clicking cannot be
   // checked from a script. Applied late, so it wins over the default tab.
   for (int i = 1; i < argc - 1; ++i) {

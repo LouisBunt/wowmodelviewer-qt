@@ -48,4 +48,13 @@ bool mvlink_read_saved_variables(const QString& path, const QString& outfitName,
 // found, newest first -- one per account, and someone with two accounts has two.
 std::vector<QString> mvlink_saved_variable_paths(const QString& wowInstallFolder);
 
+// Copies the bundled addon into the game's AddOns folder.
+//
+// The setup cannot do this: at install time nobody knows where World of Warcraft lives, and
+// the game folder is only chosen later, inside the application. So the addon travels beside
+// the exe and is put in place from here -- the same arrangement the Blender add-on uses.
+//
+// Returns the destination on success, an empty string on failure with `error` filled in.
+QString mvlink_install_addon(const QString& wowInstallFolder, QString* error);
+
 #endif

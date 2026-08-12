@@ -36,6 +36,7 @@ public:
 private:
   void importMVLink();          // code from the in-game addon
   void importMVLinkFromGame();  // ... or straight out of its SavedVariables
+  void installMVLinkAddon();    // put the bundled addon into the game's AddOns folder
   void importArmory();
   void exportForBlender();
   void setStatus(const QString& text, bool error);

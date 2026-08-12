@@ -161,6 +161,13 @@ if ($SkipListfile) {
 # source to copy from. Without this the button only worked from a development checkout.
 StageTree (Join-Path $upstream "blender_addon\io_import_wmv_fbx") "blender_addon\io_import_wmv_fbx"
 
+# --- WoW add-on (MVLink) -----------------------------------------------------
+# Same arrangement, same reason: the setup cannot place this, because the game folder is
+# not known until the application asks for it. It travels next to the exe and the button in
+# the Import & Export tab copies it into <WoW>\_retail_\Interface\AddOns. Without this the
+# package shipped the ModelViewer half of MVLink and none of the game half.
+StageTree (Join-Path $Root "addon\MVLink") "addon\MVLink"
+
 # --- documentation -----------------------------------------------------------
 # GPLv3: the licence travels with the binary, not just with the source.
 Stage (Join-Path $Root "LICENSE") "LICENSE.txt"

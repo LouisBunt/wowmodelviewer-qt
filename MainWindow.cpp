@@ -391,7 +391,7 @@ QWidget* MainWindow::buildToolBar()
     // Same words as the inspector tabs they open -- a button called "Modell" that
     // lands on a tab called "Anpassen" reads like a misclick.
     { "Anpassen",    ToolModel      },
-    { "Charakter",   ToolCharacter  },
+    { "Import",      ToolCharacter  },
     { "Licht",       ToolLight      },
     { "Kamera",      ToolCamera     },
     { "Hintergrund", ToolBackground }
@@ -945,7 +945,11 @@ QWidget* MainWindow::buildInspector()
   auto* tr = new QHBoxLayout(tabs);
   tr->setContentsMargins(0, 0, 0, 0);
   tr->setSpacing(0);
-  const char* names[] = {"Anpassen", "Charakter", "Licht", "Export"};
+  // "Import", not "Charakter": this tab is where a look comes IN -- MVLink, Armory, .chr --
+  // and "Charakter" already named the tool-bar button and the menu, so the one word pointed
+  // at three different places and at none of them helpfully. Somebody looking for the MVLink
+  // field had no reason to open it. The order is unchanged; --tab <0..3> indexes this.
+  const char* names[] = {"Anpassen", "Import", "Licht", "Export"};
   for (int i = 0; i < (int)(sizeof(names) / sizeof(names[0])); ++i) {
     auto* t = new QLabel(QString::fromLatin1(names[i]));
     t->setFixedHeight(38);

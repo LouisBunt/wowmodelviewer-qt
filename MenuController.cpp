@@ -1317,6 +1317,20 @@ QString MenuController::importMVLinkCode(const QString& code, bool interactive)
   return err;
 }
 
+QString MenuController::installMVLinkAddon(QString* destOut)
+{
+  QSettings settings(QString::fromLatin1(kSettingsFile), QSettings::IniFormat);
+  const QString wow = settings.value("game/installFolder").toString();
+
+  QString error;
+  const QString dest = mvlink_install_addon(wow, &error);
+  if (dest.isEmpty())
+    return error.isEmpty() ? tr("Das Addon ließ sich nicht installieren.") : error;
+  if (destOut)
+    *destOut = dest;
+  return QString();
+}
+
 QString MenuController::importMVLinkFromGame(const QString& outfitName, bool interactive)
 {
   // The install folder the application already knows -- asking again would be a second

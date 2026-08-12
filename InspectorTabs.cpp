@@ -120,7 +120,7 @@ CharacterIoTab::CharacterIoTab(MenuController* menus, ExportController* exporter
   // a website and pasted back; the addon reads what the character is actually wearing,
   // which is the same job done in one step. The decoder and the --dressing-room flag stay
   // for scripts and for the 56-case test corpus -- only the control is gone.
-  col->addWidget(sectionLabel(QString::fromUtf8("AUS DEM SPIEL")));
+  col->addWidget(sectionLabel(QString::fromUtf8("AUS DEM SPIEL — MVLINK-ADDON")));
   auto* mvTop = new QLabel(QString::fromUtf8(
     "Zwei Wege — beide führen zum selben Ergebnis:"));
   mvTop->setFont(QFont(uiFamily(), 8));
@@ -152,6 +152,21 @@ CharacterIoTab::CharacterIoTab(MenuController* menus, ExportController* exporter
   connect(mvBtn, &QPushButton::clicked, this, &CharacterIoTab::importMVLink);
   connect(mvlinkCode_, &QLineEdit::returnPressed, this, &CharacterIoTab::importMVLink);
   col->addWidget(mvBtn);
+
+  // Neither route works until the addon is actually in the game folder, and the setup
+  // cannot put it there -- at install time nobody knows where WoW lives. So it ships beside
+  // the exe and lands here, the same way the Blender add-on does.
+  col->addSpacing(2);
+  auto* mvInstallBtn = quietButton(QString::fromUtf8("MVLink-Addon in WoW installieren"));
+  connect(mvInstallBtn, &QPushButton::clicked, this, &CharacterIoTab::installMVLinkAddon);
+  col->addWidget(mvInstallBtn);
+  auto* mvInstallHint = new QLabel(QString::fromUtf8(
+    "Einmalig — danach im Spiel unter Addons aktivieren. Ein Update überschreibt die "
+    "Dateien; WoW sollte dabei geschlossen sein."));
+  mvInstallHint->setFont(QFont(uiFamily(), 8));
+  mvInstallHint->setWordWrap(true);
+  mvInstallHint->setStyleSheet(QString("color:%1; background:transparent;").arg(tok::kDim));
+  col->addWidget(mvInstallHint);
 
   // --- Armory
   col->addSpacing(4);
@@ -258,6 +273,22 @@ void CharacterIoTab::importMVLinkFromGame()
                                 "oder Ausloggen)."), false);
   else
     setStatus(err, true);
+}
+
+void CharacterIoTab::installMVLinkAddon()
+{
+  if (!menus_)
+    return;
+  QString dest;
+  const QString err = menus_->installMVLinkAddon(&dest);
+  if (!err.isEmpty()) {
+    setStatus(err, true);
+    return;
+  }
+  // The path is part of the message on purpose: if the game is installed twice, this is the
+  // only way to see which copy just got the addon.
+  setStatus(QString::fromUtf8("Addon installiert: %1 — in WoW /reload, dann /mvlink.")
+              .arg(dest), false);
 }
 
 void CharacterIoTab::importArmory()
