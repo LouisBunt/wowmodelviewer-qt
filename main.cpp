@@ -556,10 +556,23 @@ int main(int argc, char** argv)
   if (model)
     host->setModel(model);
 
+  // Its own pass, so --shot-frame may stand either side of --shot. A fixed frame number is
+  // what makes a screenshot reproducible: the tick is a constant 16 ms, so frame N is always
+  // the same instant of the clip. Two runs at different frames are the only way to tell a
+  // genuinely frozen model from a slowly moving one.
+  int shotFrame = 90;                                             // ~1.5 s of frames
+  for (int i = 1; i < argc - 1; ++i) {
+    if (QString(argv[i]) == "--shot-frame") {
+      const int n = QString::fromLocal8Bit(argv[i + 1]).toInt();
+      if (n > 0)
+        shotFrame = n;
+    }
+  }
+
   for (int i = 1; i < argc - 1; ++i) {
     const QString arg(argv[i]);
     if (arg == "--shot")
-      host->grabAfter(90, QString::fromLocal8Bit(argv[i + 1]));  // ~1.5 s of frames
+      host->grabAfter(shotFrame, QString::fromLocal8Bit(argv[i + 1]));
     else if (arg == "--view") {                                   // "<yaw>,<pitch>"
       const QStringList yp = QString::fromLocal8Bit(argv[i + 1]).split(',');
       if (yp.size() == 2) {
@@ -568,7 +581,11 @@ int main(int argc, char** argv)
       }
     }
   }
-  win->setBuildLabel(QString("CASC · %1").arg(config.version));
+  // Only major.minor.patch. The fourth field is Blizzard's five-digit build id (12.0.7.68974),
+  // which reads like a date, means nothing to anyone using this, and was the noisiest thing
+  // in the title bar. The pill itself stays: its green dot is the only place the window says
+  // "game data is mounted".
+  win->setBuildLabel(QString("CASC · %1").arg(config.version.section('.', 0, 2)));
   win->setPathLabel(file ? file->fullname()
                          : QString::fromUtf8("Kein Modell geladen — links im Baum eines wählen"));
 
