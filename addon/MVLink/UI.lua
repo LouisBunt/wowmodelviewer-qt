@@ -314,9 +314,13 @@ function MVLink:Select(index)
   end
   f.slotContent:SetHeight(math.max(y, 1))
 
+  -- worn counts what the character actually has on, n what could be read from it. The two
+  -- differing is the interesting case and the only one worth a sentence; the old wording
+  -- ("no appearance of their own") guessed at a cause we do not know.
   local hint = ("%d Teile."):format(n)
-  if look.missing > 0 then
-    hint = hint .. (" %d getragene Teile haben kein eigenes Aussehen."):format(look.missing)
+  if look.worn and look.worn > n then
+    hint = hint .. (" Achtung: %d Slots sind belegt, aber nur %d liessen sich lesen — "
+                    .. "/mvlink debug zeigt welche."):format(look.worn, n)
   end
   hint = hint .. "\nGesicht, Frisur und Hautfarbe kann ein Addon nicht auslesen — in "
               .. "ModelViewer bleiben sie, wie sie dort eingestellt sind."
