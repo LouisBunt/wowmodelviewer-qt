@@ -45,6 +45,14 @@ const char* const kAccentSel= "#1a1226";   // list row selection tint
 // White, not near-black: the old #17130a only worked because gold is a light colour.
 const char* const kOnAccent = "#ffffff";
 
+// --- title bar ------------------------------------------------------------------
+// Deliberately the darkest band in the window. It used to be the lightest (#14181e over
+// #0f1216), which put the frame in front of the content -- the opposite of what a frame
+// is for. The grain over it is drawn at runtime, not shipped as an image: a few lines of
+// paintEvent against a .qrc, a binary blob and a build step.
+const char* const kTitleTop  = "#0a0c10";
+const char* const kTitleBot  = "#050709";
+
 // --- signals ------------------------------------------------------------------
 const char* const kDanger   = "#ef4444";   // close button on hover
 const char* const kOk       = "#5bbd7a";   // the CASC pill's dot
