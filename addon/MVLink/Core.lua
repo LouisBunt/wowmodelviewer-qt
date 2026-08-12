@@ -117,17 +117,20 @@ function MVLink:ReadWornLook()
     raceID = select(3, UnitRace("player")) or 0,
     sex = (UnitSex("player") or 2) - 2,      -- UnitSex: 2 male, 3 female -> 0/1
     pieces = {},
-    missing = 0,
+    worn = 0,
   }
 
   for _, invSlot in ipairs(self.SLOT_ORDER) do
+    -- Counted separately from the pieces, because the two can disagree and the difference
+    -- is the only useful diagnosis. The old "missing" counter could not: it incremented
+    -- only when ReadSlot returned nil AND an item was equipped, and ReadSlot's last path
+    -- returns a piece for every equipped item unconditionally -- so it was always 0.
+    if GetInventoryItemID("player", invSlot) then
+      look.worn = look.worn + 1
+    end
     local piece = self:ReadSlot(invSlot)
     if piece then
       look.pieces[self.SLOT_MAP[invSlot]] = piece
-    elseif GetInventoryItemID("player", invSlot) then
-      -- Something IS worn here but produced nothing usable. Counted rather than silently
-      -- dropped, so the window can say the look is incomplete.
-      look.missing = look.missing + 1
     end
   end
   return look
@@ -145,7 +148,6 @@ function MVLink:ReadOutfit(outfitID)
     raceID = select(3, UnitRace("player")) or 0,
     sex = (UnitSex("player") or 2) - 2,
     pieces = {},
-    missing = 0,
   }
 
   local okList, list = pcall(function()
@@ -206,8 +208,30 @@ end
 function MVLink:Store()
   MVLinkDB = MVLinkDB or {}
   MVLinkDB.version = 1
+
+  local look = self:ReadWornLook()
+  local code = self:Encode(look)
+  local count = self:CountPieces(look)
+
+  -- A look with no pieces is useless to ModelViewer, which refuses it outright. Writing it
+  -- anyway would destroy a good code that is already in the file -- and Store() runs on
+  -- every login, so one login on a bank alt was enough to lose it. The old one is kept and
+  -- the reason recorded, rather than quietly leaving the newer timestamp on stale content.
+  if count == 0 and type(MVLinkDB.current) == "string"
+     and MVLinkDB.current:find("=%d+%.%d+") then
+    MVLinkDB.lastEmpty = date("%Y-%m-%d %H:%M:%S")
+    MVLinkDB.lastEmptyWorn = look.worn
+    print("|cffa855f7MVLink|r: Aussehen nicht lesbar (" .. look.worn
+          .. " Slots belegt, 0 erkannt) — der zuletzt gute Code bleibt erhalten. "
+          .. "/mvlink debug zeigt warum.")
+    return
+  end
+
   MVLinkDB.updatedAt = date("%Y-%m-%d %H:%M:%S")
-  MVLinkDB.current = self:Encode(self:ReadWornLook())
+  MVLinkDB.current = code
+  MVLinkDB.currentPieces = count
+  MVLinkDB.lastEmpty = nil
+  MVLinkDB.lastEmptyWorn = nil
 
   MVLinkDB.outfits = {}
   for _, id in ipairs(self:OutfitIDs()) do
@@ -272,8 +296,11 @@ f:SetScript("OnEvent", function(_, event)
     MVLink:Store()
   elseif event == "PLAYER_LOGOUT" then
     -- The last chance to catch changes made this session; SavedVariables are flushed
-    -- immediately after this returns.
-    MVLink:Store()
+    -- immediately after this returns. The settings checkbox writes autoStore and until now
+    -- nothing read it, so unticking it did nothing at all.
+    if not MVLinkDB or MVLinkDB.autoStore ~= false then
+      MVLink:Store()
+    end
   end
 end)
 
@@ -284,19 +311,39 @@ SlashCmdList["MVLINK"] = function(msg)
     MVLink:Store()
     print("|cffa855f7MVLink|r: bereitgelegt — wirksam nach /reload oder Ausloggen.")
   elseif cmd == "debug" then
-    -- One line per slot, for when the window says something the code does not.
+    -- EVERY slot, empty ones included, with the raw API answer beside the result.
+    --
+    -- The old version printed only slots that produced a piece, so an empty look printed
+    -- one header line and nothing else -- it could not tell "this slot is bare" from "the
+    -- API returned nothing for a slot that is not". That is exactly the question this
+    -- command exists to answer, so the raw GetInventoryItemID value is printed too, whether
+    -- or not anything came of it.
     local look = MVLink:ReadWornLook()
-    print(("|cffa855f7MVLink|r: race=%d sex=%d, %d Teile, %d ohne Aussehen")
-            :format(look.raceID, look.sex, MVLink:CountPieces(look), look.missing))
+    print(("|cffa855f7MVLink|r: race=%d sex=%d — %d/%d Slots belegt, %d Teile erkannt")
+            :format(look.raceID, look.sex, look.worn, #MVLink.SLOT_ORDER,
+                    MVLink:CountPieces(look)))
     for _, invSlot in ipairs(MVLink.SLOT_ORDER) do
       local p = look.pieces[MVLink.SLOT_MAP[invSlot]]
+      local rawID = GetInventoryItemID("player", invSlot)
+      local rawLink = GetInventoryItemLink("player", invSlot)
+      local state
       if p then
-        print(("  %-12s inv=%d mv=%d item=%d mod=%d  [%s]")
-                :format(MVLink.SLOT_NAME[invSlot] or "?", invSlot,
-                        MVLink.SLOT_MAP[invSlot], p.itemID, p.modID, p.src or "?"))
+        state = ("item=%d mod=%d [%s]"):format(p.itemID, p.modID, p.src or "?")
+      elseif rawID then
+        state = "|cffff5555TEIL GETRAGEN, ABER NICHTS ERKANNT|r"
+      else
+        state = "leer"
       end
+      print(("  %-12s inv=%2d  GetInventoryItemID=%s  link=%s  ->  %s")
+              :format(MVLink.SLOT_NAME[invSlot] or "?", invSlot,
+                      tostring(rawID), rawLink and "ja" or "nein", state))
     end
     print(MVLink:Encode(look))
+    if MVLink:CountPieces(look) == 0 then
+      print("|cffa855f7MVLink|r: Kein einziges Teil. Steht oben ueberall "
+            .. "GetInventoryItemID=nil, obwohl der Charakter angezogen ist, dann liefert "
+            .. "diese Spielversion die Werte nicht mehr so — bitte diese Ausgabe melden.")
+    end
   else
     MVLink:Toggle()
   end
