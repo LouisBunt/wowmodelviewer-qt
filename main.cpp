@@ -518,6 +518,31 @@ int main(int argc, char** argv)
   // cached sqlite. One text covers both honestly.
   splashStage(splash, app, QString::fromUtf8("Datenbank wird geladen — beim ersten Start dauert das eine Weile …"));
   trace("before GAMEDATABASE.initFromXML");
+
+  // The database cache (wowdb.sqlite, ~80 MB) is created next to the executable -- that path
+  // is baked into core.dll. If the folder is read-only, sqlite3_open fails, initFromXML
+  // returns false, and the message below blames the data definitions, which is the one thing
+  // that is NOT wrong. Someone who installed into C:\Program Files would go looking for a
+  // corrupt install for hours. Test first and say what actually happened.
+  {
+    QFile probe(QCoreApplication::applicationDirPath() + "/.write-test");
+    const bool writable = probe.open(QIODevice::WriteOnly);
+    probe.close();
+    if (writable)
+      probe.remove();
+    else {
+      return fatalStart(splash, win,
+        QObject::tr("In den Programmordner kann nicht geschrieben werden.\n\n"
+                    "ModelViewer legt seinen Datenbank-Cache (rund 80 MB), die Einstellungen "
+                    "und das Protokoll neben sich selbst ab und braucht dafür einen "
+                    "beschreibbaren Ordner. In »C:\\Programme« geht das ohne Administrator "
+                    "nicht.\n\nBitte in einen eigenen Ordner installieren, etwa "
+                    "»D:\\Programme\\ModelViewer Midnight« oder den vom Setup "
+                    "vorgeschlagenen Benutzerordner."),
+        QCoreApplication::applicationDirPath());
+    }
+  }
+
   // Without the database every character draws as untextured geosets and every equip is a
   // silent no-op -- an application that LOOKS like it started but can do nothing it promises.
   // Stopping here beats letting the user discover that one broken feature at a time.
