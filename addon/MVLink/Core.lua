@@ -109,6 +109,110 @@ function MVLink:ReadSlot(invSlot)
   return nil
 end
 
+-- --------------------------------------------------------------------------------------
+-- Probe
+--
+-- Writes what THIS client actually offers into SavedVariables, as plain strings.
+--
+-- The transmog reading has now been wrong twice, both times because it was written against
+-- a signature taken from documentation instead of from the running game -- and both times
+-- the pcall turned that into silence rather than an error. 12.0 moved things again:
+-- C_Transmog.GetSlotVisualInfo returns ONE table where it used to return seven values, and
+-- a whole C_TransmogOutfitInfo namespace appeared. Rather than guess a third time, this
+-- records the ground truth where it can be read off disk, without anyone retyping chat.
+
+-- tostring() on a secret value is not safe to assume, and a probe that errors is worthless.
+local function describe(v)
+  if issecretvalue and issecretvalue(v) then
+    return "<SECRET>"
+  end
+  local t = type(v)
+  if t == "table" then
+    local keys = {}
+    for k, sub in pairs(v) do
+      local sv
+      if issecretvalue and issecretvalue(sub) then
+        sv = "<SECRET>"
+      elseif type(sub) == "table" then
+        sv = "<table>"
+      else
+        sv = tostring(sub)
+      end
+      keys[#keys + 1] = tostring(k) .. "=" .. sv
+    end
+    table.sort(keys)
+    return "{" .. table.concat(keys, ", ") .. "}"
+  end
+  return t .. ":" .. tostring(v)
+end
+
+function MVLink:Probe()
+  local out = {}
+  local function note(s) out[#out + 1] = s end
+
+  note("client=" .. tostring((select(4, GetBuildInfo()))))
+
+  -- Which of the candidates exist at all. A missing name here explains a silent fallback
+  -- more cleanly than any amount of reading return values.
+  local names = {
+    { "TransmogUtil", "GetTransmogLocation" },
+    { "TransmogUtil", "GetInfoForEquippedSlot" },
+    { "TransmogUtil", "CreateTransmogLocation" },
+    { "C_Transmog", "GetSlotVisualInfo" },
+    { "C_Transmog", "GetSlotInfo" },
+    { "C_TransmogCollection", "GetSourceInfo" },
+    { "C_TransmogCollection", "GetAppearanceSourceInfo" },
+    { "C_TransmogOutfitInfo", "GetViewedOutfitSlotInfo" },
+    { "C_TransmogOutfitInfo", "GetActiveOutfitID" },
+  }
+  for _, n in ipairs(names) do
+    local tbl = _G[n[1]]
+    if type(tbl) ~= "table" then
+      note(n[1] .. " = FEHLT")
+    else
+      note(n[1] .. "." .. n[2] .. " = " .. type(tbl[n[2]]))
+    end
+  end
+  note("Enum.TransmogType=" .. describe(Enum and Enum.TransmogType))
+  note("Enum.TransmogModification=" .. describe(Enum and Enum.TransmogModification))
+
+  -- One slot, end to end, with every return value spelled out. Chest (5) rather than head:
+  -- a hidden helm is a common setting and would make an empty answer look like a fault.
+  local invSlot = 5
+  note("--- Slot " .. invSlot .. " (Brust) ---")
+  note("GetInventoryItemID=" .. describe(GetInventoryItemID("player", invSlot)))
+
+  local loc
+  if TransmogUtil and type(TransmogUtil.GetTransmogLocation) == "function" then
+    local ok, made = pcall(TransmogUtil.GetTransmogLocation, invSlot,
+                           Enum and Enum.TransmogType and Enum.TransmogType.Appearance,
+                           Enum and Enum.TransmogModification
+                             and Enum.TransmogModification.Main or 0)
+    note("GetTransmogLocation ok=" .. tostring(ok) .. " -> " .. describe(made))
+    if ok then loc = made end
+  end
+
+  if loc then
+    if TransmogUtil and type(TransmogUtil.GetInfoForEquippedSlot) == "function" then
+      local r = { pcall(TransmogUtil.GetInfoForEquippedSlot, loc) }
+      note("GetInfoForEquippedSlot n=" .. #r)
+      for i = 1, #r do note("  [" .. i .. "] " .. describe(r[i])) end
+    end
+    if C_Transmog and type(C_Transmog.GetSlotVisualInfo) == "function" then
+      local r = { pcall(C_Transmog.GetSlotVisualInfo, loc) }
+      note("GetSlotVisualInfo n=" .. #r)
+      for i = 1, #r do note("  [" .. i .. "] " .. describe(r[i])) end
+    end
+  else
+    note("loc ist nil -- beide Transmog-Pfade werden uebersprungen, "
+         .. "das ist die Ursache fuer das falsche Aussehen")
+  end
+
+  MVLinkDB = MVLinkDB or {}
+  MVLinkDB.probe = out
+  return out
+end
+
 -- What the character is wearing right now, including unsaved changes in the transmog
 -- window -- which is the whole point, and the one thing the armory route cannot do.
 function MVLink:ReadWornLook()
@@ -233,6 +337,20 @@ function MVLink:Store()
   MVLinkDB.lastEmpty = nil
   MVLinkDB.lastEmptyWorn = nil
 
+  -- Which path each slot actually came from, written down rather than printed. "equipped"
+  -- everywhere means the transmog was never read and the code carries the gear instead of
+  -- the look -- the difference between "no code" and "wrong code", and invisible until it
+  -- is recorded somewhere that survives the session.
+  local srcs = {}
+  for _, invSlot in ipairs(self.SLOT_ORDER) do
+    local p = look.pieces[self.SLOT_MAP[invSlot]]
+    if p then
+      srcs[#srcs + 1] = (self.SLOT_NAME[invSlot] or invSlot) .. "=" .. (p.src or "?")
+    end
+  end
+  MVLinkDB.sources = table.concat(srcs, " ")
+  self:Probe()
+
   MVLinkDB.outfits = {}
   for _, id in ipairs(self:OutfitIDs()) do
     local look = self:ReadOutfit(id)
@@ -307,7 +425,11 @@ end)
 SLASH_MVLINK1 = "/mvlink"
 SlashCmdList["MVLINK"] = function(msg)
   local cmd = (msg or ""):lower():match("^%s*(%S*)")
-  if cmd == "store" then
+  if cmd == "probe" then
+    local out = MVLink:Probe()
+    print("|cffa855f7MVLink|r: " .. #out .. " Zeilen aufgezeichnet. Jetzt /reload — "
+          .. "danach steht alles in MVLink.lua unter SavedVariables.")
+  elseif cmd == "store" then
     MVLink:Store()
     print("|cffa855f7MVLink|r: bereitgelegt — wirksam nach /reload oder Ausloggen.")
   elseif cmd == "debug" then
