@@ -16,5 +16,8 @@ phase*-trace.txt
 .vs/
 
 # Release artefacts. stage.ps1 rebuilds the payload, ISCC rebuilds the setup.
-installer/stage/
-installer/dist/
+# The wildcards matter: a previous release moved aside as dist-alt-<date> fell straight out
+# of "installer/dist/" and a git add -A swept 180 MB of build output into a commit, which the
+# remote then refused. Anything named like the staging or output folder stays out.
+installer/stage*/
+installer/dist*/

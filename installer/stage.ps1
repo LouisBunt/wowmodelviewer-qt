@@ -67,9 +67,22 @@ function Stage {
 }
 
 function StageTree {
-  param([string] $From, [string] $RelTarget, [string] $Filter = "*")
+  # Flat by default, which is what the Blender add-on wants: it is a single __init__.py next
+  # to a __pycache__ folder that must NOT travel. -Recurse is opt-in, for trees whose
+  # subfolders are part of the payload -- the MVLink add-on loads db\slots.lua first, and
+  # without it the whole add-on fails to load.
+  param([string] $From, [string] $RelTarget, [string] $Filter = "*", [switch] $Recurse)
 
   if (-not (Test-Path $From)) { throw "missing source tree: $From" }
+  if ($Recurse) {
+    $root = (Resolve-Path $From).Path
+    foreach ($f in Get-ChildItem $From -File -Filter $Filter -Recurse) {
+      # Relative path preserved, so db\slots.lua lands as db\slots.lua and not next to the toc.
+      $rel = $f.FullName.Substring($root.Length).TrimStart('\', '/')
+      Stage $f.FullName (Join-Path $RelTarget $rel)
+    }
+    return
+  }
   foreach ($f in Get-ChildItem $From -File -Filter $Filter) {
     Stage $f.FullName (Join-Path $RelTarget $f.Name)
   }
@@ -166,7 +179,7 @@ StageTree (Join-Path $upstream "blender_addon\io_import_wmv_fbx") "blender_addon
 # not known until the application asks for it. It travels next to the exe and the button in
 # the Import & Export tab copies it into <WoW>\_retail_\Interface\AddOns. Without this the
 # package shipped the ModelViewer half of MVLink and none of the game half.
-StageTree (Join-Path $Root "addon\MVLink") "addon\MVLink"
+StageTree (Join-Path $Root "addon\MVLink") "addon\MVLink" -Recurse
 
 # --- documentation -----------------------------------------------------------
 # GPLv3: the licence travels with the binary, not just with the source.
