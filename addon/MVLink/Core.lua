@@ -12,6 +12,14 @@ local ADDON, MVLink = ...
 
 MVLink.FORMAT = "MVM1"
 
+-- Bumped by hand whenever this file changes in a way a diagnosis depends on, and written
+-- into SavedVariables. WoW flushes the file with the code that was loaded BEFORE a /reload
+-- and only then reads the new one, so a freshly installed version never writes on its first
+-- reload -- and the file that lands looks current while being one version behind. Twice now
+-- that cost a round of "it still does not work" against data from the previous build. The
+-- stamp makes it a glance instead of a deduction.
+MVLink.BUILD = 5
+
 -- --------------------------------------------------------------------------------------
 -- Reading
 
@@ -327,6 +335,7 @@ function MVLink:Probe()
 
   MVLinkDB = MVLinkDB or {}
   MVLinkDB.probe = out
+  MVLinkDB.build = MVLink.BUILD
   return out
 end
 
