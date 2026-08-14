@@ -175,6 +175,18 @@ std::vector<QString> mvlink_saved_variable_paths(const QString& wowInstallFolder
   return found;
 }
 
+QString mvlink_saved_variables_updated_at(const QString& path)
+{
+  QFile f(path);
+  if (!f.open(QIODevice::ReadOnly | QIODevice::Text))
+    return QString();
+  const QString text = QString::fromUtf8(f.readAll());
+  // Same one-value-per-line contract as "current"; the addon writes it flat on purpose.
+  QRegularExpression rx("\\[\"updatedAt\"\\]\\s*=\\s*\"([^\"]+)\"");
+  const auto m = rx.match(text);
+  return m.hasMatch() ? m.captured(1) : QString();
+}
+
 // --------------------------------------------------------------------------------------
 
 namespace {

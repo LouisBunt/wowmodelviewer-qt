@@ -121,37 +121,37 @@ CharacterIoTab::CharacterIoTab(MenuController* menus, ExportController* exporter
   // which is the same job done in one step. The decoder and the --dressing-room flag stay
   // for scripts and for the 56-case test corpus -- only the control is gone.
   col->addWidget(sectionLabel(QString::fromUtf8("AUS DEM SPIEL — MVLINK-ADDON")));
+
+  // The order tells the truth about freshness. The clipboard is live, so it leads; the
+  // paste field is the same data by hand; the file is a snapshot from the last /reload and
+  // says so on its own button. The old layout led with the file and called both routes
+  // equivalent -- which handed people yesterday's look with a clear conscience.
   auto* mvTop = new QLabel(QString::fromUtf8(
-    "Zwei Wege — beide führen zum selben Ergebnis:"));
+    "Im Spiel /mvlink öffnen und den Code kopieren — mehr nicht. ModelViewer erkennt "
+    "ihn in der Zwischenablage und zieht den Look sofort an."));
   mvTop->setFont(QFont(uiFamily(), 8));
   mvTop->setWordWrap(true);
   mvTop->setStyleSheet(QString("color:%1; background:transparent;").arg(tok::kTextSoft));
   col->addWidget(mvTop);
 
-  auto* mvFileBtn2 = accentButton(QString::fromUtf8("Direkt aus WoW holen"));
-  connect(mvFileBtn2, &QPushButton::clicked, this, &CharacterIoTab::importMVLinkFromGame);
-  col->addWidget(mvFileBtn2);
-  auto* mvFileHint = new QLabel(QString::fromUtf8(
-    "Liest, was das Addon abgelegt hat — Stand des letzten /reload oder Ausloggens."));
-  mvFileHint->setFont(QFont(uiFamily(), 8));
-  mvFileHint->setWordWrap(true);
-  mvFileHint->setStyleSheet(QString("color:%1; background:transparent;").arg(tok::kDim));
-  col->addWidget(mvFileHint);
-
-  mvlinkCode_ = urlField(QString::fromUtf8("… oder Code hier einfügen: MVM1:R=…"));
+  mvlinkCode_ = urlField(QString::fromUtf8("… oder Code von Hand einfügen: MVM1:R=…"));
   col->addWidget(mvlinkCode_);
-  auto* mvHint = new QLabel(QString::fromUtf8(
-    "Im Spiel /mvlink öffnen, Code markieren (Strg+C), hier einfügen — wirkt sofort, "
-    "ohne /reload. Gesicht und Frisur kann ein Addon nicht auslesen; die bleiben, wie "
-    "sie hier eingestellt sind."));
-  mvHint->setFont(QFont(uiFamily(), 8));
-  mvHint->setWordWrap(true);
-  mvHint->setStyleSheet(QString("color:%1; background:transparent;").arg(tok::kDim));
-  col->addWidget(mvHint);
   auto* mvBtn = quietButton(QString::fromUtf8("Code übernehmen"));
   connect(mvBtn, &QPushButton::clicked, this, &CharacterIoTab::importMVLink);
   connect(mvlinkCode_, &QLineEdit::returnPressed, this, &CharacterIoTab::importMVLink);
   col->addWidget(mvBtn);
+  auto* mvHint = new QLabel(QString::fromUtf8(
+    "Für Codes aus zweiter Hand — etwa von jemand anderem geschickt. Gesicht und "
+    "Frisur kann ein Addon nicht auslesen; die bleiben, wie sie hier eingestellt sind."));
+  mvHint->setFont(QFont(uiFamily(), 8));
+  mvHint->setWordWrap(true);
+  mvHint->setStyleSheet(QString("color:%1; background:transparent;").arg(tok::kDim));
+  col->addWidget(mvHint);
+
+  col->addSpacing(2);
+  auto* mvFileBtn2 = quietButton(QString::fromUtf8("Ablage lesen (Stand: letztes /reload)"));
+  connect(mvFileBtn2, &QPushButton::clicked, this, &CharacterIoTab::importMVLinkFromGame);
+  col->addWidget(mvFileBtn2);
 
   // Neither route works until the addon is actually in the game folder, and the setup
   // cannot put it there -- at install time nobody knows where WoW lives. So it ships beside

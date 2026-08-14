@@ -3,7 +3,7 @@
 ## Notes: Schickt das getragene Aussehen und gespeicherte Sets an ModelViewer: Midnight.
 ## Notes-enUS: Sends the worn appearance and saved outfits to ModelViewer: Midnight.
 ## Author: Skogdesign
-## Version: 1.0.0
+## Version: 2.0.0
 ## SavedVariables: MVLinkDB
 ## IconTexture: Interface\Icons\INV_Misc_Book_09
 ## X-License: GPL-3.0-or-later
