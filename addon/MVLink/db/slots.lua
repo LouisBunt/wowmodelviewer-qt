@@ -32,6 +32,20 @@ MVLink.SLOT_MAP = {
 -- comparing two codes by eye, and it makes the test against a Wowhead import readable.
 MVLink.SLOT_ORDER = { 1, 3, 8, 6, 4, 7, 5, 9, 10, 16, 17, 15, 19 }
 
+-- The names the transmog API uses for the same slots.
+--
+-- TransmogUtil.CreateTransmogLocation is documented as taking an inventory slot NAME, not
+-- the slot number -- which is what MVLink was passing, and why GetTransmogLocation(5, 0, 0)
+-- came back nil on 12.1 without so much as an error. Kept beside SLOT_MAP because they
+-- describe the same thirteen slots and must not drift apart.
+MVLink.SLOT_APINAME = {
+  [1]  = "HEADSLOT",      [3]  = "SHOULDERSLOT",  [8]  = "FEETSLOT",
+  [6]  = "WAISTSLOT",     [4]  = "SHIRTSLOT",     [7]  = "LEGSSLOT",
+  [5]  = "CHESTSLOT",     [9]  = "WRISTSLOT",     [10] = "HANDSSLOT",
+  [16] = "MAINHANDSLOT",  [17] = "SECONDARYHANDSLOT", [15] = "BACKSLOT",
+  [19] = "TABARDSLOT",
+}
+
 -- For the "n of m pieces" line and for naming a slot in an error.
 MVLink.SLOT_NAME = {
   [1]  = "Kopf",      [3]  = "Schulter",  [8]  = "Füße",
