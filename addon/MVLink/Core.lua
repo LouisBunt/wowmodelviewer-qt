@@ -48,20 +48,60 @@ local function pieceFromSource(sourceID)
   return { itemID = info.itemID, modID = info.itemModID or 0 }
 end
 
+-- Building a TransmogLocation, by trying rather than by believing.
+--
+-- Measured on 12.1: TransmogUtil.GetTransmogLocation(5, 0, 0) returns nil. No error, no
+-- warning -- it simply answers nothing, the pcall reports success, and every slot drops to
+-- the equipped item. That is what "the wrong transmog" was: not a wrong appearance, the
+-- real gear.
+--
+-- Two likely reasons, and no way to pick between them from documentation that is paywalled
+-- or truncated at exactly the signature: "Get" reads an existing location and has nothing
+-- to return when none is cached, and "Create" is documented as taking the slot NAME
+-- ("CHESTSLOT") where this passed the number 5.
+--
+-- So all four combinations are tried in order, cheapest and most likely first, and whichever
+-- produces a table wins. Getting this wrong twice already cost two rounds; a list that tries
+-- everything cannot be wrong in the same way, and it writes down which entry worked so the
+-- next version can throw the rest away.
+local LOC_METHODS = {
+  { "create-name", function(invSlot, apiName, t, m)
+      if not (TransmogUtil and TransmogUtil.CreateTransmogLocation and apiName) then return nil end
+      return TransmogUtil.CreateTransmogLocation(apiName, t, m)
+    end },
+  { "create-id", function(invSlot, apiName, t, m)
+      if not (TransmogUtil and TransmogUtil.CreateTransmogLocation) then return nil end
+      return TransmogUtil.CreateTransmogLocation(invSlot, t, m)
+    end },
+  { "get-name", function(invSlot, apiName, t, m)
+      if not (TransmogUtil and TransmogUtil.GetTransmogLocation and apiName) then return nil end
+      return TransmogUtil.GetTransmogLocation(apiName, t, m)
+    end },
+  { "get-id", function(invSlot, apiName, t, m)
+      if not (TransmogUtil and TransmogUtil.GetTransmogLocation) then return nil end
+      return TransmogUtil.GetTransmogLocation(invSlot, t, m)
+    end },
+}
+
+function MVLink:BuildLocation(invSlot)
+  local apiName = self.SLOT_APINAME and self.SLOT_APINAME[invSlot]
+  local t = (Enum and Enum.TransmogType and Enum.TransmogType.Appearance) or 0
+  local m = (Enum and Enum.TransmogModification and Enum.TransmogModification.Main) or 0
+  for _, cand in ipairs(LOC_METHODS) do
+    local ok, loc = pcall(cand[2], invSlot, apiName, t, m)
+    if ok and type(loc) == "table" then
+      return loc, cand[1]
+    end
+  end
+  return nil, nil
+end
+
 -- One slot, from whichever source this client actually offers. /mvlink debug names the
 -- source per slot, so a wrong path shows up as [equipped] where [transmog] belongs.
 function MVLink:ReadSlot(invSlot)
-  -- Both transmog calls take a TransmogLocation TABLE, not a slot number. Passing the
-  -- number made them throw, the pcall swallowed it, and every slot silently fell through
-  -- to the equipped item -- which is why the encoded look came out as "MVM1:R=9:S=0" with
-  -- no pieces and why nothing ever carried a transmog. I blamed the client for that; the
-  -- signature was wrong.
-  local loc
-  if TransmogUtil and TransmogUtil.GetTransmogLocation and Enum and Enum.TransmogType then
-    local ok, made = pcall(TransmogUtil.GetTransmogLocation, invSlot,
-                           Enum.TransmogType.Appearance,
-                           Enum.TransmogModification and Enum.TransmogModification.Main or 0)
-    if ok then loc = made end
+  local loc, locMethod = self:BuildLocation(invSlot)
+  if locMethod then
+    self.locMethod = locMethod          -- recorded once, for the saved diagnosis
   end
 
   -- A source id can arrive as a plain number or, on newer clients, inside a table. Both
@@ -83,7 +123,7 @@ function MVLink:ReadSlot(invSlot)
         -- Returns appliedSourceID first; b is the visual id and only used as a fallback
         -- when the first came back empty.
         local p = fromAny(a) or fromAny(b)
-        if p then p.src = "transmog"; return p end
+        if p then p.src = "transmog/" .. locMethod; return p end
       elseif not self.warned then
         self.warned = true
         print("|cffa855f7MVLink|r: Transmog-Abfrage fehlgeschlagen: " .. tostring(a))
@@ -95,7 +135,7 @@ function MVLink:ReadSlot(invSlot)
       local ok, r = pcall(C_Transmog.GetSlotVisualInfo, loc)
       if ok then
         local p = fromAny(r)
-        if p then p.src = "slotvisual"; return p end
+        if p then p.src = "slotvisual/" .. locMethod; return p end
       end
     end
   end
@@ -182,15 +222,18 @@ function MVLink:Probe()
   note("--- Slot " .. invSlot .. " (Brust) ---")
   note("GetInventoryItemID=" .. describe(GetInventoryItemID("player", invSlot)))
 
-  local loc
-  if TransmogUtil and type(TransmogUtil.GetTransmogLocation) == "function" then
-    local ok, made = pcall(TransmogUtil.GetTransmogLocation, invSlot,
-                           Enum and Enum.TransmogType and Enum.TransmogType.Appearance,
-                           Enum and Enum.TransmogModification
-                             and Enum.TransmogModification.Main or 0)
-    note("GetTransmogLocation ok=" .. tostring(ok) .. " -> " .. describe(made))
-    if ok then loc = made end
+  -- Every candidate, reported individually. The winner is what ReadSlot uses, but the
+  -- losers are the interesting part when the winner is "none".
+  local t = (Enum and Enum.TransmogType and Enum.TransmogType.Appearance) or 0
+  local m = (Enum and Enum.TransmogModification and Enum.TransmogModification.Main) or 0
+  local apiName = self.SLOT_APINAME and self.SLOT_APINAME[invSlot]
+  note("apiName=" .. tostring(apiName) .. " type=" .. tostring(t) .. " mod=" .. tostring(m))
+  for _, cand in ipairs(LOC_METHODS) do
+    local ok, r = pcall(cand[2], invSlot, apiName, t, m)
+    note("loc " .. cand[1] .. ": ok=" .. tostring(ok) .. " -> " .. describe(r))
   end
+
+  local loc = self:BuildLocation(invSlot)
 
   if loc then
     if TransmogUtil and type(TransmogUtil.GetInfoForEquippedSlot) == "function" then
@@ -349,6 +392,7 @@ function MVLink:Store()
     end
   end
   MVLinkDB.sources = table.concat(srcs, " ")
+  MVLinkDB.locMethod = self.locMethod or "KEINE -- alle vier Wege lieferten nil"
   self:Probe()
 
   MVLinkDB.outfits = {}
