@@ -23,6 +23,7 @@
 #include "GLHost.h"
 #include "InspectorTabs.h"
 #include "ItemBrowser.h"
+#include "NpcBrowser.h"
 #include "LightPanel.h"
 #include "Theme.h"
 #include "TimelinePanel.h"
@@ -484,8 +485,8 @@ QWidget* MainWindow::buildBrowser()
   auto* cr = new QHBoxLayout(cats);
   cr->setContentsMargins(12, 0, 12, 10);
   cr->setSpacing(5);
-  const char* catNames[] = {"Alle", "Charaktere", "Kreaturen", "Items"};
-  for (int i = 0; i < 4; ++i) {
+  const char* catNames[] = {"Alle", "Charaktere", "Kreaturen", "Items", "NPCs"};
+  for (int i = 0; i < 5; ++i) {
     QLabel* c = chip(QString::fromLatin1(catNames[i]), i == 0, uiF(), 8);
     c->setCursor(Qt::PointingHandCursor);
     c->installEventFilter(this);
@@ -532,6 +533,11 @@ QWidget* MainWindow::buildBrowser()
   browserStack_->addWidget(listHost);
   itemBrowser_ = new ItemBrowser;
   browserStack_->addWidget(itemBrowser_);
+  // NPCs are the same situation as items, one layer up: the tree lists model files, but
+  // one creature .m2 serves dozens of differently named and skinned NPCs. Only the
+  // creature database can answer "show me Hogger".
+  npcBrowser_ = new NpcBrowser;
+  browserStack_->addWidget(npcBrowser_);
   col->addWidget(browserStack_, 1);
 
   auto* foot0 = new QWidget;
@@ -573,19 +579,21 @@ void MainWindow::setCategory(int index)
   if (!treeModel_ || index < 0 || index >= (int)catChips_.size())
     return;
 
-  static const FileTreeModel::Category kMap[] = {
-    FileTreeModel::All, FileTreeModel::Characters,
-    FileTreeModel::Creatures, FileTreeModel::Items
-  };
-  treeModel_->setCategory(kMap[index]);
-
-  // "Items" swaps the whole column over to the database browser, which brings its own
-  // search box -- the tree's would filter nothing there.
+  // "Items" and "NPCs" swap the whole column over to their database browsers, which bring
+  // their own search boxes -- the tree's would filter nothing there. The tree model only
+  // learns about categories it actually renders.
   const bool itemMode = (index == 3);
+  const bool npcMode = (index == 4);
+  if (!itemMode && !npcMode) {
+    static const FileTreeModel::Category kMap[] = {
+      FileTreeModel::All, FileTreeModel::Characters, FileTreeModel::Creatures
+    };
+    treeModel_->setCategory(kMap[index]);
+  }
   if (browserStack_)
-    browserStack_->setCurrentIndex(itemMode ? 1 : 0);
+    browserStack_->setCurrentIndex(npcMode ? 2 : itemMode ? 1 : 0);
   if (searchWrap_)
-    searchWrap_->setVisible(!itemMode);
+    searchWrap_->setVisible(!itemMode && !npcMode);
 
   for (int i = 0; i < (int)catChips_.size(); ++i) {
     const bool active = (i == index);
@@ -596,7 +604,7 @@ void MainWindow::setCategory(int index)
           .arg(tok::kMuted).arg(tok::kBorder));
   }
 
-  if (!itemMode)      // the item browser runs its own query
+  if (!itemMode && !npcMode)      // the database browsers run their own queries
     populateTree();
 }
 
