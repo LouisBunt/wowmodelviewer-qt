@@ -96,6 +96,7 @@ add_executable(WoWModelViewer-Qt WIN32
   InspectorTabs.cpp
   InspectorTabs.h
   ItemBrowser.cpp
+  NpcBrowser.cpp
   ItemBrowser.h
   LightPanel.cpp
   LightPanel.h

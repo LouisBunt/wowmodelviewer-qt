@@ -70,8 +70,9 @@ Weitere Optionen, vor allem zum Pruefen ohne Mausbedienung:
     --equip <id>[,<id>...]     Items anlegen, z.B. --equip 180900,190735
     --unequip <slot>[,...]     Items ablegen
     --focus <slot>             Item-Ansicht: nur dieses Teil zeigen (-1 = aus)
-    --category <0..3>          Browser-Kategorie: 0 Alle, 1 Charaktere,
-                               2 Kreaturen, 3 Items
+    --category <0..4>          Browser-Kategorie: 0 Alle, 1 Charaktere,
+                               2 Kreaturen, 3 Items, 4 NPCs
+    --npc <id>                 NPC nach Creature-ID anzeigen, mit Haut und Geosets
     --anim <index>             Animation starten (Index in der Liste des
                                Modells); ohne dies bleibt das Modell in der
                                Ruhepose stehen
@@ -133,6 +134,22 @@ World of Warcraft zur Verfuegung, wird der Schriftzug in der Zierschrift des
 Spiels gesetzt; sonst in der mitgelieferten. Ziehen verschiebt, Doppelklick
 maximiert; rechts sitzen Minimieren, Maximieren und Schliessen.
 Groessenaenderung geht ueber den Griff rechts unten.
+
+
+NPCs mit Namen finden
+---------------------
+Links im Browser die Kategorie "NPCs": nach Namen suchen ("Thrall"), nach Typ
+filtern (Bestie, Humanoid, ...), Doppelklick zeigt den NPC -- mit der richtigen
+Haut und den richtigen Koerperteilen, nicht nur der nackten Modelldatei. Die
+Namen kommen aus der Datenbank der eigenen WoW-Installation; es wird nichts
+aus dem Netz geladen.
+
+Beim ersten Anzeigen eines NPCs entsteht sein Vorschaubild und haengt ab dann
+in der Liste; Draufzeigen mit der Maus zeigt es gross. Die Sammlung waechst
+also mit der Benutzung.
+
+Grenze dieser Fassung: gepanzerte Humanoide (NPCs mit kompletter Ruestung wie
+Stadtwachen) erscheinen mit Koerper und Haut, aber ohne ihre Ruestungsteile.
 
 
 Eigene Looks sammeln

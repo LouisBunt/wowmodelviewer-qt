@@ -18,6 +18,7 @@
 #include <QFile>
 #include <QFileDialog>
 #include <QFontDatabase>
+#include <QImage>
 #include <QLabel>
 #include <QPainter>
 #include <QSettings>
@@ -41,6 +42,7 @@
 #include "InspectorTabs.h"
 #include "ItemBrowser.h"
 #include "MVLinkCode.h"
+#include "NpcBrowser.h"
 #include "MenuController.h"
 #include "TimelinePanel.h"
 #include "MainWindow.h"
@@ -902,6 +904,86 @@ int main(int argc, char** argv)
   QObject::connect(win->itemBrowser(), &ItemBrowser::setActivated,
                    menus, &MenuController::showSet);
   win->itemBrowser()->initialise();
+
+  // Applies a CreatureDisplayInfo -- skin textures and geoset selection -- to a freshly
+  // loaded creature model. Everything here follows the wx reference (AnimControl::SetSkin,
+  // animcontrol.cpp:1406-1479), with one deliberate deviation: the columns are selected by
+  // name, because the wx modern-branch reads them positionally and has an off-by-one that
+  // hands ParticleColorID to the skin slot. No refresh afterwards -- geoset visibility and
+  // replaceTextures are read per frame.
+  //
+  // What this cannot do: displays with ExtendedDisplayInfoID (armoured humanoids) need the
+  // whole character pipeline. Their skin and geosets still apply; armour and face do not.
+  auto applyCreatureDisplay = [](WoWModel* m, int displayId) {
+    if (!m || displayId <= 0)
+      return;
+    auto row = GAMEDATABASE.sqlQuery(QString(
+      "SELECT TextureVariationFileDataID1, TextureVariationFileDataID2, "
+      "TextureVariationFileDataID3 FROM CreatureDisplayInfo WHERE ID = %1").arg(displayId));
+    if (!row.valid || row.values.empty())
+      return;
+
+    // Geosets first: the set decides what is visible, the textures only what it wears.
+    // GeosetValue 0 is skipped on purpose -- the group stays hidden, exactly as the
+    // reference computes it (visible id = 100 * (index + 1) + value).
+    std::set<WoWModel::GeosetNum> cgd;
+    auto geo = GAMEDATABASE.sqlQuery(QString(
+      "SELECT GeosetIndex, GeosetValue FROM CreatureDisplayInfoGeosetData "
+      "WHERE CreatureDisplayInfoID = %1").arg(displayId));
+    if (geo.valid) {
+      for (auto& v : geo.values) {
+        const int val = v[1].toInt();
+        if (val > 0)
+          cgd.insert(100 * (v[0].toInt() + 1) + val);
+      }
+    }
+    m->setCreatureGeosetData(cgd);
+
+    // Skin slots are texture types 11..13; a fourth variation column exists in the data
+    // but the engine has no slot for it. A zero id is skipped rather than passed on --
+    // updateTextureList(nullptr) would bind GL texture 0 and render the part white.
+    for (int i = 0; i < 3; ++i) {
+      const int fdid = row.values[0][i].toInt();
+      if (fdid > 0)
+        m->updateTextureList(GAMEDIRECTORY.getFile(fdid), TEXTURE_GAMEOBJECT1 + i);
+    }
+  };
+
+  // An activated NPC loads its model file like a tree click would, then dresses it in the
+  // display the database names. The preview is captured the first time an NPC is shown --
+  // the list grows its pictures through use, the same trade the look library makes.
+  auto showNpc = [win, host, showModel, applyCreatureDisplay](
+                   int /*creatureId*/, int displayId, int fileDataId, const QString& name) {
+    GameFile* f = GAMEDIRECTORY.getFile((uint)fileDataId);
+    if (!f) {
+      trace(QString("npc: model file %1 not in the game data").arg(fileDataId));
+      return;
+    }
+    showModel(f);
+    WoWModel* m = host->model();
+    if (!m)
+      return;
+    applyCreatureDisplay(m, displayId);
+    win->setPathLabel(name);
+    trace(QString("npc shown: %1 (display %2, file %3)").arg(name).arg(displayId).arg(fileDataId));
+
+    const QString thumb = NpcBrowser::thumbPath(displayId);
+    if (!QFile::exists(thumb)) {
+      QDir().mkpath("userSettings/npc-thumbs");
+      if (host->saveScreenshot(thumb)) {
+        QImage img(thumb);
+        if (!img.isNull()) {
+          const int side = qMin(img.width(), img.height());
+          img = img.copy((img.width() - side) / 2, (img.height() - side) / 2, side, side)
+                   .scaled(96, 96, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+          img.save(thumb, "PNG");
+        }
+        win->npcBrowser()->refreshThumb(displayId);
+      }
+    }
+  };
+  QObject::connect(win->npcBrowser(), &NpcBrowser::npcActivated, win, showNpc);
+  win->npcBrowser()->initialise();
   trace("menus and item browser built");
 
   // --armory <url> runs the armory import without the dialog, so it is verifiable
@@ -948,6 +1030,26 @@ int main(int argc, char** argv)
     }
     trace(err.isEmpty() ? QString("mvlink import OK")
                         : QString("mvlink import FAILED: %1").arg(err));
+  }
+
+  // --npc <creatureId> shows a named NPC headlessly -- the only way to prove the display
+  // pipeline (skin + geosets) without clicking through the browser.
+  for (int i = 1; i < argc - 1; ++i) {
+    if (QString(argv[i]) != "--npc")
+      continue;
+    const int cid = QString::fromLocal8Bit(argv[i + 1]).toInt();
+    auto r = GAMEDATABASE.sqlQuery(QString(
+      "SELECT Creature.DisplayID1, CreatureModelData.FileDataID, Creature.Name_Lang "
+      "FROM Creature "
+      "JOIN CreatureDisplayInfo ON CreatureDisplayInfo.ID = Creature.DisplayID1 "
+      "JOIN CreatureModelData ON CreatureModelData.ID = CreatureDisplayInfo.ModelID "
+      "WHERE Creature.ID = %1").arg(cid));
+    if (r.valid && !r.values.empty()) {
+      showNpc(cid, r.values[0][0].toInt(), r.values[0][1].toInt(), r.values[0][2]);
+      trace(QString("npc flag OK: %1").arg(cid));
+    } else {
+      trace(QString("npc flag FAILED: creature %1 not found").arg(cid));
+    }
   }
 
   // The look library, scriptable. --look loads a saved look by name; --save-look stores

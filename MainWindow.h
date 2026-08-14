@@ -11,6 +11,7 @@ class FileTreeModel;
 class GLHost;
 class GameFile;
 class ItemBrowser;
+class NpcBrowser;
 class LightPanel;
 class QLabel;
 class QLineEdit;
@@ -62,6 +63,7 @@ public:
   // game data and the plugins.
   QMenuBar* menuBar() const { return menuBar_; }
   ItemBrowser* itemBrowser() const { return itemBrowser_; }
+  NpcBrowser* npcBrowser() const { return npcBrowser_; }
 
   // Move the highlight in the viewport's camera-preset row. Called from the menu too,
   // so the two ways of switching view do not drift apart.
@@ -145,6 +147,7 @@ private:
   QMenuBar* menuBar_ = nullptr;
   LightPanel* lightPanel_ = nullptr;
   ItemBrowser* itemBrowser_ = nullptr;
+  NpcBrowser* npcBrowser_ = nullptr;
   QStackedWidget* browserStack_ = nullptr;
   QWidget* searchWrap_ = nullptr;
   QLabel* fpsLabel_ = nullptr;
