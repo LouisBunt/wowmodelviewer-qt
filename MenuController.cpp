@@ -959,45 +959,128 @@ void MenuController::loadCharacterFile(bool equipmentOnly)
   QString fn = path;   // WoWModel::load / WoWItem::load take a non-const reference
 
   if (!equipmentOnly) {
-    QString error;
-    const QString modelName = modelNameFromCharFile(path, &error);
-    if (modelName.isEmpty()) {
-      QMessageBox::warning(win_, tr("Charakter laden"), error);
+    // Same core the look library and --look use; only the error presentation differs.
+    const QString err = loadCharacterFrom(path);
+    if (!err.isEmpty()) {
+      QMessageBox::warning(win_, tr("Charakter laden"), err);
       return;
     }
-
-    GameFile* f = GAMEDIRECTORY.getFile(modelName);
-    if (!f) {
-      QMessageBox::warning(
-        win_, tr("Charakter laden"),
-        tr("Das Modell der Datei (%1) ist in den geladenen Spieldaten nicht enthalten.")
-          .arg(modelName));
+  } else {
+    WoWModel* m = characterModel();
+    if (!m) {
+      QMessageBox::warning(win_, tr("Charakter laden"),
+                           tr("Das geladene Modell ist kein Charaktermodell."));
       return;
     }
-
-    // The model has to exist -- and be set up as a character, which the load path does
-    // -- before its customization can be applied to it.
-    emit loadFileRequested(f);
+    for (WoWModel::iterator it = m->begin(); it != m->end(); ++it)
+      (*it)->load(fn);
+    m->refresh();
+    win_->characterPanel()->refresh();
+    modelChanged();
   }
+
+  rememberDir("dirs/character", path);
+  win_->setPathLabel(tr("Geladen: %1").arg(QDir::toNativeSeparators(path)));
+}
+
+// --------------------------------------------------------------------------------------
+// The look library
+
+namespace {
+
+const char* kLooksDir = "userSettings/looks";
+
+// The colon in "ModelViewer: Midnight" once broke the whole installer; user-typed look
+// names get the same respect. Everything Windows forbids in a file name becomes '_', and
+// the visible name is whatever the user typed -- only the file on disk is sanitized.
+QString lookFilePath(const QString& name)
+{
+  QString safe = name.trimmed();
+  static const QString forbidden = "\\/:*?\"<>|";
+  for (const QChar& c : forbidden)
+    safe.replace(c, '_');
+  if (safe.isEmpty())
+    return QString();
+  QDir().mkpath(kLooksDir);
+  return QString(kLooksDir) + "/" + safe + ".chr";
+}
+
+}  // namespace
+
+QString MenuController::loadCharacterFrom(const QString& path)
+{
+  if (!QFile::exists(path))
+    return tr("Die Datei gibt es nicht:\n%1").arg(QDir::toNativeSeparators(path));
+
+  QString error;
+  const QString modelName = modelNameFromCharFile(path, &error);
+  if (modelName.isEmpty())
+    return error;
+
+  GameFile* f = GAMEDIRECTORY.getFile(modelName);
+  if (!f)
+    return tr("Das Modell der Datei (%1) ist in den geladenen Spieldaten nicht enthalten.")
+             .arg(modelName);
+
+  // Synchronous: the connection runs showModel in this thread, so by the next line the
+  // character model exists and can take the saved state.
+  emit loadFileRequested(f);
 
   WoWModel* m = characterModel();
-  if (!m) {
-    QMessageBox::warning(win_, tr("Charakter laden"),
-                         tr("Das geladene Modell ist kein Charaktermodell."));
-    return;
-  }
+  if (!m)
+    return tr("Das geladene Modell ist kein Charaktermodell.");
 
-  if (!equipmentOnly)
-    m->load(fn);
-
+  QString fn = path;                   // WoWModel::load / WoWItem::load take a non-const ref
+  m->load(fn);
   for (WoWModel::iterator it = m->begin(); it != m->end(); ++it)
     (*it)->load(fn);
 
   m->refresh();
   win_->characterPanel()->refresh();
-  rememberDir("dirs/character", path);
   modelChanged();
-  win_->setPathLabel(tr("Geladen: %1").arg(QDir::toNativeSeparators(path)));
+  return QString();
+}
+
+QString MenuController::saveLook(const QString& name)
+{
+  if (!characterModel())
+    return tr("Kein Charakter geladen — es gibt nichts zu speichern.");
+  const QString path = lookFilePath(name);
+  if (path.isEmpty())
+    return tr("Der Look braucht einen Namen.");
+  if (!writeCharacterTo(path, false))
+    return tr("»%1« ließ sich nicht schreiben.").arg(QDir::toNativeSeparators(path));
+  trace("look saved: " + path);
+  return QString();
+}
+
+QString MenuController::loadLook(const QString& name)
+{
+  const QString path = lookFilePath(name);
+  if (path.isEmpty())
+    return tr("Welcher Look? Der Name fehlt.");
+  const QString err = loadCharacterFrom(path);
+  if (err.isEmpty()) {
+    trace("look loaded: " + path);
+    win_->setPathLabel(tr("Look »%1« geladen.").arg(name.trimmed()));
+  }
+  return err;
+}
+
+QStringList MenuController::savedLooks() const
+{
+  QDir dir(kLooksDir);
+  QStringList names;
+  for (const QFileInfo& fi : dir.entryInfoList(QStringList() << "*.chr", QDir::Files,
+                                               QDir::Name | QDir::IgnoreCase))
+    names << fi.completeBaseName();
+  return names;
+}
+
+bool MenuController::deleteLook(const QString& name)
+{
+  const QString path = lookFilePath(name);
+  return !path.isEmpty() && QFile::remove(path);
 }
 
 void MenuController::clearEquipment()

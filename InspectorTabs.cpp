@@ -9,6 +9,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
+#include <QMessageBox>
 #include <QPushButton>
 #include <QVBoxLayout>
 
@@ -113,6 +114,55 @@ CharacterIoTab::CharacterIoTab(MenuController* menus, ExportController* exporter
   auto* col = new QVBoxLayout(this);
   col->setContentsMargins(0, 0, 0, 0);
   col->setSpacing(10);
+
+  // --- The look library
+  //
+  // Named .chr files, listed right here. F7/F8 could always save and load a character,
+  // but through a file dialog per use -- which in practice means nobody builds a
+  // collection. A name field, one button and a list is what "easy abspeichern und
+  // später drauf zugreifen" actually asks for.
+  col->addWidget(sectionLabel(QString::fromUtf8("MEINE LOOKS")));
+  lookName_ = urlField(QString::fromUtf8("Name für diesen Look …"));
+  col->addWidget(lookName_);
+  auto* lookSaveBtn = accentButton(QString::fromUtf8("Aktuellen Look speichern"));
+  connect(lookSaveBtn, &QPushButton::clicked, this, &CharacterIoTab::saveLook);
+  connect(lookName_, &QLineEdit::returnPressed, this, &CharacterIoTab::saveLook);
+  col->addWidget(lookSaveBtn);
+
+  lookList_ = new QListWidget;
+  lookList_->setFixedHeight(110);
+  lookList_->setStyleSheet(QString(
+    "QListWidget { background:%1; border:1px solid %2; border-radius:6px; color:%3;"
+    " padding:3px; }"
+    "QListWidget::item { padding:3px 6px; border-radius:4px; }"
+    "QListWidget::item:selected { background:%4; color:%5; }")
+    .arg(tok::kCard).arg(tok::kBorder).arg(tok::kTextSoft)
+    .arg(tok::kAccentBg).arg(tok::kText));
+  connect(lookList_, &QListWidget::itemDoubleClicked, this,
+          &CharacterIoTab::loadSelectedLook);
+  col->addWidget(lookList_);
+
+  {
+    auto* lookRow = new QHBoxLayout;
+    lookRow->setSpacing(6);
+    auto* lookLoadBtn = quietButton(QString::fromUtf8("Laden"));
+    connect(lookLoadBtn, &QPushButton::clicked, this, &CharacterIoTab::loadSelectedLook);
+    lookRow->addWidget(lookLoadBtn);
+    auto* lookDelBtn = quietButton(QString::fromUtf8("Löschen"));
+    connect(lookDelBtn, &QPushButton::clicked, this, &CharacterIoTab::deleteSelectedLook);
+    lookRow->addWidget(lookDelBtn);
+    col->addLayout(lookRow);
+  }
+  auto* lookHint = new QLabel(QString::fromUtf8(
+    "Gespeichert wird alles: Rasse, Gesicht, Ausrüstung samt Farbvariante. "
+    "Doppelklick lädt."));
+  lookHint->setFont(QFont(uiFamily(), 8));
+  lookHint->setWordWrap(true);
+  lookHint->setStyleSheet(QString("color:%1; background:transparent;").arg(tok::kDim));
+  col->addWidget(lookHint);
+  refreshLooks();
+
+  col->addSpacing(4);
 
   // --- Aus dem Spiel (MVLink)
   //
@@ -289,6 +339,67 @@ void CharacterIoTab::installMVLinkAddon()
   // only way to see which copy just got the addon.
   setStatus(QString::fromUtf8("Addon installiert: %1 — in WoW /reload, dann /mvlink.")
               .arg(dest), false);
+}
+
+void CharacterIoTab::refreshLooks()
+{
+  if (!lookList_ || !menus_)
+    return;
+  lookList_->clear();
+  lookList_->addItems(menus_->savedLooks());
+}
+
+void CharacterIoTab::saveLook()
+{
+  if (!menus_)
+    return;
+  const QString name = lookName_->text().trimmed();
+  if (name.isEmpty()) {
+    setStatus(QString::fromUtf8("Erst einen Namen eintippen, dann speichern."), true);
+    return;
+  }
+  const QString err = menus_->saveLook(name);
+  if (!err.isEmpty()) {
+    setStatus(err, true);
+    return;
+  }
+  lookName_->clear();
+  refreshLooks();
+  // Select what was just saved, so "Laden" right after does the expected thing.
+  const auto hits = lookList_->findItems(name, Qt::MatchFixedString);
+  if (!hits.isEmpty())
+    lookList_->setCurrentItem(hits.first());
+  setStatus(QString::fromUtf8("Look »%1« gespeichert.").arg(name), false);
+}
+
+void CharacterIoTab::loadSelectedLook()
+{
+  if (!menus_ || !lookList_ || !lookList_->currentItem())
+    return;
+  const QString name = lookList_->currentItem()->text();
+  const QString err = menus_->loadLook(name);
+  if (err.isEmpty())
+    setStatus(QString::fromUtf8("Look »%1« geladen.").arg(name), false);
+  else
+    setStatus(err, true);
+}
+
+void CharacterIoTab::deleteSelectedLook()
+{
+  if (!menus_ || !lookList_ || !lookList_->currentItem())
+    return;
+  const QString name = lookList_->currentItem()->text();
+  // One click less would be nicer; one look lost to a misclick would not.
+  if (QMessageBox::question(this, QString::fromUtf8("Look löschen"),
+        QString::fromUtf8("»%1« wirklich löschen?").arg(name))
+      != QMessageBox::Yes)
+    return;
+  if (menus_->deleteLook(name)) {
+    refreshLooks();
+    setStatus(QString::fromUtf8("Look »%1« gelöscht.").arg(name), false);
+  } else {
+    setStatus(QString::fromUtf8("»%1« ließ sich nicht löschen.").arg(name), true);
+  }
 }
 
 void CharacterIoTab::importArmory()

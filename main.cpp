@@ -950,6 +950,25 @@ int main(int argc, char** argv)
                         : QString("mvlink import FAILED: %1").arg(err));
   }
 
+  // The look library, scriptable. --look loads a saved look by name; --save-look stores
+  // the current character under a name AFTER the import flags above ran, then keeps
+  // going -- so one run can import, save and screenshot, and a second run proves the
+  // round trip: --mvlink <code> --save-look X --shot a.png must hash-match
+  // --look X --shot b.png, colour variants included.
+  for (int i = 1; i < argc - 1; ++i) {
+    if (QString(argv[i]) == "--look") {
+      const QString name = QString::fromLocal8Bit(argv[i + 1]);
+      const QString err = menus->loadLook(name);
+      trace(err.isEmpty() ? QString("look load OK: %1").arg(name)
+                          : QString("look load FAILED: %1").arg(err));
+    } else if (QString(argv[i]) == "--save-look") {
+      const QString name = QString::fromLocal8Bit(argv[i + 1]);
+      const QString err = menus->saveLook(name);
+      trace(err.isEmpty() ? QString("look save OK: %1").arg(name)
+                          : QString("look save FAILED: %1").arg(err));
+    }
+  }
+
   // --clips <id>[,<id>...] selects animation clips for the export below, by the same
   // model animation index the timeline and the Export tab use. Parsed before --export so
   // the animated path is provable headlessly too, not only by clicking the checkbox.
