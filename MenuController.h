@@ -83,6 +83,10 @@ public:
   QStringList savedLooks() const;
   bool deleteLook(const QString& name);
 
+  // Path of the preview image saved beside the .chr, or empty when there is none --
+  // looks stored before previews existed simply have no picture until re-saved.
+  QString lookThumbFor(const QString& name) const;
+
   // Loads a .chr from an explicit path with no dialog anywhere -- the shared core of
   // loadCharacterFile, loadLook and the --look flag.
   QString loadCharacterFrom(const QString& path);
