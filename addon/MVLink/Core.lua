@@ -216,6 +216,32 @@ function MVLink:Probe()
   note("Enum.TransmogType=" .. describe(Enum and Enum.TransmogType))
   note("Enum.TransmogModification=" .. describe(Enum and Enum.TransmogModification))
 
+  -- The whole namespace, listed rather than guessed at.
+  --
+  -- Saved outfits have been arriving empty the entire time, and the reason is almost
+  -- certainly that 12.0 moved outfit handling out of C_TransmogCollection into
+  -- C_TransmogOutfitInfo -- OutfitIDs() still hunts for GetOutfits/GetOutfitIDs/
+  -- GetAllOutfitIDs, none of which exist any more. pairs() over the table answers what the
+  -- replacements are called without anyone reading a paywalled wiki page.
+  local function dumpNamespace(name, filter)
+    local t = _G[name]
+    if type(t) ~= "table" then
+      note(name .. " = FEHLT")
+      return
+    end
+    local fns = {}
+    for k, v in pairs(t) do
+      if type(v) == "function" and (not filter or tostring(k):find(filter)) then
+        fns[#fns + 1] = tostring(k)
+      end
+    end
+    table.sort(fns)
+    note(name .. " (" .. #fns .. "): " .. table.concat(fns, ", "))
+  end
+  dumpNamespace("C_TransmogOutfitInfo")
+  dumpNamespace("C_TransmogCollection", "Outfit")
+  dumpNamespace("C_TransmogSets", nil)
+
   -- One slot, end to end, with every return value spelled out. Chest (5) rather than head:
   -- a hidden helm is a common setting and would make an empty answer look like a fault.
   local invSlot = 5
