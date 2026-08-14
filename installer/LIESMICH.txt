@@ -84,6 +84,8 @@ Weitere Optionen, vor allem zum Pruefen ohne Mausbedienung:
     --mvlink <code|datei>      Aussehen aus dem MVLink-Addon uebernehmen: entweder der
                                Code selbst (MVM1:...) oder der Pfad auf dessen
                                SavedVariables-Datei
+    --look <name>              gespeicherten Look aus der Bibliothek laden
+    --save-look <name>         aktuellen Charakter unter diesem Namen ablegen
     --install-mvlink-addon     MVLink-Addon nach WoW installieren und beenden
     --clips <id>[,<id>...]     Animationsclips fuer den Export waehlen
     --export <format>,<datei>  ohne Dialog exportieren
@@ -131,6 +133,18 @@ World of Warcraft zur Verfuegung, wird der Schriftzug in der Zierschrift des
 Spiels gesetzt; sonst in der mitgelieferten. Ziehen verschiebt, Doppelklick
 maximiert; rechts sitzen Minimieren, Maximieren und Schliessen.
 Groessenaenderung geht ueber den Griff rechts unten.
+
+
+Eigene Looks sammeln
+--------------------
+Reiter "Import", oberster Abschnitt "Meine Looks": Namen eintippen, "Aktuellen Look
+speichern" -- fertig. Gespeichert wird der ganze Charakter: Rasse, Gesicht und alle
+Anpassungen, die Ausruestung samt Farbvariante. Doppelklick in der Liste laedt den
+Look wieder, egal was gerade angezeigt wird.
+
+Die Dateien liegen als .chr unter userSettings\looks und sind dieselben, die
+"Charakter speichern" (F7) erzeugt -- sie lassen sich also auch weitergeben oder
+sichern, indem man den Ordner kopiert.
 
 
 Aussehen direkt aus dem Spiel holen (MVLink)

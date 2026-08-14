@@ -73,6 +73,20 @@ public:
   // two installations needs to know which one just got it.
   QString installMVLinkAddon(QString* destOut = nullptr);
 
+  // The look library: named .chr files under userSettings/looks. A look is the whole
+  // character -- race, customization, equipment including the colour variant, because the
+  // .chr format stores the resolved displayId per item. F7/F8 already write and read this
+  // format; the library only gives it names and a list instead of a file dialog per use.
+  // Errors come back as text; empty means it worked.
+  QString saveLook(const QString& name);
+  QString loadLook(const QString& name);
+  QStringList savedLooks() const;
+  bool deleteLook(const QString& name);
+
+  // Loads a .chr from an explicit path with no dialog anywhere -- the shared core of
+  // loadCharacterFile, loadLook and the --look flag.
+  QString loadCharacterFrom(const QString& path);
+
   // The .chr file dialogs. Public because the character tab offers the same two
   // buttons; both entry points run the identical code rather than a second copy.
   void loadCharacter() { loadCharacterFile(false); }
