@@ -18,7 +18,7 @@ MVLink.FORMAT = "MVM1"
 -- reload -- and the file that lands looks current while being one version behind. Twice now
 -- that cost a round of "it still does not work" against data from the previous build. The
 -- stamp makes it a glance instead of a deduction.
-MVLink.BUILD = 6
+MVLink.BUILD = 7
 
 -- --------------------------------------------------------------------------------------
 -- Reading
@@ -286,15 +286,35 @@ function MVLink:Probe()
       call("GetOutfitInfo", activeID)
     end
 
-    -- Inventory slot -> outfit slot, then the outfit's appearance for it. This pair is the
-    -- most likely route from "chest" to "the source id the outfit puts there".
-    local outfitSlot = call("GetTransmogOutfitSlotFromInventorySlot", 5)
-    if outfitSlot ~= nil then
-      call("GetViewedOutfitSlotInfo", outfitSlot)
-      call("GetSourceIDsForSlot", outfitSlot)
-      call("GetSlotGroupInfo", outfitSlot)
-    end
+    -- The outfit system numbers slots its own way -- CHESTSLOT is 4 there and 5 in the
+    -- inventory -- and GetAllSlotLocationInfo is the table that says so. Read, never guessed:
+    -- GetTransmogOutfitSlotFromInventorySlot(5) answered 9, which is WAISTSLOT, so whatever
+    -- that function converts it is not inventory slots.
     call("GetAllSlotLocationInfo")
+
+    -- Signatures courtesy of the error messages last round:
+    --   GetViewedOutfitSlotInfo(slot, type, option)
+    --   GetSourceIDsForSlot(transmogSetID, slot)
+    -- "Viewed" is the open question: GetCurrentlyViewedOutfitID answers 0 outside the
+    -- transmog window, so this may only speak while that window is open -- which would make
+    -- it useless here. Three slots, so one empty answer cannot be mistaken for a rule.
+    local t = (Enum and Enum.TransmogType and Enum.TransmogType.Appearance) or 0
+    for _, s in ipairs({ 0, 4, 12 }) do        -- head, chest, main hand
+      for _, opt in ipairs({ 0, 1 }) do
+        if type(api.GetViewedOutfitSlotInfo) == "function" then
+          local r = { pcall(api.GetViewedOutfitSlotInfo, s, t, opt) }
+          note(("GetViewedOutfitSlotInfo(%d,%d,%d) -> %s"):format(s, t, opt, describe(r[2])))
+        end
+      end
+      if type(api.GetCollectionInfoForSlotAndOption) == "function" then
+        local r = { pcall(api.GetCollectionInfoForSlotAndOption, s, 0) }
+        note(("GetCollectionInfoForSlotAndOption(%d,0) -> %s"):format(s, describe(r[2])))
+      end
+      if type(api.GetEquippedSlotOptionFromTransmogSlot) == "function" then
+        local r = { pcall(api.GetEquippedSlotOptionFromTransmogSlot, s) }
+        note(("GetEquippedSlotOptionFromTransmogSlot(%d) -> %s"):format(s, describe(r[2])))
+      end
+    end
   end
 
   -- Every slot: is a transmog applied at all, and does the read pick it up? One slot could
@@ -510,6 +530,19 @@ function MVLink:Store()
   end
   MVLinkDB.sources = table.concat(srcs, " ")
   MVLinkDB.locMethod = self.locMethod or "KEINE -- alle vier Wege lieferten nil"
+
+  -- The outfit layer, recorded even while its per-slot appearances cannot be read yet: the
+  -- names and the active id are certain, and ModelViewer can already show the list.
+  local names = {}
+  for _, o in ipairs(self:Outfits()) do
+    names[#names + 1] = o.id .. "=" .. o.name
+  end
+  MVLinkDB.outfitList = table.concat(names, " | ")
+  local okA, active = pcall(function()
+    return C_TransmogOutfitInfo and C_TransmogOutfitInfo.GetActiveOutfitID
+       and C_TransmogOutfitInfo.GetActiveOutfitID()
+  end)
+  MVLinkDB.activeOutfit = okA and active or nil
   self:Probe()
 
   MVLinkDB.outfits = {}
@@ -527,25 +560,43 @@ end
 -- down with "attempt to call a nil value" in both Store() and AllLooks(). The name varies
 -- between clients, so it is resolved once at runtime instead of assumed, and a client
 -- that has none of them simply offers no saved outfits rather than erroring.
-function MVLink:OutfitIDs()
-  if self.outfitFn == nil then
-    self.outfitFn = false
-    for _, name in ipairs({ "GetOutfits", "GetOutfitIDs", "GetAllOutfitIDs" }) do
-      if C_TransmogCollection and type(C_TransmogCollection[name]) == "function" then
-        self.outfitFn = name
-        break
-      end
-    end
-    if not self.outfitFn then
-      print("|cffa855f7MVLink|r: gespeicherte Outfits sind in dieser Spielversion nicht "
-            .. "abrufbar — der getragene Look funktioniert normal.")
-    end
-  end
-  if not self.outfitFn then
+-- The saved outfits, with their names.
+--
+-- These were reported as "not available in this game version" for weeks, which was wrong.
+-- 12.0 emptied C_TransmogCollection of every outfit function -- the probe finds exactly zero
+-- there -- and moved the lot into C_TransmogOutfitInfo. GetOutfitsInfo returns one table per
+-- outfit carrying name, outfitID and playerFacingOutfitIndex; measured, not guessed.
+function MVLink:Outfits()
+  local api = C_TransmogOutfitInfo
+  if type(api) ~= "table" or type(api.GetOutfitsInfo) ~= "function" then
     return {}
   end
-  local ok, ids = pcall(C_TransmogCollection[self.outfitFn])
-  return (ok and type(ids) == "table") and ids or {}
+  local ok, list = pcall(api.GetOutfitsInfo)
+  if not ok or type(list) ~= "table" then
+    return {}
+  end
+  local out = {}
+  for _, e in ipairs(list) do
+    if type(e) == "table" and e.outfitID then
+      -- Several outfits genuinely share the name "Outfit" or "neu", so the index goes into
+      -- the label. Two entries the user cannot tell apart are worse than a clumsy name.
+      out[#out + 1] = {
+        id = e.outfitID,
+        name = (e.name and e.name ~= "" and e.name or "Ohne Namen")
+               .. " #" .. tostring(e.playerFacingOutfitIndex or e.outfitID),
+      }
+    end
+  end
+  return out
+end
+
+-- Kept for the callers that only want ids.
+function MVLink:OutfitIDs()
+  local ids = {}
+  for _, o in ipairs(self:Outfits()) do
+    ids[#ids + 1] = o.id
+  end
+  return ids
 end
 
 -- Collect everything the window offers: the worn look first, then saved outfits by name.
