@@ -18,7 +18,7 @@ MVLink.FORMAT = "MVM1"
 -- reload -- and the file that lands looks current while being one version behind. Twice now
 -- that cost a round of "it still does not work" against data from the previous build. The
 -- stamp makes it a glance instead of a deduction.
-MVLink.BUILD = 5
+MVLink.BUILD = 6
 
 -- --------------------------------------------------------------------------------------
 -- Reading
@@ -170,28 +170,34 @@ end
 -- records the ground truth where it can be read off disk, without anyone retyping chat.
 
 -- tostring() on a secret value is not safe to assume, and a probe that errors is worthless.
-local function describe(v)
+-- depth 2 by default: one level was enough to see that GetOutfitsInfo returns eleven
+-- tables, and useless for finding out what is IN them -- which is the whole question now.
+-- Functions are folded into a count so a TransmogLocation does not bury the line it sits on.
+local function describe(v, depth)
+  depth = depth or 2
   if issecretvalue and issecretvalue(v) then
     return "<SECRET>"
   end
   local t = type(v)
-  if t == "table" then
-    local keys = {}
-    for k, sub in pairs(v) do
-      local sv
-      if issecretvalue and issecretvalue(sub) then
-        sv = "<SECRET>"
-      elseif type(sub) == "table" then
-        sv = "<table>"
-      else
-        sv = tostring(sub)
-      end
-      keys[#keys + 1] = tostring(k) .. "=" .. sv
-    end
-    table.sort(keys)
-    return "{" .. table.concat(keys, ", ") .. "}"
+  if t ~= "table" then
+    return t .. ":" .. tostring(v)
   end
-  return t .. ":" .. tostring(v)
+  if depth <= 0 then
+    return "<table>"
+  end
+  local keys, nfun = {}, 0
+  for k, sub in pairs(v) do
+    if type(sub) == "function" then
+      nfun = nfun + 1
+    else
+      keys[#keys + 1] = tostring(k) .. "=" .. describe(sub, depth - 1)
+    end
+  end
+  table.sort(keys)
+  if nfun > 0 then
+    keys[#keys + 1] = "<" .. nfun .. " Methoden>"
+  end
+  return "{" .. table.concat(keys, ", ") .. "}"
 end
 
 function MVLink:Probe()
@@ -252,15 +258,43 @@ function MVLink:Probe()
 
   -- Saved outfits. The names above are known now; the return SHAPES are not, and guessing
   -- those is how the last two rounds went. So they are called and dumped.
-  note("--- gespeicherte Sets ---")
-  if type(C_TransmogOutfitInfo) == "table" then
-    for _, fname in ipairs({ "GetOutfitsInfo", "GetActiveOutfitID", "GetCurrentlyViewedOutfitID" }) do
-      if type(C_TransmogOutfitInfo[fname]) == "function" then
-        local r = { pcall(C_TransmogOutfitInfo[fname]) }
-        note(fname .. " n=" .. #r)
-        for i = 1, math.min(#r, 4) do note("  [" .. i .. "] " .. describe(r[i])) end
+  -- The outfit layer, which is where the look actually lives on 12.x.
+  --
+  -- Every slot reports applied=0 while the character visibly wears a transmog, and
+  -- GetActiveOutfitID answers 2: the appearance comes from an active OUTFIT, not from
+  -- per-slot transmog. Asking "what is applied to this slot" was the wrong question all
+  -- along -- the game answers it correctly with "nothing".
+  note("--- Outfit-Ebene ---")
+  local api = C_TransmogOutfitInfo
+  if type(api) == "table" then
+    local function call(fname, ...)
+      if type(api[fname]) ~= "function" then
+        note(fname .. " = FEHLT")
+        return nil
       end
+      local r = { pcall(api[fname], ...) }
+      local args = select("#", ...) > 0 and ("(" .. tostring((...)) .. ")") or "()"
+      note(fname .. args .. " n=" .. #r)
+      for i = 1, math.min(#r, 3) do note("  [" .. i .. "] " .. describe(r[i])) end
+      return r[2]
     end
+
+    local activeID = call("GetActiveOutfitID")
+    call("IsEquippedGearOutfitDisplayed")
+    call("GetOutfitsInfo")
+    if type(activeID) == "number" then
+      call("GetOutfitInfo", activeID)
+    end
+
+    -- Inventory slot -> outfit slot, then the outfit's appearance for it. This pair is the
+    -- most likely route from "chest" to "the source id the outfit puts there".
+    local outfitSlot = call("GetTransmogOutfitSlotFromInventorySlot", 5)
+    if outfitSlot ~= nil then
+      call("GetViewedOutfitSlotInfo", outfitSlot)
+      call("GetSourceIDsForSlot", outfitSlot)
+      call("GetSlotGroupInfo", outfitSlot)
+    end
+    call("GetAllSlotLocationInfo")
   end
 
   -- Every slot: is a transmog applied at all, and does the read pick it up? One slot could
