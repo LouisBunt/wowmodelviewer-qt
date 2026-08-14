@@ -18,7 +18,7 @@ MVLink.FORMAT = "MVM1"
 -- reload -- and the file that lands looks current while being one version behind. Twice now
 -- that cost a round of "it still does not work" against data from the previous build. The
 -- stamp makes it a glance instead of a deduction.
-MVLink.BUILD = 8
+MVLink.BUILD = 9
 
 -- --------------------------------------------------------------------------------------
 -- Reading
@@ -104,9 +104,118 @@ function MVLink:BuildLocation(invSlot)
   return nil, nil
 end
 
+-- --------------------------------------------------------------------------------------
+-- The outfit layer
+--
+-- This is where the look actually lives on 12.x, and missing it is what made MVLink report
+-- equipped gear for weeks. Every per-slot query answers appliedSourceID=0 honestly: nothing
+-- is transmogged onto the slots. The character wears OUTFIT 2, and the outfit is a separate
+-- layer the old API knows nothing about.
+--
+-- Measured, all of it: GetActiveOutfitID()=2, IsEquippedGearOutfitDisplayed()=false,
+-- GetCurrentlyViewedOutfitID()=0, and GetViewedOutfitSlotInfo answers for the VIEWED outfit
+-- -- which is 0, "equipped gear", hence isTransmogrified=false everywhere. The outfit has to
+-- be brought into view before it can be read.
+
+-- Outfit slot numbers differ from inventory slots (CHESTSLOT is 4 there, 5 in the
+-- inventory), so the table is read from the client instead of transcribed. Secondary
+-- shoulder and the illusion entries are skipped: one appearance per slot is what we encode.
+function MVLink:OutfitSlotMap()
+  if self._outfitSlots then
+    return self._outfitSlots
+  end
+  local map = {}
+  local api = C_TransmogOutfitInfo
+  if type(api) == "table" and type(api.GetAllSlotLocationInfo) == "function" then
+    local ok, list = pcall(api.GetAllSlotLocationInfo)
+    if ok and type(list) == "table" then
+      for _, e in ipairs(list) do
+        if type(e) == "table" and e.slotName and e.slot
+           and not e.isSecondary and (e.type == nil or e.type == 0) then
+          map[e.slotName] = e.slot
+        end
+      end
+    end
+  end
+  self._outfitSlots = map
+  return map
+end
+
+-- Brings the active outfit into view, runs fn, puts the view back.
+--
+-- ChangeViewedOutfit is a state change, which is why the previous value is restored even
+-- when fn throws. "Viewed" is the transmog window's own selection -- ChangeToOutfit and
+-- ChangeDisplayedOutfit are the ones that would actually redress the character, and neither
+-- is called here.
+function MVLink:WithActiveOutfitViewed(fn)
+  local api = C_TransmogOutfitInfo
+  if type(api) ~= "table" or type(api.ChangeViewedOutfit) ~= "function" then
+    return fn()
+  end
+  local okPrev, prev = pcall(api.GetCurrentlyViewedOutfitID)
+  local okAct, active = pcall(api.GetActiveOutfitID)
+  local changed = false
+  if okAct and type(active) == "number" and active > 0 and active ~= prev then
+    changed = pcall(api.ChangeViewedOutfit, active)
+  end
+  local ok, result = pcall(fn)
+  if changed and okPrev and type(prev) == "number" then
+    pcall(api.ChangeViewedOutfit, prev)
+  end
+  if not ok then
+    return nil
+  end
+  return result
+end
+
+-- One slot's appearance out of the outfit currently in view.
+function MVLink:ReadOutfitSlot(invSlot)
+  local api = C_TransmogOutfitInfo
+  if type(api) ~= "table" or type(api.GetViewedOutfitSlotInfo) ~= "function" then
+    return nil
+  end
+  local name = self.SLOT_APINAME and self.SLOT_APINAME[invSlot]
+  local slot = name and self:OutfitSlotMap()[name]
+  if not slot then
+    return nil
+  end
+
+  -- The option is per slot, not a constant: GetEquippedSlotOptionFromTransmogSlot answers 0
+  -- for armour and 1 for the main hand. Passing 0 everywhere is why both weapons fell
+  -- through to the equipped item while the armour did not.
+  local option = 0
+  if type(api.GetEquippedSlotOptionFromTransmogSlot) == "function" then
+    local okO, o = pcall(api.GetEquippedSlotOptionFromTransmogSlot, slot)
+    if okO and type(o) == "number" then
+      option = o
+    end
+  end
+
+  local t = (Enum and Enum.TransmogType and Enum.TransmogType.Appearance) or 0
+  local ok, info = pcall(api.GetViewedOutfitSlotInfo, slot, t, option)
+  if not ok or type(info) ~= "table" then
+    return nil
+  end
+  if not info.isTransmogrified or not info.transmogID or info.transmogID <= 0 then
+    return nil                      -- this slot genuinely carries no appearance
+  end
+  local p = pieceFromSource(info.transmogID)
+  if p then
+    p.src = "outfit"
+  end
+  return p
+end
+
 -- One slot, from whichever source this client actually offers. /mvlink debug names the
 -- source per slot, so a wrong path shows up as [equipped] where [transmog] belongs.
 function MVLink:ReadSlot(invSlot)
+  -- The outfit first: on 12.x it is the layer that decides what is actually seen, and the
+  -- per-slot transmog below is the older mechanism that now answers 0 for everything.
+  local fromOutfit = self:ReadOutfitSlot(invSlot)
+  if fromOutfit then
+    return fromOutfit
+  end
+
   local loc, locMethod = self:BuildLocation(invSlot)
   if locMethod then
     self.locMethod = locMethod          -- recorded once, for the saved diagnosis
@@ -404,19 +513,24 @@ function MVLink:ReadWornLook()
     worn = 0,
   }
 
-  for _, invSlot in ipairs(self.SLOT_ORDER) do
-    -- Counted separately from the pieces, because the two can disagree and the difference
-    -- is the only useful diagnosis. The old "missing" counter could not: it incremented
-    -- only when ReadSlot returned nil AND an item was equipped, and ReadSlot's last path
-    -- returns a piece for every equipped item unconditionally -- so it was always 0.
-    if GetInventoryItemID("player", invSlot) then
-      look.worn = look.worn + 1
+  -- The outfit is brought into view ONCE around all thirteen reads, not per slot: it is a
+  -- state change, and doing it thirteen times over would be thirteen chances to leave the
+  -- transmog window looking at something the player did not choose.
+  self:WithActiveOutfitViewed(function()
+    for _, invSlot in ipairs(self.SLOT_ORDER) do
+      -- Counted separately from the pieces, because the two can disagree and the difference
+      -- is the only useful diagnosis. The old "missing" counter could not: it incremented
+      -- only when ReadSlot returned nil AND an item was equipped, and ReadSlot's last path
+      -- returns a piece for every equipped item unconditionally -- so it was always 0.
+      if GetInventoryItemID("player", invSlot) then
+        look.worn = look.worn + 1
+      end
+      local piece = self:ReadSlot(invSlot)
+      if piece then
+        look.pieces[self.SLOT_MAP[invSlot]] = piece
+      end
     end
-    local piece = self:ReadSlot(invSlot)
-    if piece then
-      look.pieces[self.SLOT_MAP[invSlot]] = piece
-    end
-  end
+  end)
   return look
 end
 
