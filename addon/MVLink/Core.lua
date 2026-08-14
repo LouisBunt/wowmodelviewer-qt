@@ -18,7 +18,7 @@ MVLink.FORMAT = "MVM1"
 -- reload -- and the file that lands looks current while being one version behind. Twice now
 -- that cost a round of "it still does not work" against data from the previous build. The
 -- stamp makes it a glance instead of a deduction.
-MVLink.BUILD = 7
+MVLink.BUILD = 8
 
 -- --------------------------------------------------------------------------------------
 -- Reading
@@ -634,10 +634,86 @@ f:SetScript("OnEvent", function(_, event)
   end
 end)
 
+-- --------------------------------------------------------------------------------------
+-- Dump window
+--
+-- Every diagnosis so far went into SavedVariables, which WoW only writes on /reload or
+-- logout -- and writes with the code loaded BEFORE the reload, so a freshly installed build
+-- never reports on its first one. That cost six reloads and most of the patience in the
+-- room, and it was my method that was wrong, not the user's.
+--
+-- This reads out of memory into a text box that can be selected and copied. Nothing is
+-- written, nothing is reloaded, and the answer is on screen the moment the command is typed.
+local dumpFrame
+
+local function createDumpFrame()
+  local f = CreateFrame("Frame", "MVLinkDumpFrame", UIParent, "BasicFrameTemplateWithInset")
+  f:SetSize(760, 520)
+  f:SetPoint("CENTER")
+  f:SetMovable(true)
+  f:EnableMouse(true)
+  f:RegisterForDrag("LeftButton")
+  f:SetScript("OnDragStart", f.StartMoving)
+  f:SetScript("OnDragStop", f.StopMovingOrSizing)
+  f:SetFrameStrata("DIALOG")
+  f:SetToplevel(true)
+
+  f.title = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+  f.title:SetPoint("TOP", f, "TOP", 0, -5)
+  f.title:SetText("MVLink — alles markieren mit Strg+A, kopieren mit Strg+C")
+
+  local sf = CreateFrame("ScrollFrame", "MVLinkDumpScroll", f, "UIPanelScrollFrameTemplate")
+  sf:SetPoint("TOPLEFT", f.Inset, "TOPLEFT", 6, -6)
+  sf:SetPoint("BOTTOMRIGHT", f.Inset, "BOTTOMRIGHT", -26, 6)
+
+  local eb = CreateFrame("EditBox", nil, sf)
+  eb:SetMultiLine(true)
+  eb:SetFontObject(GameFontHighlightSmall)
+  eb:SetWidth(700)
+  eb:SetAutoFocus(false)
+  eb:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+  sf:SetScrollChild(eb)
+
+  f.editBox = eb
+  f:Hide()
+  return f
+end
+
+function MVLink:Dump()
+  local look = self:ReadWornLook()
+  local lines = {
+    "MVLink build " .. tostring(self.BUILD),
+    "",
+    "CODE: " .. self:Encode(look),
+    "",
+    "--- Quelle pro Slot ---",
+  }
+  for _, invSlot in ipairs(self.SLOT_ORDER) do
+    local p = look.pieces[self.SLOT_MAP[invSlot]]
+    lines[#lines + 1] = ("%-12s inv=%2d  equipped=%s  ->  %s"):format(
+      self.SLOT_NAME[invSlot] or "?", invSlot,
+      tostring(GetInventoryItemID("player", invSlot)),
+      p and (p.itemID .. "." .. p.modID .. " [" .. (p.src or "?") .. "]") or "nichts")
+  end
+  lines[#lines + 1] = ""
+  lines[#lines + 1] = "--- Sonde ---"
+  for _, l in ipairs(self:Probe()) do
+    lines[#lines + 1] = l
+  end
+
+  dumpFrame = dumpFrame or createDumpFrame()
+  dumpFrame.editBox:SetText(table.concat(lines, "\n"))
+  dumpFrame.editBox:HighlightText()
+  dumpFrame:Show()
+  dumpFrame.editBox:SetFocus()
+end
+
 SLASH_MVLINK1 = "/mvlink"
 SlashCmdList["MVLINK"] = function(msg)
   local cmd = (msg or ""):lower():match("^%s*(%S*)")
-  if cmd == "probe" then
+  if cmd == "dump" then
+    MVLink:Dump()
+  elseif cmd == "probe" then
     local out = MVLink:Probe()
     print("|cffa855f7MVLink|r: " .. #out .. " Zeilen aufgezeichnet. Jetzt /reload — "
           .. "danach steht alles in MVLink.lua unter SavedVariables.")
