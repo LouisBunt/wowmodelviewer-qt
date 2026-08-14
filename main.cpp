@@ -28,6 +28,7 @@
 #include <QInputDialog>
 #include <QMenu>
 #include <QAction>
+#include <QClipboard>
 #include <QCursor>
 #include <QMessageBox>
 #include <QString>
@@ -804,6 +805,41 @@ int main(int argc, char** argv)
   // The character tab delegates every button to the menu controller, so it can only be
   // built once that exists.
   win->characterIoHost()->layout()->addWidget(new CharacterIoTab(menus, exporters, host));
+
+  // The clipboard IS the MVLink transport. An addon cannot write a file except through
+  // SavedVariables, and WoW flushes those only on /reload -- with the code that was loaded
+  // BEFORE the reload. Every file-based route is therefore stale by design, and stale data
+  // is exactly what it delivered. Copying in-game is instant, so ModelViewer watches the
+  // clipboard and applies any MVM1 code that shows up; the player copies, switches windows,
+  // and is done.
+  //
+  // Never under --shot/--export: a scripted run must not be dressed by whatever happens to
+  // sit in the clipboard, or every reference image becomes a dice roll.
+  if (!g_scripted) {
+    QClipboard* cb = QApplication::clipboard();
+    // Shared state, not a lambda-local: dataChanged fires twice per copy on Windows, and
+    // re-applying the identical code would reset the camera mid-look.
+    static QString lastApplied;
+    auto tryClipboard = [menus, win, cb]() {
+      const QString text = cb->text().trimmed();
+      if (!text.startsWith("MVM1:") || text == lastApplied)
+        return;
+      lastApplied = text;
+      const QString err = menus->importMVLinkCode(text, false);
+      if (err.isEmpty()) {
+        win->setPathLabel(QObject::tr("Look aus der Zwischenablage übernommen."));
+        trace("mvlink from clipboard OK");
+      } else {
+        // Quiet on purpose. The clipboard belongs to the user; a half-copied or foreign
+        // code must not pop dialogs while they are doing something else.
+        trace("mvlink from clipboard FAILED: " + err);
+      }
+    };
+    QObject::connect(cb, &QClipboard::dataChanged, win, tryClipboard);
+    // Once at startup too: the common order is copy in game first, launch ModelViewer
+    // second -- and dataChanged only fires for changes after this point.
+    tryClipboard();
+  }
   // Connected after showModel, so by the time the menu re-reads the state the panels
   // already hold the new model.
   QObject::connect(win, &MainWindow::fileActivated, menus,

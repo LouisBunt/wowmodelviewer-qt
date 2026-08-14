@@ -1352,7 +1352,21 @@ QString MenuController::importMVLinkFromGame(const QString& outfitName, bool int
   if (!mvlink_read_saved_variables(paths.front(), outfitName, &code, &error))
     return error;
 
-  return importMVLinkCode(code, interactive);
+  const QString result = importMVLinkCode(code, interactive);
+  if (!result.isEmpty())
+    return result;
+
+  // Success -- but the file is only as fresh as the last /reload, and pretending otherwise
+  // is precisely what made this route look broken: it faithfully served the look from the
+  // previous session. The timestamp comes from the addon itself.
+  const QString written = mvlink_saved_variables_updated_at(paths.front());
+  if (interactive && !written.isEmpty() && win_) {
+    QMessageBox::information(win_, tr("MVLink"),
+      tr("Look übernommen — Stand vom %1.\n\nDie Datei schreibt WoW erst beim /reload oder "
+         "Ausloggen. Aktueller geht es über das Addon-Fenster: /mvlink, Code kopieren — "
+         "ModelViewer übernimmt ihn sofort.").arg(written));
+  }
+  return QString();
 }
 
 QString MenuController::importWowheadDressingRoom(const QString& rawUrl, bool interactive)

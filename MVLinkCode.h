@@ -48,6 +48,12 @@ bool mvlink_read_saved_variables(const QString& path, const QString& outfitName,
 // found, newest first -- one per account, and someone with two accounts has two.
 std::vector<QString> mvlink_saved_variable_paths(const QString& wowInstallFolder);
 
+// When the addon last wrote the file, as the addon's own timestamp string ("2026-08-14
+// 04:47:43"), or empty if the field is missing. Separate from the code reader on purpose:
+// the file is only as fresh as the last /reload, and the import message says so with this
+// value -- silently serving stale data is what made the file route look broken.
+QString mvlink_saved_variables_updated_at(const QString& path);
+
 // Copies the bundled addon into the game's AddOns folder.
 //
 // The setup cannot do this: at install time nobody knows where World of Warcraft lives, and
