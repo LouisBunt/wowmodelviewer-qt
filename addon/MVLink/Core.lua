@@ -242,6 +242,42 @@ function MVLink:Probe()
   dumpNamespace("C_TransmogCollection", "Outfit")
   dumpNamespace("C_TransmogSets", nil)
 
+  -- Saved outfits. The names above are known now; the return SHAPES are not, and guessing
+  -- those is how the last two rounds went. So they are called and dumped.
+  note("--- gespeicherte Sets ---")
+  if type(C_TransmogOutfitInfo) == "table" then
+    for _, fname in ipairs({ "GetOutfitsInfo", "GetActiveOutfitID", "GetCurrentlyViewedOutfitID" }) do
+      if type(C_TransmogOutfitInfo[fname]) == "function" then
+        local r = { pcall(C_TransmogOutfitInfo[fname]) }
+        note(fname .. " n=" .. #r)
+        for i = 1, math.min(#r, 4) do note("  [" .. i .. "] " .. describe(r[i])) end
+      end
+    end
+  end
+
+  -- Every slot: is a transmog applied at all, and does the read pick it up? One slot could
+  -- not answer that -- a bare chest looks exactly like a broken reader.
+  note("--- alle Slots: appliedSourceID vs baseSourceID ---")
+  for _, s in ipairs(self.SLOT_ORDER) do
+    local l = self:BuildLocation(s)
+    local line = (self.SLOT_NAME[s] or s) .. " inv=" .. s
+      .. " item=" .. tostring(GetInventoryItemID("player", s))
+    if l and C_Transmog and C_Transmog.GetSlotVisualInfo then
+      local ok, vis = pcall(C_Transmog.GetSlotVisualInfo, l)
+      if ok and type(vis) == "table" then
+        line = line .. " applied=" .. tostring(vis.appliedSourceID)
+                    .. " base=" .. tostring(vis.baseSourceID)
+      elseif ok then
+        line = line .. " vis=" .. describe(vis)
+      else
+        line = line .. " vis-FEHLER"
+      end
+    else
+      line = line .. " KEINE LOCATION"
+    end
+    note(line)
+  end
+
   -- One slot, end to end, with every return value spelled out. Chest (5) rather than head:
   -- a hidden helm is a common setting and would make an empty answer look like a fault.
   local invSlot = 5
@@ -275,6 +311,18 @@ function MVLink:Probe()
   else
     note("loc ist nil -- beide Transmog-Pfade werden uebersprungen, "
          .. "das ist die Ursache fuer das falsche Aussehen")
+  end
+
+  -- Main hand separately: it is one of the two slots still dropping to the equipped item,
+  -- and the created location reports modification=1 although 0 was passed. Weapons carry a
+  -- main/secondary axis the armour slots do not, so this is where that difference shows.
+  note("--- Slot 16 (Waffenhand) ---")
+  local wLoc, wMethod = self:BuildLocation(16)
+  note("method=" .. tostring(wMethod) .. " loc=" .. describe(wLoc))
+  if wLoc and TransmogUtil and type(TransmogUtil.GetInfoForEquippedSlot) == "function" then
+    local r = { pcall(TransmogUtil.GetInfoForEquippedSlot, wLoc) }
+    note("GetInfoForEquippedSlot n=" .. #r)
+    for i = 1, #r do note("  [" .. i .. "] " .. describe(r[i])) end
   end
 
   MVLinkDB = MVLinkDB or {}
