@@ -7,9 +7,11 @@
 #include <QFontDatabase>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QFileInfo>
 #include <QLineEdit>
 #include <QListWidget>
 #include <QMessageBox>
+#include <QUrl>
 #include <QPushButton>
 #include <QVBoxLayout>
 
@@ -130,7 +132,9 @@ CharacterIoTab::CharacterIoTab(MenuController* menus, ExportController* exporter
   col->addWidget(lookSaveBtn);
 
   lookList_ = new QListWidget;
-  lookList_->setFixedHeight(110);
+  // Tall enough for three thumbnail rows; the preview is the point of the list.
+  lookList_->setFixedHeight(150);
+  lookList_->setIconSize(QSize(44, 44));
   lookList_->setStyleSheet(QString(
     "QListWidget { background:%1; border:1px solid %2; border-radius:6px; color:%3;"
     " padding:3px; }"
@@ -346,7 +350,24 @@ void CharacterIoTab::refreshLooks()
   if (!lookList_ || !menus_)
     return;
   lookList_->clear();
-  lookList_->addItems(menus_->savedLooks());
+  for (const QString& name : menus_->savedLooks()) {
+    auto* item = new QListWidgetItem(name);
+    const QString thumb = menus_->lookThumbFor(name);
+    if (!thumb.isEmpty()) {
+      item->setIcon(QIcon(thumb));
+      // Qt tooltips take rich text, which turns hovering into a real preview -- the
+      // thumbnail is 96 px, big enough to recognise a look without opening it.
+      item->setToolTip(QString("<img src='%1'>")
+                         .arg(QUrl::fromLocalFile(QFileInfo(thumb).absoluteFilePath())
+                                .toString()));
+    } else {
+      // Saved before previews existed. Said out loud, or the missing picture reads as
+      // a bug rather than an old file.
+      item->setToolTip(QString::fromUtf8("Noch ohne Vorschau — einmal laden und neu "
+                                         "speichern, dann bekommt er eine."));
+    }
+    lookList_->addItem(item);
+  }
 }
 
 void CharacterIoTab::saveLook()

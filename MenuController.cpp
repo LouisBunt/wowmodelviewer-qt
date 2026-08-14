@@ -19,6 +19,7 @@
 #include <QColorDialog>
 #include <QDateTime>
 #include <QDir>
+#include <QImage>
 #include <QTextStream>
 #include <QFile>
 #include <QFileDialog>
@@ -1005,6 +1006,14 @@ QString lookFilePath(const QString& name)
   return QString(kLooksDir) + "/" + safe + ".chr";
 }
 
+// The preview beside a .chr: same base name, .png. Derived from the sanitized path so the
+// pair can never drift apart.
+QString lookThumbPath(const QString& name)
+{
+  const QString chr = lookFilePath(name);
+  return chr.isEmpty() ? QString() : chr.left(chr.size() - 4) + ".png";
+}
+
 }  // namespace
 
 QString MenuController::loadCharacterFrom(const QString& path)
@@ -1050,6 +1059,22 @@ QString MenuController::saveLook(const QString& name)
     return tr("Der Look braucht einen Namen.");
   if (!writeCharacterTo(path, false))
     return tr("»%1« ließ sich nicht schreiben.").arg(QDir::toNativeSeparators(path));
+
+  // The preview, taken from the viewport the user is looking at this very moment -- by
+  // definition the look being saved. Full frame first (saveScreenshot needs the GL
+  // readback), then a centred square at thumbnail size; the full shot would be half a
+  // megabyte per entry for no gain. Failure here costs the picture, never the look.
+  const QString thumb = lookThumbPath(name);
+  if (host_ && !thumb.isEmpty() && host_->saveScreenshot(thumb)) {
+    QImage img(thumb);
+    if (!img.isNull()) {
+      const int side = qMin(img.width(), img.height());
+      img = img.copy((img.width() - side) / 2, (img.height() - side) / 2, side, side)
+               .scaled(96, 96, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+      img.save(thumb, "PNG");
+    }
+  }
+
   trace("look saved: " + path);
   return QString();
 }
@@ -1080,7 +1105,16 @@ QStringList MenuController::savedLooks() const
 bool MenuController::deleteLook(const QString& name)
 {
   const QString path = lookFilePath(name);
-  return !path.isEmpty() && QFile::remove(path);
+  if (path.isEmpty() || !QFile::remove(path))
+    return false;
+  QFile::remove(lookThumbPath(name));   // no thumbnail is fine; an orphaned one is litter
+  return true;
+}
+
+QString MenuController::lookThumbFor(const QString& name) const
+{
+  const QString thumb = lookThumbPath(name);
+  return QFile::exists(thumb) ? thumb : QString();
 }
 
 void MenuController::clearEquipment()
