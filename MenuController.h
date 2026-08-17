@@ -61,6 +61,36 @@ public:
   // success, otherwise the reason; drivable from the command line (--dressing-room).
   QString importWowheadDressingRoom(const QString& rawUrl, bool interactive);
 
+  // The code the in-game MVLink addon produces. Empty return means it worked.
+  QString importMVLinkCode(const QString& code, bool interactive);
+
+  // Same, but the code is fetched from the addon's SavedVariables file. `outfitName`
+  // empty takes the worn look.
+  QString importMVLinkFromGame(const QString& outfitName, bool interactive);
+
+  // Copies the bundled MVLink addon into the game's AddOns folder. Empty return means it
+  // worked, and `destOut` then holds where it landed -- worth showing, because someone with
+  // two installations needs to know which one just got it.
+  QString installMVLinkAddon(QString* destOut = nullptr);
+
+  // The look library: named .chr files under userSettings/looks. A look is the whole
+  // character -- race, customization, equipment including the colour variant, because the
+  // .chr format stores the resolved displayId per item. F7/F8 already write and read this
+  // format; the library only gives it names and a list instead of a file dialog per use.
+  // Errors come back as text; empty means it worked.
+  QString saveLook(const QString& name);
+  QString loadLook(const QString& name);
+  QStringList savedLooks() const;
+  bool deleteLook(const QString& name);
+
+  // Path of the preview image saved beside the .chr, or empty when there is none --
+  // looks stored before previews existed simply have no picture until re-saved.
+  QString lookThumbFor(const QString& name) const;
+
+  // Loads a .chr from an explicit path with no dialog anywhere -- the shared core of
+  // loadCharacterFile, loadLook and the --look flag.
+  QString loadCharacterFrom(const QString& path);
+
   // The .chr file dialogs. Public because the character tab offers the same two
   // buttons; both entry points run the identical code rather than a second copy.
   void loadCharacter() { loadCharacterFile(false); }
@@ -92,7 +122,10 @@ private:
   void clearEquipment();
   void randomiseCharacter();
   void importArmoryCharacter();   // the dialog wrapper around importArmory()
-  void importWowheadDressingRoomDialog();  // ... around importWowheadDressingRoom()
+  void importWowheadDressingRoomDialog();
+
+  // Menu route: offers the file first, then a code, in one dialog.
+  void importMVLinkDialog();  // ... around importWowheadDressingRoom()
   void importNpcFromUrl();
   void importWowheadLook();
 

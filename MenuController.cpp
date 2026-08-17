@@ -19,6 +19,7 @@
 #include <QColorDialog>
 #include <QDateTime>
 #include <QDir>
+#include <QImage>
 #include <QTextStream>
 #include <QFile>
 #include <QFileDialog>
@@ -37,6 +38,7 @@
 #include "ExportController.h"
 #include "GLHost.h"
 #include "MainWindow.h"
+#include "MVLinkCode.h"
 #include "WowheadDressingRoom.h"
 
 #include "CharDetails.h"
@@ -189,10 +191,12 @@ void MenuController::build()
       &MenuController::importArmoryCharacter);
   add(characterMenu_, tr("NPC von URL importieren …"), QString(),
       &MenuController::importNpcFromUrl);
-  add(characterMenu_, tr("Wowhead-Anprobe importieren …"), QString(),
-      &MenuController::importWowheadDressingRoomDialog);
-  add(characterMenu_, tr("Wowhead-Look importieren …"), QString(),
-      &MenuController::importWowheadLook);
+  // The two Wowhead entries are gone: rebuilding a look on a website and pasting the link
+  // back is the long way round now that the in-game addon reads what the character is
+  // actually wearing. The decoder and --dressing-room stay for scripts and for the test
+  // corpus; only the way in through the menu is removed.
+  add(characterMenu_, tr("Aussehen aus WoW holen (MVLink) …"), QString(),
+      &MenuController::importMVLinkDialog);
   characterMenu_->addSeparator();
   needsCharacter_.push_back(
     add(characterMenu_, tr("Ausrüstung speichern …"), "F5", &MenuController::saveEquipment));
@@ -956,45 +960,161 @@ void MenuController::loadCharacterFile(bool equipmentOnly)
   QString fn = path;   // WoWModel::load / WoWItem::load take a non-const reference
 
   if (!equipmentOnly) {
-    QString error;
-    const QString modelName = modelNameFromCharFile(path, &error);
-    if (modelName.isEmpty()) {
-      QMessageBox::warning(win_, tr("Charakter laden"), error);
+    // Same core the look library and --look use; only the error presentation differs.
+    const QString err = loadCharacterFrom(path);
+    if (!err.isEmpty()) {
+      QMessageBox::warning(win_, tr("Charakter laden"), err);
       return;
     }
-
-    GameFile* f = GAMEDIRECTORY.getFile(modelName);
-    if (!f) {
-      QMessageBox::warning(
-        win_, tr("Charakter laden"),
-        tr("Das Modell der Datei (%1) ist in den geladenen Spieldaten nicht enthalten.")
-          .arg(modelName));
+  } else {
+    WoWModel* m = characterModel();
+    if (!m) {
+      QMessageBox::warning(win_, tr("Charakter laden"),
+                           tr("Das geladene Modell ist kein Charaktermodell."));
       return;
     }
-
-    // The model has to exist -- and be set up as a character, which the load path does
-    // -- before its customization can be applied to it.
-    emit loadFileRequested(f);
+    for (WoWModel::iterator it = m->begin(); it != m->end(); ++it)
+      (*it)->load(fn);
+    m->refresh();
+    win_->characterPanel()->refresh();
+    modelChanged();
   }
+
+  rememberDir("dirs/character", path);
+  win_->setPathLabel(tr("Geladen: %1").arg(QDir::toNativeSeparators(path)));
+}
+
+// --------------------------------------------------------------------------------------
+// The look library
+
+namespace {
+
+const char* kLooksDir = "userSettings/looks";
+
+// The colon in "ModelViewer: Midnight" once broke the whole installer; user-typed look
+// names get the same respect. Everything Windows forbids in a file name becomes '_', and
+// the visible name is whatever the user typed -- only the file on disk is sanitized.
+QString lookFilePath(const QString& name)
+{
+  QString safe = name.trimmed();
+  static const QString forbidden = "\\/:*?\"<>|";
+  for (const QChar& c : forbidden)
+    safe.replace(c, '_');
+  if (safe.isEmpty())
+    return QString();
+  QDir().mkpath(kLooksDir);
+  return QString(kLooksDir) + "/" + safe + ".chr";
+}
+
+// The preview beside a .chr: same base name, .png. Derived from the sanitized path so the
+// pair can never drift apart.
+QString lookThumbPath(const QString& name)
+{
+  const QString chr = lookFilePath(name);
+  return chr.isEmpty() ? QString() : chr.left(chr.size() - 4) + ".png";
+}
+
+}  // namespace
+
+QString MenuController::loadCharacterFrom(const QString& path)
+{
+  if (!QFile::exists(path))
+    return tr("Die Datei gibt es nicht:\n%1").arg(QDir::toNativeSeparators(path));
+
+  QString error;
+  const QString modelName = modelNameFromCharFile(path, &error);
+  if (modelName.isEmpty())
+    return error;
+
+  GameFile* f = GAMEDIRECTORY.getFile(modelName);
+  if (!f)
+    return tr("Das Modell der Datei (%1) ist in den geladenen Spieldaten nicht enthalten.")
+             .arg(modelName);
+
+  // Synchronous: the connection runs showModel in this thread, so by the next line the
+  // character model exists and can take the saved state.
+  emit loadFileRequested(f);
 
   WoWModel* m = characterModel();
-  if (!m) {
-    QMessageBox::warning(win_, tr("Charakter laden"),
-                         tr("Das geladene Modell ist kein Charaktermodell."));
-    return;
-  }
+  if (!m)
+    return tr("Das geladene Modell ist kein Charaktermodell.");
 
-  if (!equipmentOnly)
-    m->load(fn);
-
+  QString fn = path;                   // WoWModel::load / WoWItem::load take a non-const ref
+  m->load(fn);
   for (WoWModel::iterator it = m->begin(); it != m->end(); ++it)
     (*it)->load(fn);
 
   m->refresh();
   win_->characterPanel()->refresh();
-  rememberDir("dirs/character", path);
   modelChanged();
-  win_->setPathLabel(tr("Geladen: %1").arg(QDir::toNativeSeparators(path)));
+  return QString();
+}
+
+QString MenuController::saveLook(const QString& name)
+{
+  if (!characterModel())
+    return tr("Kein Charakter geladen — es gibt nichts zu speichern.");
+  const QString path = lookFilePath(name);
+  if (path.isEmpty())
+    return tr("Der Look braucht einen Namen.");
+  if (!writeCharacterTo(path, false))
+    return tr("»%1« ließ sich nicht schreiben.").arg(QDir::toNativeSeparators(path));
+
+  // The preview, taken from the viewport the user is looking at this very moment -- by
+  // definition the look being saved. Full frame first (saveScreenshot needs the GL
+  // readback), then a centred square at thumbnail size; the full shot would be half a
+  // megabyte per entry for no gain. Failure here costs the picture, never the look.
+  const QString thumb = lookThumbPath(name);
+  if (host_ && !thumb.isEmpty() && host_->saveScreenshot(thumb)) {
+    QImage img(thumb);
+    if (!img.isNull()) {
+      const int side = qMin(img.width(), img.height());
+      img = img.copy((img.width() - side) / 2, (img.height() - side) / 2, side, side)
+               .scaled(96, 96, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+      img.save(thumb, "PNG");
+    }
+  }
+
+  trace("look saved: " + path);
+  return QString();
+}
+
+QString MenuController::loadLook(const QString& name)
+{
+  const QString path = lookFilePath(name);
+  if (path.isEmpty())
+    return tr("Welcher Look? Der Name fehlt.");
+  const QString err = loadCharacterFrom(path);
+  if (err.isEmpty()) {
+    trace("look loaded: " + path);
+    win_->setPathLabel(tr("Look »%1« geladen.").arg(name.trimmed()));
+  }
+  return err;
+}
+
+QStringList MenuController::savedLooks() const
+{
+  QDir dir(kLooksDir);
+  QStringList names;
+  for (const QFileInfo& fi : dir.entryInfoList(QStringList() << "*.chr", QDir::Files,
+                                               QDir::Name | QDir::IgnoreCase))
+    names << fi.completeBaseName();
+  return names;
+}
+
+bool MenuController::deleteLook(const QString& name)
+{
+  const QString path = lookFilePath(name);
+  if (path.isEmpty() || !QFile::remove(path))
+    return false;
+  QFile::remove(lookThumbPath(name));   // no thumbnail is fine; an orphaned one is litter
+  return true;
+}
+
+QString MenuController::lookThumbFor(const QString& name) const
+{
+  const QString thumb = lookThumbPath(name);
+  return QFile::exists(thumb) ? thumb : QString();
 }
 
 void MenuController::clearEquipment()
@@ -1230,6 +1350,139 @@ QString MenuController::applyCharInfos(CharInfos* result, bool interactive,
     choiceIds.push_back(c.second);
   win_->characterPanel()->applyPostureFor(choiceIds);
 
+  return QString();
+}
+
+void MenuController::importMVLinkDialog()
+{
+  // Try the file first without asking: if the addon has been used at all, this is the
+  // whole interaction. Only when nothing is there does the dialog appear -- pasting a
+  // code should not be the price of admission for people who have it set up.
+  const QString fileErr = importMVLinkFromGame(QString(), false);
+  if (fileErr.isEmpty()) {
+    win_->setPathLabel(tr("Aussehen aus WoW übernommen (Stand: letztes /reload)."));
+    return;
+  }
+
+  bool ok = false;
+  const QString code = QInputDialog::getText(
+    win_, tr("Aussehen aus WoW"),
+    tr("%1\n\nCode aus dem Addon einfügen (im Spiel: /mvlink):").arg(fileErr),
+    QLineEdit::Normal, QString(), &ok);
+  if (!ok || code.trimmed().isEmpty())
+    return;
+
+  const QString err = importMVLinkCode(code.trimmed(), true);
+  if (!err.isEmpty())
+    QMessageBox::warning(win_, tr("MVLink"), err);
+}
+
+QString MenuController::importMVLinkCode(const QString& code, bool interactive)
+{
+  MVLinkLook look;
+  QString error;
+  if (!mvlink_parse_code(code, &look, &error)) {
+    trace("=== mvlink FAILED: " + error);
+    return error;
+  }
+
+  trace(QString("=== mvlink: v%1 race=%2 gender=%3, %4 pieces")
+          .arg(look.version).arg(look.race).arg(look.gender).arg((int)look.pieces.size()));
+
+  QScopedPointer<CharInfos> info(new CharInfos());
+  info->valid = true;
+  info->raceId = (unsigned int)look.race;
+  info->gender = (look.gender == 0) ? "Male" : "Female";
+  // What the addon read IS the appearance -- there is no "real" gear behind it to warn
+  // about, the same reasoning as for a dressing-room look.
+  info->hasTransmogGear = false;
+  info->eyeGlowType = EGT_DEFAULT;      // class is not in the code; no death-knight glow
+
+  info->equipment.assign(NUM_CHAR_SLOTS, 0);
+  info->itemModifierIds.assign(NUM_CHAR_SLOTS, 0);
+
+  int applied = 0;
+  for (const auto& p : look.pieces) {
+    if (p.slot < 0 || p.slot >= NUM_CHAR_SLOTS) {
+      trace(QString("  slot %1 out of range -- skipped").arg(p.slot));
+      continue;
+    }
+    // The slot comes from WoW's own inventory slot, so unlike Wowhead's positional
+    // counting it can be trusted. The item database is still asked, purely so a
+    // disagreement shows up in the log instead of as a helmet on the feet.
+    ItemRecord rec = items.getById(p.itemId);   // by value: slot() is not const
+    if (rec.id != 0 && rec.slot() != p.slot) {
+      trace(QString("  WARNING item %1 says slot %2, code says %3 -- following the code")
+              .arg(p.itemId).arg(rec.slot()).arg(p.slot));
+    }
+    info->equipment[p.slot] = p.itemId;
+    info->itemModifierIds[p.slot] = p.modifier;
+    ++applied;
+    trace(QString("  slot %1: item %2 modifier %3").arg(p.slot).arg(p.itemId).arg(p.modifier));
+  }
+
+  if (applied == 0)
+    return tr("Im Code stand kein Teil, das sich einem Slot zuordnen ließ.");
+
+  // take(), not data(): applyCharInfos deletes the CharInfos on every path. Handing it
+  // data() left the scoped pointer holding a freed object and deleting it a second time
+  // on return -- the import reported success and the application then went down with an
+  // access violation.
+  const QString err = applyCharInfos(info.take(), interactive, tr("MVLink"));
+  if (err.isEmpty())
+    trace("mvlink import OK");
+  return err;
+}
+
+QString MenuController::installMVLinkAddon(QString* destOut)
+{
+  QSettings settings(QString::fromLatin1(kSettingsFile), QSettings::IniFormat);
+  const QString wow = settings.value("game/installFolder").toString();
+
+  QString error;
+  const QString dest = mvlink_install_addon(wow, &error);
+  if (dest.isEmpty())
+    return error.isEmpty() ? tr("Das Addon ließ sich nicht installieren.") : error;
+  if (destOut)
+    *destOut = dest;
+  return QString();
+}
+
+QString MenuController::importMVLinkFromGame(const QString& outfitName, bool interactive)
+{
+  // The install folder the application already knows -- asking again would be a second
+  // place to get it wrong.
+  QSettings settings(QString::fromLatin1(kSettingsFile), QSettings::IniFormat);
+  const QString wow = settings.value("game/installFolder").toString();
+
+  const std::vector<QString> paths = mvlink_saved_variable_paths(wow);
+  if (paths.empty()) {
+    return tr("Keine MVLink-Daten gefunden.\n\nIst das Addon installiert und war es seit "
+              "dem letzten /reload einmal aktiv? Gesucht wurde unter\n%1")
+             .arg(QDir::toNativeSeparators(wow + "/WTF/Account/<Account>/SavedVariables/"));
+  }
+
+  // Newest first. With several accounts the one just played is the intended one; the
+  // path is traced so a wrong guess is visible rather than mysterious.
+  trace("mvlink savedvariables: " + paths.front());
+  QString code, error;
+  if (!mvlink_read_saved_variables(paths.front(), outfitName, &code, &error))
+    return error;
+
+  const QString result = importMVLinkCode(code, interactive);
+  if (!result.isEmpty())
+    return result;
+
+  // Success -- but the file is only as fresh as the last /reload, and pretending otherwise
+  // is precisely what made this route look broken: it faithfully served the look from the
+  // previous session. The timestamp comes from the addon itself.
+  const QString written = mvlink_saved_variables_updated_at(paths.front());
+  if (interactive && !written.isEmpty() && win_) {
+    QMessageBox::information(win_, tr("MVLink"),
+      tr("Look übernommen — Stand vom %1.\n\nDie Datei schreibt WoW erst beim /reload oder "
+         "Ausloggen. Aktueller geht es über das Addon-Fenster: /mvlink, Code kopieren — "
+         "ModelViewer übernimmt ihn sofort.").arg(written));
+  }
   return QString();
 }
 

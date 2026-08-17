@@ -11,6 +11,7 @@ class FileTreeModel;
 class GLHost;
 class GameFile;
 class ItemBrowser;
+class NpcBrowser;
 class LightPanel;
 class QLabel;
 class QLineEdit;
@@ -42,6 +43,11 @@ public:
   void setBuildLabel(const QString& text);
   void setPathLabel(const QString& text);
 
+  // Re-set the brand line in a different family. Separate from construction because the
+  // face we want lives in the game archives, which are not mounted when this window is
+  // built. Does nothing if the family is empty, so the caller need not check.
+  void setDisplayFont(const QString& family, int pointSize = -1);
+
   // Fill the browser from the game directory once CASC is mounted.
   void populateTree();
   void setCategory(int index);
@@ -57,6 +63,7 @@ public:
   // game data and the plugins.
   QMenuBar* menuBar() const { return menuBar_; }
   ItemBrowser* itemBrowser() const { return itemBrowser_; }
+  NpcBrowser* npcBrowser() const { return npcBrowser_; }
 
   // Move the highlight in the viewport's camera-preset row. Called from the menu too,
   // so the two ways of switching view do not drift apart.
@@ -121,6 +128,7 @@ private:
   GLHost* canvas_ = nullptr;
   CharacterPanel* charPanel_ = nullptr;
   TimelinePanel* timeline_ = nullptr;
+  QLabel* brandLabel_ = nullptr;     // the product name in the title bar
   QLabel* buildLabel_ = nullptr;
   QLabel* pathLabel_ = nullptr;
   QLabel* exportButton_ = nullptr;   // HUD, disabled while no model is loaded
@@ -139,6 +147,7 @@ private:
   QMenuBar* menuBar_ = nullptr;
   LightPanel* lightPanel_ = nullptr;
   ItemBrowser* itemBrowser_ = nullptr;
+  NpcBrowser* npcBrowser_ = nullptr;
   QStackedWidget* browserStack_ = nullptr;
   QWidget* searchWrap_ = nullptr;
   QLabel* fpsLabel_ = nullptr;

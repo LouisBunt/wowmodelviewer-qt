@@ -16,5 +16,13 @@ phase*-trace.txt
 .vs/
 
 # Release artefacts. stage.ps1 rebuilds the payload, ISCC rebuilds the setup.
-installer/stage/
-installer/dist/
+# The wildcards matter: a previous release moved aside as dist-alt-<date> fell straight out
+# of "installer/dist/" and a git add -A swept 180 MB of build output into a commit, which the
+# remote then refused. Anything named like the staging or output folder stays out.
+installer/stage*/
+installer/dist*/
+
+# Runtime data written beside the executable: settings with the player's WoW path, the log
+# and trace, the database cache, the look library and the NPC thumbnails. Personal and
+# machine-specific -- it belongs to the installation, never to the repository.
+userSettings/
