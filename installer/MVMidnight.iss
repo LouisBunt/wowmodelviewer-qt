@@ -21,8 +21,8 @@
 ; group and both shortcut files -- the installation could not be completed at all. AppName
 ; keeps the colon; that one is only ever displayed.
 #define MyAppNameFs "ModelViewer Midnight"
-#define MyAppVersion "1.7.0"
-#define MyAppVersionNumeric "1.7.0.0"
+#define MyAppVersion "1.8.0"
+#define MyAppVersionNumeric "1.8.0.0"
 #define MyAppPublisher "Skogdesign"
 #define MyAppExeName "WoWModelViewer-Qt.exe"
 #define MyAppURL "https://github.com/LouisBunt/wowmodelviewer-qt"

@@ -17,6 +17,8 @@
 #include <QDir>
 #include <QFile>
 #include <QFileDialog>
+#include <QFontDatabase>
+#include <QImage>
 #include <QLabel>
 #include <QPainter>
 #include <QSettings>
@@ -27,6 +29,7 @@
 #include <QInputDialog>
 #include <QMenu>
 #include <QAction>
+#include <QClipboard>
 #include <QCursor>
 #include <QMessageBox>
 #include <QString>
@@ -38,6 +41,8 @@
 #include "ExportController.h"
 #include "InspectorTabs.h"
 #include "ItemBrowser.h"
+#include "MVLinkCode.h"
+#include "NpcBrowser.h"
 #include "MenuController.h"
 #include "TimelinePanel.h"
 #include "MainWindow.h"
@@ -335,7 +340,8 @@ int main(int argc, char** argv)
   // Scripted runs must never stop on a modal dialog; decided here, before anything can fail.
   for (int i = 1; i < argc; ++i) {
     const QString a = QString::fromLocal8Bit(argv[i]);
-    if (a == "--shot" || a == "--export" || a == "--install-blender-addon") {
+    if (a == "--shot" || a == "--export" || a == "--install-blender-addon"
+        || a == "--install-mvlink-addon") {
       g_scripted = true;
       break;
     }
@@ -469,6 +475,45 @@ int main(int argc, char** argv)
   GAMEDIRECTORY.initFromListfile("../../../listfile.csv");
   trace("initFromListfile returned");
 
+  // The game's own display face for the title bar, read out of the player's installation
+  // exactly like every other asset. MORPHEUS.TTF belongs to Blizzard and is never shipped
+  // with this program -- if it is not there, this does nothing and the bundled face stays.
+  //
+  // Both routes are tried, not just the name: a name that fails to resolve is one failure
+  // mode, but a streaming installation can resolve it and then have no data behind it.
+  {
+    auto readAsset = [](GameFile* f) -> QByteArray {
+      if (!f || !f->open())
+        return QByteArray();
+      // Deep copy. GameFile::close() releases the buffer with delete[], so handing Qt a
+      // fromRawData view would leave it reading freed memory. The GameFile itself belongs
+      // to GAMEDIRECTORY and must not be deleted here.
+      const QByteArray bytes(reinterpret_cast<const char*>(f->getBuffer()),
+                             static_cast<int>(f->getSize()));
+      f->close();
+      return bytes;
+    };
+
+    QByteArray ttf = readAsset(GAMEDIRECTORY.getFile(QString("fonts/morpheus.ttf")));
+    if (ttf.isEmpty())
+      ttf = readAsset(GAMEDIRECTORY.getFile((uint)615962));      // fonts/morpheus.ttf
+    if (ttf.isEmpty()) {
+      trace("morpheus.ttf not in the game data -- keeping the bundled display face");
+    } else {
+      const int fid = QFontDatabase::addApplicationFontFromData(ttf);
+      const QStringList fams = fid >= 0 ? QFontDatabase::applicationFontFamilies(fid)
+                                        : QStringList();
+      if (fams.isEmpty()) {
+        trace("morpheus.ttf read but rejected by Qt -- keeping the bundled display face");
+      } else {
+        // The family name comes from the file, never guessed: Qt registers whatever the
+        // face calls itself, and asking for the wrong name silently substitutes.
+        win->setDisplayFont(fams.first(), 12);
+        trace("title face from the game data: " + fams.first());
+      }
+    }
+  }
+
   // The database, texture regions and race registry. Without these WoWModel cannot
   // resolve a model file to a race, infos.raceID stays -1, and character models draw
   // as a handful of untextured geosets -- which is exactly what Phase 1 produced.
@@ -476,6 +521,31 @@ int main(int argc, char** argv)
   // cached sqlite. One text covers both honestly.
   splashStage(splash, app, QString::fromUtf8("Datenbank wird geladen — beim ersten Start dauert das eine Weile …"));
   trace("before GAMEDATABASE.initFromXML");
+
+  // The database cache (wowdb.sqlite, ~80 MB) is created next to the executable -- that path
+  // is baked into core.dll. If the folder is read-only, sqlite3_open fails, initFromXML
+  // returns false, and the message below blames the data definitions, which is the one thing
+  // that is NOT wrong. Someone who installed into C:\Program Files would go looking for a
+  // corrupt install for hours. Test first and say what actually happened.
+  {
+    QFile probe(QCoreApplication::applicationDirPath() + "/.write-test");
+    const bool writable = probe.open(QIODevice::WriteOnly);
+    probe.close();
+    if (writable)
+      probe.remove();
+    else {
+      return fatalStart(splash, win,
+        QObject::tr("In den Programmordner kann nicht geschrieben werden.\n\n"
+                    "ModelViewer legt seinen Datenbank-Cache (rund 80 MB), die Einstellungen "
+                    "und das Protokoll neben sich selbst ab und braucht dafür einen "
+                    "beschreibbaren Ordner. In »C:\\Programme« geht das ohne Administrator "
+                    "nicht.\n\nBitte in einen eigenen Ordner installieren, etwa "
+                    "»D:\\Programme\\ModelViewer Midnight« oder den vom Setup "
+                    "vorgeschlagenen Benutzerordner."),
+        QCoreApplication::applicationDirPath());
+    }
+  }
+
   // Without the database every character draws as untextured geosets and every equip is a
   // silent no-op -- an application that LOOKS like it started but can do nothing it promises.
   // Stopping here beats letting the user discover that one broken feature at a time.
@@ -555,10 +625,23 @@ int main(int argc, char** argv)
   if (model)
     host->setModel(model);
 
+  // Its own pass, so --shot-frame may stand either side of --shot. A fixed frame number is
+  // what makes a screenshot reproducible: the tick is a constant 16 ms, so frame N is always
+  // the same instant of the clip. Two runs at different frames are the only way to tell a
+  // genuinely frozen model from a slowly moving one.
+  int shotFrame = 90;                                             // ~1.5 s of frames
+  for (int i = 1; i < argc - 1; ++i) {
+    if (QString(argv[i]) == "--shot-frame") {
+      const int n = QString::fromLocal8Bit(argv[i + 1]).toInt();
+      if (n > 0)
+        shotFrame = n;
+    }
+  }
+
   for (int i = 1; i < argc - 1; ++i) {
     const QString arg(argv[i]);
     if (arg == "--shot")
-      host->grabAfter(90, QString::fromLocal8Bit(argv[i + 1]));  // ~1.5 s of frames
+      host->grabAfter(shotFrame, QString::fromLocal8Bit(argv[i + 1]));
     else if (arg == "--view") {                                   // "<yaw>,<pitch>"
       const QStringList yp = QString::fromLocal8Bit(argv[i + 1]).split(',');
       if (yp.size() == 2) {
@@ -567,7 +650,11 @@ int main(int argc, char** argv)
       }
     }
   }
-  win->setBuildLabel(QString("CASC · %1").arg(config.version));
+  // Only major.minor.patch. The fourth field is Blizzard's five-digit build id (12.0.7.68974),
+  // which reads like a date, means nothing to anyone using this, and was the noisiest thing
+  // in the title bar. The pill itself stays: its green dot is the only place the window says
+  // "game data is mounted".
+  win->setBuildLabel(QString("CASC · %1").arg(config.version.section('.', 0, 2)));
   win->setPathLabel(file ? file->fullname()
                          : QString::fromUtf8("Kein Modell geladen — links im Baum eines wählen"));
 
@@ -609,7 +696,20 @@ int main(int argc, char** argv)
     }
   }
 
-  // --tab <0..3> opens an inspector tab (0 Anpassen, 1 Charakter, 2 Licht, 3 Export).
+  // The same for the game side of MVLink. Install and quit, exit code carries the outcome.
+  for (int i = 1; i < argc; ++i) {
+    if (QString(argv[i]) == "--install-mvlink-addon") {
+      // dataFolder, not the settings key: it is the folder this run actually resolved,
+      // command line included, so the flag installs where this run is looking.
+      QString err;
+      const QString dest = mvlink_install_addon(dataFolder, &err);
+      trace(dest.isEmpty() ? QString("mvlink addon install FAILED: %1").arg(err)
+                           : QString("mvlink addon installed into %1").arg(dest));
+      return dest.isEmpty() ? 1 : 0;
+    }
+  }
+
+  // --tab <0..3> opens an inspector tab (0 Anpassen, 1 Import, 2 Licht, 3 Export).
   // Same purpose as --category: a tab that can only be reached by clicking cannot be
   // checked from a script. Applied late, so it wins over the default tab.
   for (int i = 1; i < argc - 1; ++i) {
@@ -707,6 +807,41 @@ int main(int argc, char** argv)
   // The character tab delegates every button to the menu controller, so it can only be
   // built once that exists.
   win->characterIoHost()->layout()->addWidget(new CharacterIoTab(menus, exporters, host));
+
+  // The clipboard IS the MVLink transport. An addon cannot write a file except through
+  // SavedVariables, and WoW flushes those only on /reload -- with the code that was loaded
+  // BEFORE the reload. Every file-based route is therefore stale by design, and stale data
+  // is exactly what it delivered. Copying in-game is instant, so ModelViewer watches the
+  // clipboard and applies any MVM1 code that shows up; the player copies, switches windows,
+  // and is done.
+  //
+  // Never under --shot/--export: a scripted run must not be dressed by whatever happens to
+  // sit in the clipboard, or every reference image becomes a dice roll.
+  if (!g_scripted) {
+    QClipboard* cb = QApplication::clipboard();
+    // Shared state, not a lambda-local: dataChanged fires twice per copy on Windows, and
+    // re-applying the identical code would reset the camera mid-look.
+    static QString lastApplied;
+    auto tryClipboard = [menus, win, cb]() {
+      const QString text = cb->text().trimmed();
+      if (!text.startsWith("MVM1:") || text == lastApplied)
+        return;
+      lastApplied = text;
+      const QString err = menus->importMVLinkCode(text, false);
+      if (err.isEmpty()) {
+        win->setPathLabel(QObject::tr("Look aus der Zwischenablage übernommen."));
+        trace("mvlink from clipboard OK");
+      } else {
+        // Quiet on purpose. The clipboard belongs to the user; a half-copied or foreign
+        // code must not pop dialogs while they are doing something else.
+        trace("mvlink from clipboard FAILED: " + err);
+      }
+    };
+    QObject::connect(cb, &QClipboard::dataChanged, win, tryClipboard);
+    // Once at startup too: the common order is copy in game first, launch ModelViewer
+    // second -- and dataChanged only fires for changes after this point.
+    tryClipboard();
+  }
   // Connected after showModel, so by the time the menu re-reads the state the panels
   // already hold the new model.
   QObject::connect(win, &MainWindow::fileActivated, menus,
@@ -769,6 +904,86 @@ int main(int argc, char** argv)
   QObject::connect(win->itemBrowser(), &ItemBrowser::setActivated,
                    menus, &MenuController::showSet);
   win->itemBrowser()->initialise();
+
+  // Applies a CreatureDisplayInfo -- skin textures and geoset selection -- to a freshly
+  // loaded creature model. Everything here follows the wx reference (AnimControl::SetSkin,
+  // animcontrol.cpp:1406-1479), with one deliberate deviation: the columns are selected by
+  // name, because the wx modern-branch reads them positionally and has an off-by-one that
+  // hands ParticleColorID to the skin slot. No refresh afterwards -- geoset visibility and
+  // replaceTextures are read per frame.
+  //
+  // What this cannot do: displays with ExtendedDisplayInfoID (armoured humanoids) need the
+  // whole character pipeline. Their skin and geosets still apply; armour and face do not.
+  auto applyCreatureDisplay = [](WoWModel* m, int displayId) {
+    if (!m || displayId <= 0)
+      return;
+    auto row = GAMEDATABASE.sqlQuery(QString(
+      "SELECT TextureVariationFileDataID1, TextureVariationFileDataID2, "
+      "TextureVariationFileDataID3 FROM CreatureDisplayInfo WHERE ID = %1").arg(displayId));
+    if (!row.valid || row.values.empty())
+      return;
+
+    // Geosets first: the set decides what is visible, the textures only what it wears.
+    // GeosetValue 0 is skipped on purpose -- the group stays hidden, exactly as the
+    // reference computes it (visible id = 100 * (index + 1) + value).
+    std::set<WoWModel::GeosetNum> cgd;
+    auto geo = GAMEDATABASE.sqlQuery(QString(
+      "SELECT GeosetIndex, GeosetValue FROM CreatureDisplayInfoGeosetData "
+      "WHERE CreatureDisplayInfoID = %1").arg(displayId));
+    if (geo.valid) {
+      for (auto& v : geo.values) {
+        const int val = v[1].toInt();
+        if (val > 0)
+          cgd.insert(100 * (v[0].toInt() + 1) + val);
+      }
+    }
+    m->setCreatureGeosetData(cgd);
+
+    // Skin slots are texture types 11..13; a fourth variation column exists in the data
+    // but the engine has no slot for it. A zero id is skipped rather than passed on --
+    // updateTextureList(nullptr) would bind GL texture 0 and render the part white.
+    for (int i = 0; i < 3; ++i) {
+      const int fdid = row.values[0][i].toInt();
+      if (fdid > 0)
+        m->updateTextureList(GAMEDIRECTORY.getFile(fdid), TEXTURE_GAMEOBJECT1 + i);
+    }
+  };
+
+  // An activated NPC loads its model file like a tree click would, then dresses it in the
+  // display the database names. The preview is captured the first time an NPC is shown --
+  // the list grows its pictures through use, the same trade the look library makes.
+  auto showNpc = [win, host, showModel, applyCreatureDisplay](
+                   int /*creatureId*/, int displayId, int fileDataId, const QString& name) {
+    GameFile* f = GAMEDIRECTORY.getFile((uint)fileDataId);
+    if (!f) {
+      trace(QString("npc: model file %1 not in the game data").arg(fileDataId));
+      return;
+    }
+    showModel(f);
+    WoWModel* m = host->model();
+    if (!m)
+      return;
+    applyCreatureDisplay(m, displayId);
+    win->setPathLabel(name);
+    trace(QString("npc shown: %1 (display %2, file %3)").arg(name).arg(displayId).arg(fileDataId));
+
+    const QString thumb = NpcBrowser::thumbPath(displayId);
+    if (!QFile::exists(thumb)) {
+      QDir().mkpath("userSettings/npc-thumbs");
+      if (host->saveScreenshot(thumb)) {
+        QImage img(thumb);
+        if (!img.isNull()) {
+          const int side = qMin(img.width(), img.height());
+          img = img.copy((img.width() - side) / 2, (img.height() - side) / 2, side, side)
+                   .scaled(96, 96, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+          img.save(thumb, "PNG");
+        }
+        win->npcBrowser()->refreshThumb(displayId);
+      }
+    }
+  };
+  QObject::connect(win->npcBrowser(), &NpcBrowser::npcActivated, win, showNpc);
+  win->npcBrowser()->initialise();
   trace("menus and item browser built");
 
   // --armory <url> runs the armory import without the dialog, so it is verifiable
@@ -793,6 +1008,67 @@ int main(int argc, char** argv)
     const QString err = menus->importWowheadDressingRoom(url, false);
     trace(err.isEmpty() ? QString("dressing room import OK: %1").arg(url)
                         : QString("dressing room import FAILED: %1").arg(err));
+  }
+
+  // --mvlink <code|"game"> takes the appearance from the in-game addon: either the code
+  // itself, or the word "game" to read it out of the addon's SavedVariables.
+  for (int i = 1; i < argc - 1; ++i) {
+    if (QString(argv[i]) != "--mvlink")
+      continue;
+    const QString arg = QString::fromLocal8Bit(argv[i + 1]);
+    QString err;
+    if (arg.compare("game", Qt::CaseInsensitive) == 0) {
+      err = menus->importMVLinkFromGame(QString(), false);
+    } else if (arg.endsWith(".lua", Qt::CaseInsensitive) && QFile::exists(arg)) {
+      // A SavedVariables file given directly. Lets the file path be exercised against a
+      // scratch copy instead of only against a live WoW installation.
+      QString code;
+      if (mvlink_read_saved_variables(arg, QString(), &code, &err))
+        err = menus->importMVLinkCode(code, false);
+    } else {
+      err = menus->importMVLinkCode(arg, false);
+    }
+    trace(err.isEmpty() ? QString("mvlink import OK")
+                        : QString("mvlink import FAILED: %1").arg(err));
+  }
+
+  // --npc <creatureId> shows a named NPC headlessly -- the only way to prove the display
+  // pipeline (skin + geosets) without clicking through the browser.
+  for (int i = 1; i < argc - 1; ++i) {
+    if (QString(argv[i]) != "--npc")
+      continue;
+    const int cid = QString::fromLocal8Bit(argv[i + 1]).toInt();
+    auto r = GAMEDATABASE.sqlQuery(QString(
+      "SELECT Creature.DisplayID1, CreatureModelData.FileDataID, Creature.Name_Lang "
+      "FROM Creature "
+      "JOIN CreatureDisplayInfo ON CreatureDisplayInfo.ID = Creature.DisplayID1 "
+      "JOIN CreatureModelData ON CreatureModelData.ID = CreatureDisplayInfo.ModelID "
+      "WHERE Creature.ID = %1").arg(cid));
+    if (r.valid && !r.values.empty()) {
+      showNpc(cid, r.values[0][0].toInt(), r.values[0][1].toInt(), r.values[0][2]);
+      trace(QString("npc flag OK: %1").arg(cid));
+    } else {
+      trace(QString("npc flag FAILED: creature %1 not found").arg(cid));
+    }
+  }
+
+  // The look library, scriptable. --look loads a saved look by name; --save-look stores
+  // the current character under a name AFTER the import flags above ran, then keeps
+  // going -- so one run can import, save and screenshot, and a second run proves the
+  // round trip: --mvlink <code> --save-look X --shot a.png must hash-match
+  // --look X --shot b.png, colour variants included.
+  for (int i = 1; i < argc - 1; ++i) {
+    if (QString(argv[i]) == "--look") {
+      const QString name = QString::fromLocal8Bit(argv[i + 1]);
+      const QString err = menus->loadLook(name);
+      trace(err.isEmpty() ? QString("look load OK: %1").arg(name)
+                          : QString("look load FAILED: %1").arg(err));
+    } else if (QString(argv[i]) == "--save-look") {
+      const QString name = QString::fromLocal8Bit(argv[i + 1]);
+      const QString err = menus->saveLook(name);
+      trace(err.isEmpty() ? QString("look save OK: %1").arg(name)
+                          : QString("look save FAILED: %1").arg(err));
+    }
   }
 
   // --clips <id>[,<id>...] selects animation clips for the export below, by the same

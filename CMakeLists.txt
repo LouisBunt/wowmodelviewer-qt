@@ -1,10 +1,10 @@
 cmake_minimum_required(VERSION 3.16)
-project(WoWModelViewerQt VERSION 1.7.0)
+project(WoWModelViewerQt VERSION 1.8.0)
 
 # The version the running application reports -- window title, About box, trace and log.
 # Without it a bug report cannot say which build it came from. Keep in step with
 # MyAppVersion in installer/MVMidnight.iss.
-set(WMV_QT_VERSION "1.7.0")
+set(WMV_QT_VERSION "1.8.0")
 
 # The product name, in one place. It reached five files last time it changed.
 set(WMV_APP_NAME "ModelViewer: Midnight")
@@ -96,6 +96,7 @@ add_executable(WoWModelViewer-Qt WIN32
   InspectorTabs.cpp
   InspectorTabs.h
   ItemBrowser.cpp
+  NpcBrowser.cpp
   ItemBrowser.h
   LightPanel.cpp
   LightPanel.h
@@ -105,6 +106,7 @@ add_executable(WoWModelViewer-Qt WIN32
   TimelinePanel.h
   FileTreeModel.cpp
   FileTreeModel.h
+  MVLinkCode.cpp
   WowheadDressingRoom.cpp
   WowheadDressingRoom.h
   BlenderAddonInstaller.cpp

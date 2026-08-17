@@ -7,8 +7,11 @@
 #include <QFontDatabase>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QFileInfo>
 #include <QLineEdit>
 #include <QListWidget>
+#include <QMessageBox>
+#include <QUrl>
 #include <QPushButton>
 #include <QVBoxLayout>
 
@@ -114,20 +117,110 @@ CharacterIoTab::CharacterIoTab(MenuController* menus, ExportController* exporter
   col->setContentsMargins(0, 0, 0, 0);
   col->setSpacing(10);
 
-  // --- Wowhead
-  col->addWidget(sectionLabel(QString::fromUtf8("WOWHEAD-ANPROBE")));
-  wowheadUrl_ = urlField(QString::fromUtf8("https://www.wowhead.com/dressing-room#…"));
-  col->addWidget(wowheadUrl_);
-  auto* whHint = new QLabel(QString::fromUtf8(
-    "Der Link muss das '#' enthalten — dahinter steckt der ganze Look."));
-  whHint->setFont(QFont(uiFamily(), 8));
-  whHint->setWordWrap(true);
-  whHint->setStyleSheet(QString("color:%1; background:transparent;").arg(tok::kDim));
-  col->addWidget(whHint);
-  auto* whBtn = accentButton(QString::fromUtf8("Anprobe importieren"));
-  connect(whBtn, &QPushButton::clicked, this, &CharacterIoTab::importWowhead);
-  connect(wowheadUrl_, &QLineEdit::returnPressed, this, &CharacterIoTab::importWowhead);
-  col->addWidget(whBtn);
+  // --- The look library
+  //
+  // Named .chr files, listed right here. F7/F8 could always save and load a character,
+  // but through a file dialog per use -- which in practice means nobody builds a
+  // collection. A name field, one button and a list is what "easy abspeichern und
+  // später drauf zugreifen" actually asks for.
+  col->addWidget(sectionLabel(QString::fromUtf8("MEINE LOOKS")));
+  lookName_ = urlField(QString::fromUtf8("Name für diesen Look …"));
+  col->addWidget(lookName_);
+  auto* lookSaveBtn = accentButton(QString::fromUtf8("Aktuellen Look speichern"));
+  connect(lookSaveBtn, &QPushButton::clicked, this, &CharacterIoTab::saveLook);
+  connect(lookName_, &QLineEdit::returnPressed, this, &CharacterIoTab::saveLook);
+  col->addWidget(lookSaveBtn);
+
+  lookList_ = new QListWidget;
+  // Tall enough for three thumbnail rows; the preview is the point of the list.
+  lookList_->setFixedHeight(150);
+  lookList_->setIconSize(QSize(44, 44));
+  lookList_->setStyleSheet(QString(
+    "QListWidget { background:%1; border:1px solid %2; border-radius:6px; color:%3;"
+    " padding:3px; }"
+    "QListWidget::item { padding:3px 6px; border-radius:4px; }"
+    "QListWidget::item:selected { background:%4; color:%5; }")
+    .arg(tok::kCard).arg(tok::kBorder).arg(tok::kTextSoft)
+    .arg(tok::kAccentBg).arg(tok::kText));
+  connect(lookList_, &QListWidget::itemDoubleClicked, this,
+          &CharacterIoTab::loadSelectedLook);
+  col->addWidget(lookList_);
+
+  {
+    auto* lookRow = new QHBoxLayout;
+    lookRow->setSpacing(6);
+    auto* lookLoadBtn = quietButton(QString::fromUtf8("Laden"));
+    connect(lookLoadBtn, &QPushButton::clicked, this, &CharacterIoTab::loadSelectedLook);
+    lookRow->addWidget(lookLoadBtn);
+    auto* lookDelBtn = quietButton(QString::fromUtf8("Löschen"));
+    connect(lookDelBtn, &QPushButton::clicked, this, &CharacterIoTab::deleteSelectedLook);
+    lookRow->addWidget(lookDelBtn);
+    col->addLayout(lookRow);
+  }
+  auto* lookHint = new QLabel(QString::fromUtf8(
+    "Gespeichert wird alles: Rasse, Gesicht, Ausrüstung samt Farbvariante. "
+    "Doppelklick lädt."));
+  lookHint->setFont(QFont(uiFamily(), 8));
+  lookHint->setWordWrap(true);
+  lookHint->setStyleSheet(QString("color:%1; background:transparent;").arg(tok::kDim));
+  col->addWidget(lookHint);
+  refreshLooks();
+
+  col->addSpacing(4);
+
+  // --- Aus dem Spiel (MVLink)
+  //
+  // This replaced the Wowhead dressing-room field. That route needed the look rebuilt on
+  // a website and pasted back; the addon reads what the character is actually wearing,
+  // which is the same job done in one step. The decoder and the --dressing-room flag stay
+  // for scripts and for the 56-case test corpus -- only the control is gone.
+  col->addWidget(sectionLabel(QString::fromUtf8("AUS DEM SPIEL — MVLINK-ADDON")));
+
+  // The order tells the truth about freshness. The clipboard is live, so it leads; the
+  // paste field is the same data by hand; the file is a snapshot from the last /reload and
+  // says so on its own button. The old layout led with the file and called both routes
+  // equivalent -- which handed people yesterday's look with a clear conscience.
+  auto* mvTop = new QLabel(QString::fromUtf8(
+    "Im Spiel /mvlink öffnen und den Code kopieren — mehr nicht. ModelViewer erkennt "
+    "ihn in der Zwischenablage und zieht den Look sofort an."));
+  mvTop->setFont(QFont(uiFamily(), 8));
+  mvTop->setWordWrap(true);
+  mvTop->setStyleSheet(QString("color:%1; background:transparent;").arg(tok::kTextSoft));
+  col->addWidget(mvTop);
+
+  mvlinkCode_ = urlField(QString::fromUtf8("… oder Code von Hand einfügen: MVM1:R=…"));
+  col->addWidget(mvlinkCode_);
+  auto* mvBtn = quietButton(QString::fromUtf8("Code übernehmen"));
+  connect(mvBtn, &QPushButton::clicked, this, &CharacterIoTab::importMVLink);
+  connect(mvlinkCode_, &QLineEdit::returnPressed, this, &CharacterIoTab::importMVLink);
+  col->addWidget(mvBtn);
+  auto* mvHint = new QLabel(QString::fromUtf8(
+    "Für Codes aus zweiter Hand — etwa von jemand anderem geschickt. Gesicht und "
+    "Frisur kann ein Addon nicht auslesen; die bleiben, wie sie hier eingestellt sind."));
+  mvHint->setFont(QFont(uiFamily(), 8));
+  mvHint->setWordWrap(true);
+  mvHint->setStyleSheet(QString("color:%1; background:transparent;").arg(tok::kDim));
+  col->addWidget(mvHint);
+
+  col->addSpacing(2);
+  auto* mvFileBtn2 = quietButton(QString::fromUtf8("Ablage lesen (Stand: letztes /reload)"));
+  connect(mvFileBtn2, &QPushButton::clicked, this, &CharacterIoTab::importMVLinkFromGame);
+  col->addWidget(mvFileBtn2);
+
+  // Neither route works until the addon is actually in the game folder, and the setup
+  // cannot put it there -- at install time nobody knows where WoW lives. So it ships beside
+  // the exe and lands here, the same way the Blender add-on does.
+  col->addSpacing(2);
+  auto* mvInstallBtn = quietButton(QString::fromUtf8("MVLink-Addon in WoW installieren"));
+  connect(mvInstallBtn, &QPushButton::clicked, this, &CharacterIoTab::installMVLinkAddon);
+  col->addWidget(mvInstallBtn);
+  auto* mvInstallHint = new QLabel(QString::fromUtf8(
+    "Einmalig — danach im Spiel unter Addons aktivieren. Ein Update überschreibt die "
+    "Dateien; WoW sollte dabei geschlossen sein."));
+  mvInstallHint->setFont(QFont(uiFamily(), 8));
+  mvInstallHint->setWordWrap(true);
+  mvInstallHint->setStyleSheet(QString("color:%1; background:transparent;").arg(tok::kDim));
+  col->addWidget(mvInstallHint);
 
   // --- Armory
   col->addSpacing(4);
@@ -205,23 +298,129 @@ void CharacterIoTab::setStatus(const QString& text, bool error)
   status_->setText(text);
 }
 
-void CharacterIoTab::importWowhead()
+void CharacterIoTab::importMVLink()
 {
   if (!menus_)
     return;
-  const QString url = wowheadUrl_->text().trimmed();
-  if (url.isEmpty()) {
-    setStatus(QString::fromUtf8("Bitte zuerst einen Anprobe-Link einsetzen."), true);
+  const QString code = mvlinkCode_->text().trimmed();
+  if (code.isEmpty()) {
+    setStatus(QString::fromUtf8("Bitte zuerst den Code aus dem Addon einfügen."), true);
     return;
   }
-  setStatus(QString::fromUtf8("Importiere …"), false);
-  // The import blocks this thread. Without a paint pass the label never appears and the
-  // window simply freezes until the result is in.
-  QApplication::processEvents();
-  // interactive=false: the tab reports into its own status line, so the extra message
-  // box the menu path shows would only be a second thing to click away.
-  const QString err = menus_->importWowheadDressingRoom(url, false);
-  setStatus(err.isEmpty() ? QString::fromUtf8("Charakter übernommen.") : err, !err.isEmpty());
+  const QString err = menus_->importMVLinkCode(code, true);
+  if (err.isEmpty())
+    setStatus(QString::fromUtf8("Look aus dem Spiel übernommen."), false);
+  else
+    setStatus(err, true);
+}
+
+void CharacterIoTab::importMVLinkFromGame()
+{
+  if (!menus_)
+    return;
+  // No copying: read the addon's SavedVariables directly. Only as fresh as the last
+  // /reload or logout, because that is when WoW writes the file -- the status line says
+  // so rather than leaving the user wondering why nothing changed.
+  const QString err = menus_->importMVLinkFromGame(QString(), true);
+  if (err.isEmpty())
+    setStatus(QString::fromUtf8("Look aus WoW übernommen (Stand: letztes /reload "
+                                "oder Ausloggen)."), false);
+  else
+    setStatus(err, true);
+}
+
+void CharacterIoTab::installMVLinkAddon()
+{
+  if (!menus_)
+    return;
+  QString dest;
+  const QString err = menus_->installMVLinkAddon(&dest);
+  if (!err.isEmpty()) {
+    setStatus(err, true);
+    return;
+  }
+  // The path is part of the message on purpose: if the game is installed twice, this is the
+  // only way to see which copy just got the addon.
+  setStatus(QString::fromUtf8("Addon installiert: %1 — in WoW /reload, dann /mvlink.")
+              .arg(dest), false);
+}
+
+void CharacterIoTab::refreshLooks()
+{
+  if (!lookList_ || !menus_)
+    return;
+  lookList_->clear();
+  for (const QString& name : menus_->savedLooks()) {
+    auto* item = new QListWidgetItem(name);
+    const QString thumb = menus_->lookThumbFor(name);
+    if (!thumb.isEmpty()) {
+      item->setIcon(QIcon(thumb));
+      // Qt tooltips take rich text, which turns hovering into a real preview -- the
+      // thumbnail is 96 px, big enough to recognise a look without opening it.
+      item->setToolTip(QString("<img src='%1'>")
+                         .arg(QUrl::fromLocalFile(QFileInfo(thumb).absoluteFilePath())
+                                .toString()));
+    } else {
+      // Saved before previews existed. Said out loud, or the missing picture reads as
+      // a bug rather than an old file.
+      item->setToolTip(QString::fromUtf8("Noch ohne Vorschau — einmal laden und neu "
+                                         "speichern, dann bekommt er eine."));
+    }
+    lookList_->addItem(item);
+  }
+}
+
+void CharacterIoTab::saveLook()
+{
+  if (!menus_)
+    return;
+  const QString name = lookName_->text().trimmed();
+  if (name.isEmpty()) {
+    setStatus(QString::fromUtf8("Erst einen Namen eintippen, dann speichern."), true);
+    return;
+  }
+  const QString err = menus_->saveLook(name);
+  if (!err.isEmpty()) {
+    setStatus(err, true);
+    return;
+  }
+  lookName_->clear();
+  refreshLooks();
+  // Select what was just saved, so "Laden" right after does the expected thing.
+  const auto hits = lookList_->findItems(name, Qt::MatchFixedString);
+  if (!hits.isEmpty())
+    lookList_->setCurrentItem(hits.first());
+  setStatus(QString::fromUtf8("Look »%1« gespeichert.").arg(name), false);
+}
+
+void CharacterIoTab::loadSelectedLook()
+{
+  if (!menus_ || !lookList_ || !lookList_->currentItem())
+    return;
+  const QString name = lookList_->currentItem()->text();
+  const QString err = menus_->loadLook(name);
+  if (err.isEmpty())
+    setStatus(QString::fromUtf8("Look »%1« geladen.").arg(name), false);
+  else
+    setStatus(err, true);
+}
+
+void CharacterIoTab::deleteSelectedLook()
+{
+  if (!menus_ || !lookList_ || !lookList_->currentItem())
+    return;
+  const QString name = lookList_->currentItem()->text();
+  // One click less would be nicer; one look lost to a misclick would not.
+  if (QMessageBox::question(this, QString::fromUtf8("Look löschen"),
+        QString::fromUtf8("»%1« wirklich löschen?").arg(name))
+      != QMessageBox::Yes)
+    return;
+  if (menus_->deleteLook(name)) {
+    refreshLooks();
+    setStatus(QString::fromUtf8("Look »%1« gelöscht.").arg(name), false);
+  } else {
+    setStatus(QString::fromUtf8("»%1« ließ sich nicht löschen.").arg(name), true);
+  }
 }
 
 void CharacterIoTab::importArmory()
