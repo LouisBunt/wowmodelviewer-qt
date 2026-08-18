@@ -139,10 +139,21 @@ build output, the Qt installation, the VC redist folder, the tracked `bin_suppor
 tree. Nothing is hand-copied, and the shipped DLL list is the dependency closure
 reported by `dumpbin`, not inherited from the wx package.
 
+The visible installer is not the Inno wizard: `installer/setupui` is a small Qt
+program in the application's own design (same `Theme.h`), which the setup extracts
+and shows instead. It collects folder and options, re-runs the setup with
+`/VERYSILENT` and tails Inno's log for its progress display; all install and
+uninstall mechanics stay in the engine. One command builds all of it — payload,
+front-end, package:
+
 ```
-powershell -ExecutionPolicy Bypass -File installer\stage.ps1
-"%LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe" installer\MVMidnight.iss
+powershell -ExecutionPolicy Bypass -File installer\build-setup.ps1
 ```
+
+(`stage.ps1` + `ISCC installer\MVMidnight.iss` still work on their own; the driver
+script also measures the payload so the front-end's progress bar divides by the real
+file count. `/VERYSILENT /DIR=... /MERGETASKS=...` bypasses the front-end entirely
+and behaves like any Inno setup.)
 
 The setup carries the same `AppId` as WoW Model Viewer Midnight, so it upgrades that
 installation in place and removes its executable and wxWidgets DLLs.

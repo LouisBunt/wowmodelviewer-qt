@@ -1,0 +1,26 @@
+// Icon and version block. The version info is what Explorer's Properties dialog and
+// SmartScreen's publisher line show for the extracted UI -- absent, the file looks
+// anonymous in exactly the situation where a user is deciding whether to trust it.
+IDI_ICON1 ICON "../../resources/appicon.ico"
+
+1 VERSIONINFO
+FILEVERSION     1,8,0,0
+PRODUCTVERSION  1,8,0,0
+BEGIN
+  BLOCK "StringFileInfo"
+  BEGIN
+    BLOCK "040704b0"
+    BEGIN
+      VALUE "CompanyName",      "Skogdesign"
+      VALUE "FileDescription",  "ModelViewer: Midnight Setup"
+      VALUE "FileVersion",      "1.8.0.0"
+      VALUE "ProductName",      "ModelViewer: Midnight"
+      VALUE "ProductVersion",   "1.8.0"
+      VALUE "LegalCopyright",   "GPLv3 - https://github.com/LouisBunt/wowmodelviewer-qt"
+    END
+  END
+  BLOCK "VarFileInfo"
+  BEGIN
+    VALUE "Translation", 0x0407, 1200
+  END
+END

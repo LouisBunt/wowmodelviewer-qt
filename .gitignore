@@ -1,5 +1,6 @@
 # Build output
 build/
+build-setupui/
 
 # Local build logs and traces. The phase history lives in the commit messages.
 build-log.txt
@@ -21,6 +22,7 @@ phase*-trace.txt
 # remote then refused. Anything named like the staging or output folder stays out.
 installer/stage*/
 installer/dist*/
+installer/setupui-stage/
 
 # Runtime data written beside the executable: settings with the player's WoW path, the log
 # and trace, the database cache, the look library and the NPC thumbnails. Personal and
