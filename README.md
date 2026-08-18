@@ -4,8 +4,9 @@ A Qt front-end for [WoW Model Viewer](https://github.com/wowmodelviewer/wowmodel
 replacing the wxWidgets one. The model, render and data layers are reused rather than
 rewritten: `core.dll` and `wow.dll` are the upstream libraries, and the GUI on top is new.
 
-Released as **1.7.0** (early access) — the features below are tested and do what
-this says, but several areas of the old interface are not ported yet. See
+Released publicly as **1.0.0** — the early-access line before it (1.5.0–1.8.0) never
+left this machine and lives on only in the history. The features below are tested and
+do what this says, but several areas of the old interface are not ported yet. See
 [LIESMICH.txt](installer/LIESMICH.txt) for the user-facing feature list and known gaps,
 and [MIGRATION.md](MIGRATION.md) for why the port is shaped the way it is.
 

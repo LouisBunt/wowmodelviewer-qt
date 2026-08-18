@@ -5,7 +5,7 @@ Dieses Programm selbst steht unter der GNU General Public License, Version 3
 (siehe LICENSE.txt). Daneben liefert das Paket Bibliotheken und Daten Dritter
 aus. Dieser Text nennt sie, ihre Herkunft und ihre Bedingungen.
 
-Stand: Version 1.7.0
+Stand: Version 1.0.0
 
 
 1. Autodesk FBX SDK  —  libfbxsdk.dll
