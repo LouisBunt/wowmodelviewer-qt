@@ -23,6 +23,16 @@
 #define MyAppNameFs "ModelViewer Midnight"
 #define MyAppVersion "1.8.0"
 #define MyAppVersionNumeric "1.8.0.0"
+
+; Passed by installer\build-setup.ps1, which counts the staged payload. The UI divides
+; its progress bar by TotalFiles and prints StageMB on the welcome page; both are
+; display values only and the fallbacks merely make a bare ISCC run usable.
+#ifndef TotalFiles
+  #define TotalFiles "1300"
+#endif
+#ifndef StageMB
+  #define StageMB "450"
+#endif
 #define MyAppPublisher "Skogdesign"
 #define MyAppExeName "WoWModelViewer-Qt.exe"
 #define MyAppURL "https://github.com/LouisBunt/wowmodelviewer-qt"
@@ -68,6 +78,13 @@ ArchitecturesInstallIn64BitMode=x64compatible
 Name: "german";  MessagesFile: "compiler:Languages\German.isl"
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
+[Setup]
+; No language dialog: it would appear BEFORE InitializeSetup and therefore in front of
+; the Qt front-end, asking a question the front-end never needs answered. The engine
+; picks the language from Windows; it only surfaces in the classic-wizard fallback and
+; in engine-level error boxes.
+ShowLanguageDialog=no
+
 [Messages]
 ; The directory page offers %LOCALAPPDATA%\Programs, because PrivilegesRequired=lowest
 ; resolves {autopf} there. Browsing to C:\Program Files from that page looks like a normal
@@ -101,6 +118,11 @@ Type: files; Name: "{app}\wowdb.sqlite.build"
 [Files]
 ; Everything staged by stage.ps1, layout preserved.
 Source: "{#Stage}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+; The Qt setup front-end (installer\setupui, staged by build-setup.ps1). Never installed:
+; [Code] extracts it to {tmp} and shows it INSTEAD of the classic wizard, and the UI then
+; re-runs this same exe with /VERYSILENT to do the actual work. dontcopy files keep their
+; relative paths under {tmp}, which is how platforms\qwindows.dll ends up where Qt looks.
+Source: "setupui-stage\*"; Flags: dontcopy recursesubdirs
 
 [Icons]
 ; MyAppNameFs, not MyAppName: these are file names on disk, and the colon is illegal there.
@@ -110,6 +132,55 @@ Name: "{autodesktop}\{#MyAppNameFs}"; Filename: "{app}\{#MyAppExeName}"; Tasks: 
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
+
+[Code]
+{ The two-phase arrangement. Phase 1 is the exe the user double-clicks: it extracts the
+  Qt front-end and shows it instead of the classic wizard, then exits. Phase 2 is the
+  same exe, re-run BY that front-end with /VERYSILENT -- WizardSilent is true, the code
+  below steps aside, and the stock Inno engine installs under the UI's progress display.
+
+  Every failure path falls back to Result := True, i.e. to the classic wizard: an
+  installer whose pretty front cannot start must still be able to install.
+
+  Known cost of the trick: the DOUBLE-CLICKED process exits with code 1, because to
+  Inno an InitializeSetup returning False is an aborted setup. The process that did
+  the installing reports correctly -- so tools that script this installer should call
+  it with /VERYSILENT themselves (bypassing the front-end entirely), which is what
+  package managers do anyway. }
+function InitializeSetup(): Boolean;
+var
+  R: Integer;
+  Ui: String;
+begin
+  Result := True;
+  if WizardSilent then
+    Exit;
+
+  try
+    ExtractTemporaryFiles('{tmp}\*');
+  except
+    Log('setupui: extraction failed, falling back to the classic wizard');
+    Exit;
+  end;
+
+  Ui := ExpandConstant('{tmp}\setupui.exe');
+  if not FileExists(Ui) then
+  begin
+    Log('setupui: not in the package, classic wizard');
+    Exit;
+  end;
+
+  { ewWaitUntilTerminated: this instance owns the temp dir and must outlive the UI
+    running from it. The silent re-run is a second process of the same exe; without a
+    SetupMutex there is nothing for the two to fight over. }
+  if Exec(Ui,
+          '--inner "' + ExpandConstant('{srcexe}') + '"'
+            + ' --totalfiles {#TotalFiles} --sizemb {#StageMB} --version {#MyAppVersion}',
+          ExpandConstant('{tmp}'), SW_SHOW, ewWaitUntilTerminated, R) then
+    Result := False   { the UI ran the install (or the user cancelled) -- do not }
+  else                { show a second wizard behind it }
+    Log('setupui: could not be started, classic wizard');
+end;
 
 [UninstallDelete]
 ; Runtime-generated files, so uninstall leaves nothing behind.
