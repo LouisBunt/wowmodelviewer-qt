@@ -257,7 +257,7 @@ public:
     auto* midRow = indent(mid);
     midRow->setContentsMargins(19, 3, 0, 0);
     col->addLayout(midRow);
-    auto* ver = mk(version + QString::fromUtf8(" · Early Access"), "Consolas", 7, tok::kDim);
+    auto* ver = mk("Version " + version, "Consolas", 7, tok::kDim);
     auto* verRow = indent(ver);
     verRow->setContentsMargins(19, 10, 0, 0);
     col->addLayout(verRow);
@@ -449,7 +449,7 @@ struct Options
   QString innerExe;      // the Inno setup to run silently; empty = simulate
   int totalFiles = 1300;
   int sizeMb = 450;
-  QString version = "1.8.0";
+  QString version = "1.0.0";
   QString shotsDir;      // autopilot: step through, grab each page as PNG, quit
 };
 

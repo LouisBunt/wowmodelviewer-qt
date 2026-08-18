@@ -8,7 +8,7 @@
 #   cmake -S installer/setupui -B build-setupui -G "Visual Studio 17 2022" -A x64
 #   cmake --build build-setupui --config Release
 cmake_minimum_required(VERSION 3.16)
-project(MVMidnightSetupUI VERSION 1.8.0)
+project(MVMidnightSetupUI VERSION 1.0.0)
 
 set(CMAKE_CXX_STANDARD 17)
 

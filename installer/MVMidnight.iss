@@ -21,8 +21,8 @@
 ; group and both shortcut files -- the installation could not be completed at all. AppName
 ; keeps the colon; that one is only ever displayed.
 #define MyAppNameFs "ModelViewer Midnight"
-#define MyAppVersion "1.8.0"
-#define MyAppVersionNumeric "1.8.0.0"
+#define MyAppVersion "1.0.0"
+#define MyAppVersionNumeric "1.0.0.0"
 
 ; Passed by installer\build-setup.ps1, which counts the staged payload. The UI divides
 ; its progress bar by TotalFiles and prints StageMB on the welcome page; both are

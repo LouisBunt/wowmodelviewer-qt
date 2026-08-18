@@ -1,5 +1,5 @@
-ModelViewer: Midnight 1.7.0 (Early Access)
-========================================
+ModelViewer: Midnight 1.0
+=========================
 
 Was das ist
 -----------
@@ -13,9 +13,9 @@ Diese Version ersetzt die wxWidgets-Ausgabe (WoW Model Viewer Midnight). Beim
 Einrichten werden deren Programmdateien entfernt; die Spieldaten-Hilfsdateien
 bleiben erhalten.
 
-Early Access heisst: die beschriebenen Funktionen sind geprueft und tun, was
-hier steht. Es fehlen aber Bereiche der alten Oberflaeche, und es sind Fehler zu
-erwarten, die nur auf fremder Hardware auftreten. Was fehlt, steht weiter unten.
+Die beschriebenen Funktionen sind geprueft und tun, was hier steht. Einzelne
+Bereiche der alten Oberflaeche sind noch nicht portiert; was fehlt, steht
+weiter unten ehrlich aufgelistet.
 
 
 Voraussetzungen
