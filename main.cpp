@@ -952,14 +952,24 @@ int main(int argc, char** argv)
   // An activated NPC loads its model file like a tree click would, then dresses it in the
   // display the database names. The preview is captured the first time an NPC is shown --
   // the list grows its pictures through use, the same trade the look library makes.
-  auto showNpc = [win, host, showModel, applyCreatureDisplay](
+  auto showNpc = [win, host, applyCreatureDisplay](
                    int /*creatureId*/, int displayId, int fileDataId, const QString& name) {
     GameFile* f = GAMEDIRECTORY.getFile((uint)fileDataId);
     if (!f) {
+      // Silence here meant a double-click that visibly did nothing. The list is built from
+      // the database, the files come from the installation, and the two can disagree.
+      win->setPathLabel(QObject::tr("%1: das Modell steckt nicht in den geladenen "
+                                    "Spieldaten.").arg(name));
       trace(QString("npc: model file %1 not in the game data").arg(fileDataId));
       return;
     }
-    showModel(f);
+    // Through the signal, not through showModel() directly: fileActivated is what tells the
+    // menu controller a model arrived (modelChanged -> setModelActionsEnabled), and that is
+    // what takes the "Kein Modell geladen" hint off the viewport and un-greys Export. Calling
+    // the lambda skipped that half, so an NPC rendered underneath the hint that said nothing
+    // was loaded. Qt runs the two receivers in connection order -- showModel first, the menu
+    // second -- so the model is in place before the menu re-reads the state.
+    emit win->fileActivated(f);
     WoWModel* m = host->model();
     if (!m)
       return;
@@ -1032,23 +1042,38 @@ int main(int argc, char** argv)
                         : QString("mvlink import FAILED: %1").arg(err));
   }
 
-  // --npc <creatureId> shows a named NPC headlessly -- the only way to prove the display
-  // pipeline (skin + geosets) without clicking through the browser.
+  // --npc <creatureId|Name> shows a named NPC headlessly -- the only way to prove the
+  // display pipeline (skin + geosets) without clicking through the browser.
+  //
+  // The name form exists because creature ids are not portable: the client ships a subset
+  // of the creature table, so an id read off a database site is as likely to be absent as
+  // present, while the name is what the browser searches by and what a bug report says.
+  // Same joins and same escaping as NpcBrowser::refresh, so the flag can only reach rows
+  // the list can also reach.
   for (int i = 1; i < argc - 1; ++i) {
     if (QString(argv[i]) != "--npc")
       continue;
-    const int cid = QString::fromLocal8Bit(argv[i + 1]).toInt();
+    const QString wanted = QString::fromLocal8Bit(argv[i + 1]);
+    bool numeric = false;
+    const int cid = wanted.toInt(&numeric);
+    QString needle = wanted;
+    needle.replace('\'', "''");     // Zul'jin, O'ros -- apostrophes are the norm in names
     auto r = GAMEDATABASE.sqlQuery(QString(
-      "SELECT Creature.DisplayID1, CreatureModelData.FileDataID, Creature.Name_Lang "
+      "SELECT Creature.DisplayID1, CreatureModelData.FileDataID, Creature.Name_Lang, "
+      "Creature.ID "
       "FROM Creature "
       "JOIN CreatureDisplayInfo ON CreatureDisplayInfo.ID = Creature.DisplayID1 "
       "JOIN CreatureModelData ON CreatureModelData.ID = CreatureDisplayInfo.ModelID "
-      "WHERE Creature.ID = %1").arg(cid));
+      "WHERE Creature.DisplayID1 != 0 AND %1 "
+      "ORDER BY Creature.ID LIMIT 1")
+      .arg(numeric ? QString("Creature.ID = %1").arg(cid)
+                   : QString("Creature.Name_Lang = '%1'").arg(needle)));
     if (r.valid && !r.values.empty()) {
-      showNpc(cid, r.values[0][0].toInt(), r.values[0][1].toInt(), r.values[0][2]);
-      trace(QString("npc flag OK: %1").arg(cid));
+      showNpc(r.values[0][3].toInt(), r.values[0][0].toInt(), r.values[0][1].toInt(),
+              r.values[0][2]);
+      trace(QString("npc flag OK: %1 (creature %2)").arg(wanted).arg(r.values[0][3]));
     } else {
-      trace(QString("npc flag FAILED: creature %1 not found").arg(cid));
+      trace(QString("npc flag FAILED: creature %1 not found").arg(wanted));
     }
   }
 
