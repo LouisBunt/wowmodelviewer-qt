@@ -1,10 +1,12 @@
 #include "Theme.h"
+#include "UiKit.h"
 #include "TimelinePanel.h"
 
 #include <algorithm>
 #include <map>
 
 #include <QComboBox>
+#include <QToolButton>
 #include <QEvent>
 #include <QFontDatabase>
 #include <QFrame>
@@ -36,127 +38,130 @@ const char* kSpeedLabels[] = { "0.25x", "0.5x", "1x", "2x" };
 TimelinePanel::TimelinePanel(QWidget* parent) : QWidget(parent)
 {
   setAttribute(Qt::WA_StyledBackground, true);
-  setFixedHeight(104);
-  setStyleSheet(QString("background:%1; border-top:1px solid %2;").arg(tok::kPanel).arg(tok::kBorder2));
+  // 88 px, and no longer the loudest thing in the window.
+  //
+  // The scrubber used to be a 24 px tall groove filled with an accent gradient across the
+  // whole width -- the largest, most saturated object in the frame, louder than the model.
+  // A transport control is not the subject of the page. It is a 4 px groove now, and the only
+  // accent on it is the playhead, which is the one thing that carries information.
+  setFixedHeight(ui::px(88));
+  setProperty("role", "panel");
 
   auto* col = new QVBoxLayout(this);
-  col->setContentsMargins(16, 12, 16, 14);
-  col->setSpacing(11);
+  col->setContentsMargins(met::sp(met::Edge), met::sp(met::Pad),
+                          met::sp(met::Edge), met::sp(met::Pad));
+  col->setSpacing(met::sp(met::Pad));
 
   auto* top = new QHBoxLayout;
-  top->setSpacing(14);
+  top->setSpacing(met::sp(met::Pad));
 
-  // Transport. The glyphs need the symbol font; Segoe UI has no coverage for them.
+  // Transport. Real buttons with SVG icons: the glyphs used to come from "Segoe UI Symbol"
+  // and rendered as empty boxes on any machine without it.
   auto* transport = new QWidget;
-  transport->setStyleSheet("background:transparent;");
+  transport->setAttribute(Qt::WA_StyledBackground, true);
+  transport->setProperty("role", "panel");
   auto* tr = new QHBoxLayout(transport);
   tr->setContentsMargins(0, 0, 0, 0);
-  tr->setSpacing(4);
+  tr->setSpacing(met::sp(met::Snug));
 
-  auto makeButton = [this](const QString& glyph, int size, const char* colour,
-                           const char* background, int action) {
-    auto* b = new QLabel(glyph);
-    b->setFixedSize(size, size);
-    b->setAlignment(Qt::AlignCenter);
-    b->setFont(QFont(iconF(), size / 3 + 3));
-    b->setCursor(Qt::PointingHandCursor);
-    b->setStyleSheet(QString("color:%1; background:%2; border:none; border-radius:%3px;")
-                       .arg(colour).arg(background).arg(size > 30 ? 8 : 6));
+  auto makeButton = [this](const QString& icon, const QString& tip, int action) {
+    auto* b = uikit::iconButton(icon, tip);
     b->setProperty("transport", action);
-    b->installEventFilter(this);
+    connect(b, &QToolButton::clicked, this, [this, action]() { transportAction(action); });
     return b;
   };
 
-  tr->addWidget(makeButton(QString::fromUtf8("⏮"), 28, "#98a1ae", "transparent", 0));
-  playButton_ = makeButton(QString::fromUtf8("⏸"), 34, tok::kOnAccent, tok::kAccent, 1);
+  tr->addWidget(makeButton("skip-back", QString::fromUtf8("An den Anfang"), 0));
+  playButton_ = makeButton("play", QString::fromUtf8("Abspielen / Pause"), 1);
+  playButton_->setIcon(Theme::icon("play", QColor(tok::accentText)));
   tr->addWidget(playButton_);
-  tr->addWidget(makeButton(QString::fromUtf8("⏭"), 28, "#98a1ae", "transparent", 2));
+  tr->addWidget(makeButton("skip-forward", QString::fromUtf8("An das Ende"), 2));
   top->addWidget(transport);
 
-  // Animation picker.
-  auto* animWrap = new QFrame;
-  animWrap->setFixedHeight(28);
-  animWrap->setMinimumWidth(230);
-  animWrap->setStyleSheet(QString("QFrame { background:%1; border:1px solid %2;"
-                                  " border-radius:6px; }").arg(tok::kCard).arg(tok::kBorder));
-  auto* aw = new QHBoxLayout(animWrap);
-  aw->setContentsMargins(10, 0, 6, 0);
-  aw->setSpacing(8);
+  // Animation picker. A wide combo, because an animation name can be longer than the box:
+  // the closed field and the drop-down list both used to elide, so a clip could not be
+  // identified in either.
   auto* animTag = new QLabel("ANIM");
-  QFont tagFont(uiF(), 7);
-  tagFont.setLetterSpacing(QFont::AbsoluteSpacing, 1.2);
-  animTag->setFont(tagFont);
-  animTag->setStyleSheet(QString("color:%1; background:transparent; border:none;").arg(tok::kDim));
-  aw->addWidget(animTag);
+  animTag->setFont(typo::font(typo::Caption));
+  animTag->setProperty("role", "section");
+  top->addWidget(animTag);
 
-  animList_ = new QComboBox;
-  animList_->setFont(QFont(uiF(), 9));
-  animList_->setStyleSheet(QString(
-    "QComboBox { background:transparent; border:none; color:%1; }"
-    "QComboBox::drop-down { border:none; width:16px; }"
-    "QComboBox QAbstractItemView { background:%2; border:1px solid %3;"
-    " selection-background-color:#1a1226; color:%1; }")
-    .arg(tok::kText).arg(tok::kCard).arg(tok::kBorder));
+  animList_ = uikit::wideCombo();
+  animList_->setMinimumWidth(ui::px(230));
+  animList_->setFont(typo::font(typo::Body));
   connect(animList_, QOverload<int>::of(&QComboBox::currentIndexChanged),
           this, [this](int i) { if (!updating_) applyAnimation(i); });
-  aw->addWidget(animList_, 1);
-  top->addWidget(animWrap);
+  top->addWidget(animList_);
 
   timeLabel_ = new QLabel("0 / 0");
-  timeLabel_->setFont(QFont(monoF(), 9));
-  timeLabel_->setStyleSheet("color:#98a1ae; background:transparent; border:none;");
+  timeLabel_->setFont(typo::font(typo::Mono));
+  timeLabel_->setProperty("role", "mono");
   top->addWidget(timeLabel_);
   top->addStretch(1);
 
-  auto* speedTag = new QLabel("Tempo");
-  speedTag->setFont(QFont(uiF(), 8));
-  speedTag->setStyleSheet(QString("color:%1; background:transparent; border:none;").arg(tok::kDim));
+  auto* speedTag = new QLabel(QString::fromUtf8("Tempo"));
+  speedTag->setFont(typo::font(typo::Caption));
+  speedTag->setProperty("role", "section");
   top->addWidget(speedTag);
 
-  for (int i = 0; i < 4; ++i) {
-    auto* c = new QLabel(QString::fromLatin1(kSpeedLabels[i]));
-    c->setFont(QFont(monoF(), 8));
-    c->setAlignment(Qt::AlignCenter);
-    c->setCursor(Qt::PointingHandCursor);
-    c->setProperty("speedIndex", i);
-    c->installEventFilter(this);
-    speedChips_.push_back(c);
-    top->addWidget(c);
-  }
+  speedBar_ = new SegmentedBar(SegmentedBar::Radio, this);
+  for (const char* l : kSpeedLabels)
+    speedBar_->addSegment(QString::fromLatin1(l));
+  speedBar_->setCurrent(2);   // 1x
+  connect(speedBar_, &SegmentedBar::activated, this, [this](int i) { applySpeed(i); });
+  top->addWidget(speedBar_);
   col->addLayout(top);
 
-  // Scrubber. A styled QSlider rather than a hand-drawn track: dragging it has to
-  // seek, and QSlider already handles the interaction.
+  // The scrubber: a thin groove, an accent fill up to the playhead, and a grab handle big
+  // enough to hit. The old handle was 3 px wide -- effectively impossible to grab.
   scrubber_ = new QSlider(Qt::Horizontal);
   scrubber_->setRange(0, 0);
-  scrubber_->setFixedHeight(26);
-  scrubber_->setStyleSheet(QString(
-    "QSlider::groove:horizontal { height:24px; border-radius:6px; background:#0a0d10;"
-    " border:1px solid %1; }"
-    "QSlider::sub-page:horizontal { border-radius:6px;"
-    " background: qlineargradient(x1:0,y1:0,x2:1,y2:0,"
-    " stop:0 rgba(168,85,247,120), stop:1 rgba(168,85,247,45)); }"
-    "QSlider::handle:horizontal { width:3px; margin:-1px 0; border-radius:1px;"
-    " background:%2; }").arg(tok::kBorder2).arg(tok::kAccent));
+  scrubber_->setFixedHeight(ui::px(20));
+  scrubber_->setProperty("role", "scrub");
   connect(scrubber_, &QSlider::sliderMoved, this, [this](int f) {
     if (!model_ || !model_->animManager)
       return;
     model_->animManager->Pause(true);
     model_->animManager->SetFrame((size_t)f);
     if (playButton_)
-      playButton_->setText(QString::fromUtf8("▶"));
+      playButton_->setIcon(Theme::icon("play", QColor(tok::accentText)));
   });
   col->addWidget(scrubber_);
+}
 
-  // Reflect the default speed selection.
-  for (int i = 0; i < (int)speedChips_.size(); ++i) {
-    const bool active = (i == 2);
-    speedChips_[i]->setStyleSheet(active
-      ? QString("color:%1; background:#1e1030; border:1px solid #4c2a75;"
-                " border-radius:5px; padding:3px 8px;").arg(tok::kAccent)
-      : QString("color:%1; background:#12161b; border:1px solid %2;"
-                " border-radius:5px; padding:3px 8px;").arg(tok::kMuted).arg(tok::kBorder));
+// One place for the three transport buttons, called from their clicked() signals.
+void TimelinePanel::transportAction(int action)
+{
+  if (!model_ || !model_->animManager)
+    return;
+  AnimManager* am = model_->animManager;
+  switch (action) {
+    case 0:                                   // back to the start
+      am->SetFrame(0);
+      break;
+    case 1:                                   // play / pause
+      // Pressing play while the neutral row is selected has nothing to play, so take it as
+      // "start the first real clip" rather than silently resuming whatever was last loaded.
+      if (!animList_->itemData(animList_->currentIndex()).isValid()) {
+        if (animList_->count() > 1)
+          animList_->setCurrentIndex(1);
+        break;
+      }
+      am->Pause();
+      playButton_->setIcon(Theme::icon(am->IsPaused() ? "play" : "pause",
+                                       QColor(tok::accentText)));
+      break;
+    case 2:                                   // next animation in the list
+      if (animList_->currentIndex() + 1 < animList_->count())
+        animList_->setCurrentIndex(animList_->currentIndex() + 1);
+      break;
   }
+}
+
+void TimelinePanel::applySpeed(int index)
+{
+  if (index >= 0 && index < 4 && model_ && model_->animManager)
+    model_->animManager->SetSpeed(kSpeeds[index]);
 }
 
 void TimelinePanel::setModel(WoWModel* model)
@@ -243,7 +248,7 @@ void TimelinePanel::applyAnimation(int index)
     scrubber_->setRange(0, 0);
     scrubber_->setValue(0);
     if (playButton_)
-      playButton_->setText(QString::fromUtf8("▶"));
+      playButton_->setIcon(Theme::icon("play", QColor(tok::accentText)));
     return;
   }
 
@@ -259,7 +264,7 @@ void TimelinePanel::applyAnimation(int index)
   am->SetAnim(0, (unsigned int)animIndex, 0);
   am->Play();
   if (playButton_)
-    playButton_->setText(QString::fromUtf8("⏸"));
+    playButton_->setIcon(Theme::icon("pause", QColor(tok::accentText)));
 
   // Last valid frame is length-1, and a clip reporting 0 frames would otherwise produce
   // setRange(0, -1).
@@ -289,54 +294,6 @@ void TimelinePanel::tick()
   timeLabel_->setText(QString("%1 / %2").arg(frame).arg(total));
 }
 
-bool TimelinePanel::eventFilter(QObject* obj, QEvent* e)
-{
-  if (e->type() != QEvent::MouseButtonRelease)
-    return QWidget::eventFilter(obj, e);
-
-  const QVariant speed = obj->property("speedIndex");
-  if (speed.isValid()) {
-    const int idx = speed.toInt();
-    if (model_ && model_->animManager)
-      model_->animManager->SetSpeed(kSpeeds[idx]);
-    for (int i = 0; i < (int)speedChips_.size(); ++i) {
-      const bool active = (i == idx);
-      speedChips_[i]->setStyleSheet(active
-        ? QString("color:%1; background:#1e1030; border:1px solid #4c2a75;"
-                  " border-radius:5px; padding:3px 8px;").arg(tok::kAccent)
-        : QString("color:%1; background:#12161b; border:1px solid %2;"
-                  " border-radius:5px; padding:3px 8px;").arg(tok::kMuted).arg(tok::kBorder));
-    }
-    return true;
-  }
-
-  const QVariant transport = obj->property("transport");
-  if (transport.isValid() && model_ && model_->animManager) {
-    AnimManager* am = model_->animManager;
-    switch (transport.toInt()) {
-      case 0:                                   // back to the start
-        am->SetFrame(0);
-        break;
-      case 1:                                   // play / pause
-        // Pressing play while the neutral row is selected has nothing to play, so take
-        // it as "start the first real clip" rather than silently resuming whatever was
-        // last loaded.
-        if (!animList_->itemData(animList_->currentIndex()).isValid()) {
-          if (animList_->count() > 1)
-            animList_->setCurrentIndex(1);
-          break;
-        }
-        am->Pause();
-        playButton_->setText(am->IsPaused() ? QString::fromUtf8("▶")
-                                            : QString::fromUtf8("⏸"));
-        break;
-      case 2:                                   // next animation in the list
-        if (animList_->currentIndex() + 1 < animList_->count())
-          animList_->setCurrentIndex(animList_->currentIndex() + 1);
-        break;
-    }
-    return true;
-  }
-
-  return QWidget::eventFilter(obj, e);
-}
+// eventFilter is gone: the speed chips and the transport glyphs were QLabels routed through
+// property lookups, with no hover, no pressed state and no keyboard. They are real buttons and
+// a segmented control now, each with its own signal.

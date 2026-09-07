@@ -45,10 +45,20 @@ public:
     bool skinning = true;
     bool animation = false;
     std::vector<int> clips;
+
+    // STL only: the printed height in millimetres -- the one number the Export tab's
+    // 3D-print section asks for. Handed to every plugin as the parameter "print.height_mm";
+    // the others do not know the key and ignore it.
+    double printHeightMm = 200.0;
   };
 
   void setOptions(const Options& o) { options_ = o; }
   const Options& options() const { return options_; }
+
+  // What the last successful export has to say about itself (ExporterPlugin::lastReport):
+  // the STL exporter reports the measured size, the footprint and the parts without
+  // thickness. Empty after a failure, a cancelled dialog, or an exporter with nothing to say.
+  const QString& lastReport() const { return lastReport_; }
 
   // Asks for a path and exports. Returns an empty string on success, otherwise the
   // reason.
@@ -61,6 +71,7 @@ public:
 private:
   std::vector<Format> formats_;
   Options options_;
+  QString lastReport_;
 };
 
 #endif

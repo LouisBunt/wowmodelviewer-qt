@@ -1,6 +1,7 @@
 # Build output
 build/
 build-setupui/
+build-tests/
 
 # Local build logs and traces. The phase history lives in the commit messages.
 build-log.txt

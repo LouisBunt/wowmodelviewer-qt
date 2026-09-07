@@ -12,6 +12,8 @@ class WoWModel;
 class QCheckBox;
 class QComboBox;
 class QLabel;
+class QToolButton;
+class ElidedLabel;
 class QLineEdit;
 class QSpinBox;
 class QVBoxLayout;
@@ -129,9 +131,9 @@ private:
   std::vector<QSpinBox*> tabardSpins_;
   QLineEdit* itemInput_ = nullptr;
   std::vector<QComboBox*> combos_;
-  std::vector<QLabel*> slotLabels_;   // one per CharSlots entry we show
-  std::vector<QLabel*> clearButtons_; // the per-row "x", visible only when worn
-  std::vector<QLabel*> focusButtons_; // the per-row eye: show only this piece
+  std::vector<ElidedLabel*> slotLabels_;    // one per CharSlots entry we show
+  std::vector<QToolButton*> clearButtons_;  // the per-row "x", enabled only when worn
+  std::vector<QToolButton*> focusButtons_;  // the per-row eye: show only this piece
   int focusSlot_ = -1;                // -1 = whole character visible
   int lastFocusSlot_ = -1;            // for the toolbar's on/off switch
   bool updating_ = false;      // guards against reacting to our own writes

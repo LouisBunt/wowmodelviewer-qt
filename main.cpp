@@ -13,6 +13,7 @@
 #include <QDateTime>
 #include <QPalette>
 #include <QRegularExpression>
+#include <QScreen>
 #include <QStyleFactory>
 #include <QDir>
 #include <QFile>
@@ -36,6 +37,8 @@
 #include <QVBoxLayout>
 
 #include "GLHost.h"
+#include "MidnightStyle.h"
+#include "Theme.h"
 #include "BlenderAddonInstaller.h"
 #include "CharacterPanel.h"
 #include "ExportController.h"
@@ -178,42 +181,31 @@ static QString resolveGameFolder(int argc, char** argv)
   return folder;
 }
 
-// The window paints itself with stylesheets, but the standard dialogs (input, message,
-// file, colour) are built by the style from the PALETTE. MainWindow's stylesheet cascades
-// into any dialog parented to it and darkens the background, while the text colour stays
-// whatever the platform default is -- which on Windows is black. That is how the armory
-// import ended up as black text on a black field.
+// The application's whole look, installed in one place and in one order.
 //
-// Fusion plus an explicit dark palette fixes every dialog at once instead of patching them
-// one at a time, and keeps the custom-drawn UI looking as it did.
-static void applyDarkPalette(QApplication& app)
+// The order matters and is not obvious. Fonts have to be loaded before anything measures a
+// string; the style has to be set before the palette, because setStyle() re-applies the style's
+// standard palette over whatever was there; and the stylesheet comes last, because a widget with
+// a stylesheet ignores setPalette() and setFont() afterwards.
+//
+// What this replaces: a Fusion palette of six hardcoded greys, a window-wide stylesheet whose
+// main job was undoing its own cascade for dialogs, and roughly twenty-five per-widget
+// stylesheet strings across seven files.
+static void applyTheme(QApplication& app, double scale, bool scripted)
 {
-  app.setStyle(QStyleFactory::create("Fusion"));
+  ui::setScale(scale);
+  fx::setEnabled(!scripted);   // a scripted run must photograph a settled frame
 
-  const QColor bg("#0f1216"), panel("#14181e"), text("#e8eaee"), dim("#5f6874");
-  const QColor accent("#a855f7"), onAccent("#ffffff");
+  if (!typo::loadFonts())
+    trace("theme: a bundled font is missing from the resources -- falling back to system faces");
+  trace(QString("theme: ui=%1 mono=%2 display=%3 scale=%4")
+          .arg(typo::uiFamily()).arg(typo::monoFamily()).arg(typo::displayFamily())
+          .arg(ui::scale()));
 
-  QPalette p;
-  p.setColor(QPalette::Window,          panel);
-  p.setColor(QPalette::WindowText,      text);
-  p.setColor(QPalette::Base,            bg);            // text entry backgrounds
-  p.setColor(QPalette::AlternateBase,   panel);
-  p.setColor(QPalette::Text,            text);          // and the text in them
-  p.setColor(QPalette::Button,          QColor("#1c2229"));
-  p.setColor(QPalette::ButtonText,      text);
-  p.setColor(QPalette::BrightText,      QColor("#ff6b6b"));
-  p.setColor(QPalette::ToolTipBase,     panel);
-  p.setColor(QPalette::ToolTipText,     text);
-  p.setColor(QPalette::Highlight,       accent);
-  p.setColor(QPalette::HighlightedText, onAccent);
-  p.setColor(QPalette::Link,            accent);
-  p.setColor(QPalette::PlaceholderText, dim);
-
-  p.setColor(QPalette::Disabled, QPalette::Text,       dim);
-  p.setColor(QPalette::Disabled, QPalette::WindowText, dim);
-  p.setColor(QPalette::Disabled, QPalette::ButtonText, dim);
-
-  app.setPalette(p);
+  app.setStyle(new MidnightStyle(QStyleFactory::create("Fusion")));
+  app.setPalette(Theme::palette());
+  app.setFont(typo::font(typo::Body));
+  app.setStyleSheet(Theme::sheet());
 }
 
 // The first start builds the database from DB2 (~20 s) and even a warm start reads a
@@ -229,12 +221,12 @@ static QSplashScreen* makeSplash()
   QPixmap pm(":/splash.png");
   if (pm.isNull()) {
     pm = QPixmap(420, 160);
-    pm.fill(QColor("#14181e"));
+    pm.fill(QColor(tok::bgRaised));
     QPainter p(&pm);
-    p.setPen(QColor("#23282f"));
+    p.setPen(QColor(tok::lineBorder));
     p.drawRect(0, 0, pm.width() - 1, pm.height() - 1);
-    p.setPen(QColor("#a855f7"));
-    QFont f("Segoe UI", 14, QFont::DemiBold);
+    p.setPen(QColor(tok::accent));
+    QFont f = typo::font(typo::Display);
     f.setLetterSpacing(QFont::AbsoluteSpacing, 2.0);
     p.setFont(f);
     p.drawText(QRect(0, 40, pm.width(), 30), Qt::AlignCenter, "MODEL VIEWER");
@@ -247,7 +239,7 @@ static void splashStage(QSplashScreen* splash, QApplication& app, const QString&
 {
   if (!splash)
     return;
-  splash->showMessage(text, Qt::AlignBottom | Qt::AlignHCenter, QColor("#b6bdc8"));
+  splash->showMessage(text, Qt::AlignBottom | Qt::AlignHCenter, QColor(tok::fgSoft));
   app.processEvents();
 }
 
@@ -295,6 +287,27 @@ static int fatalStart(QSplashScreen* splash, QWidget* win, const QString& what,
   return 1;
 }
 
+// Stamp a freshly built model as a character, or as not one. Both flags have to be set
+// before it renders: charModelDetails.isChar sends WoWModel::calcBones down the character
+// path (root and key bones first, the rest inheriting), and without it a character's mesh
+// is skinned by the generic path -- the body collapses while attached armour stays put.
+//
+// raceID != -1 is the criterion, not upstream's "does the path start with char": it is the
+// same test the character panel and the item slots use, so the three cannot drift apart.
+//
+// A function rather than two lines repeated at each load site: the startup path had the
+// lines missing entirely, so a model named on the command line rendered as a broken
+// character while the very same file opened from the tree came out right.
+static bool markAsCharacter(WoWModel* m)
+{
+  if (!m)
+    return false;
+  const bool isCharacter = (m->infos.raceID != -1);
+  m->modelType = isCharacter ? MT_CHAR : MT_NORMAL;
+  m->charModelDetails.isChar = isCharacter;
+  return isCharacter;
+}
+
 int main(int argc, char** argv)
 {
   trace(QString("main entered -- %1 %2").arg(WMV_APP_NAME).arg(WMV_QT_VERSION));
@@ -331,13 +344,8 @@ int main(int argc, char** argv)
     }
   }
 
-  applyDarkPalette(app);
-  // Window/taskbar icon for every top-level widget; the exe's Explorer icon comes
-  // from resources/appicon.rc.
-  app.setWindowIcon(QIcon(":/appicon.png"));
-  trace("QApplication constructed");
-
   // Scripted runs must never stop on a modal dialog; decided here, before anything can fail.
+  // Read before the theme, because it decides whether animation runs at all.
   for (int i = 1; i < argc; ++i) {
     const QString a = QString::fromLocal8Bit(argv[i]);
     if (a == "--shot" || a == "--export" || a == "--install-blender-addon"
@@ -346,6 +354,35 @@ int main(int argc, char** argv)
       break;
     }
   }
+
+  // --ui-scale <faktor> pins the interface scale. Without it the scale comes from the screen's
+  // logical DPI. Qt's own AA_EnableHighDpiScaling is deliberately NOT used: on 5.13 it rounds
+  // the device pixel ratio to a whole number (150 % would become 2x), and GLHost reads the back
+  // buffer with glReadPixels over width()/height(), which at a ratio above 1 captures a quarter
+  // of the frame. Scaling the measures ourselves keeps one code path for every display and
+  // keeps --shot honest.
+  double uiScale = 0.0;
+  for (int i = 1; i < argc - 1; ++i) {
+    if (QString(argv[i]) != "--ui-scale")
+      continue;
+    bool ok = false;
+    const double v = QString::fromLocal8Bit(argv[i + 1]).toDouble(&ok);
+    if (ok)
+      uiScale = v;
+    else
+      trace(QString("--ui-scale: '%1' ist keine Zahl -- ignoriert").arg(argv[i + 1]));
+  }
+  if (uiScale <= 0.0) {
+    const QScreen* s = QGuiApplication::primaryScreen();
+    uiScale = s ? s->logicalDotsPerInch() / 96.0 : 1.0;
+  }
+
+  applyTheme(app, uiScale, g_scripted);
+
+  // Window/taskbar icon for every top-level widget; the exe's Explorer icon comes
+  // from resources/appicon.rc.
+  app.setWindowIcon(QIcon(":/appicon.png"));
+  trace("QApplication constructed");
 
   QSplashScreen* splash = makeSplash();
   splash->show();
@@ -622,8 +659,10 @@ int main(int argc, char** argv)
   trace("before WoWModel construction");
   WoWModel* model = file ? new WoWModel(file, true) : nullptr;
   trace(model ? "WoWModel constructed" : "starting without a model");
-  if (model)
+  if (model) {
+    markAsCharacter(model);
     host->setModel(model);
+  }
 
   // Its own pass, so --shot-frame may stand either side of --shot. A fixed frame number is
   // what makes a screenshot reproducible: the tick is a constant 16 ms, so frame N is always
@@ -733,20 +772,7 @@ int main(int argc, char** argv)
       return;
     auto* m = new WoWModel(picked, true);
 
-    // ModelViewer::LoadModel stamps both of these on a character model and neither was
-    // being carried over. charModelDetails.isChar is the one that matters at render
-    // time: WoWModel::calcBones takes a DIFFERENT path for characters (it animates the
-    // root/key bones first, then lets the rest inherit), so with it left false a
-    // character's mesh is skinned by the generic path -- which is what made an
-    // equipped character look contorted, with the body collapsing while the attached
-    // armour pieces stayed at their bone positions.
-    //
-    // raceID != -1 is the criterion, not upstream's "does the path start with char":
-    // it is the same test the character panel and the item slots already use, so the
-    // three cannot drift apart.
-    const bool isCharacter = (m->infos.raceID != -1);
-    m->modelType = isCharacter ? MT_CHAR : MT_NORMAL;
-    m->charModelDetails.isChar = isCharacter;
+    const bool isCharacter = markAsCharacter(m);
 
     host->setModel(m);
     win->setPathLabel(picked->fullname());
@@ -1115,6 +1141,25 @@ int main(int argc, char** argv)
     trace(QString("export clips: %1").arg((int)o.clips.size()));
   }
 
+  // --print-height <mm> sets the printed height for an STL export below, the headless twin
+  // of the spin box in the Export tab's 3D-print section. Parsed before --export for the
+  // same reason --clips is.
+  for (int i = 1; i < argc - 1; ++i) {
+    if (QString(argv[i]) != "--print-height")
+      continue;
+    bool ok = false;
+    const QString raw = QString::fromLocal8Bit(argv[i + 1]);
+    const double mm = raw.toDouble(&ok);
+    if (!ok) {
+      trace(QString("--print-height: '%1' ist keine Zahl -- ignoriert").arg(raw));
+      continue;
+    }
+    ExportController::Options o = exporters->options();
+    o.printHeightMm = mm;
+    exporters->setOptions(o);
+    trace(QString("print height %1 mm").arg(mm));
+  }
+
 
   // Keep the scrubber and frame counter in step with playback. The canvas advances
   // the animation itself; this only reads it back.
@@ -1253,6 +1298,10 @@ int main(int argc, char** argv)
     const QString err = exporters->exportTo(host->model(), idx, a[1]);
     trace(err.isEmpty() ? QString("export OK -> %1").arg(a[1])
                         : QString("export FAILED: %1").arg(err));
+    // What the exporter measured on the written file (STL: size, footprint, warnings) --
+    // the trace is the only place a headless run can show it.
+    if (err.isEmpty() && !exporters->lastReport().isEmpty())
+      trace("export report:\n" + exporters->lastReport());
   }
 
   win->show();

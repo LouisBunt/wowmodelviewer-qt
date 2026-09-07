@@ -16,6 +16,12 @@ class LightPanel;
 class QLabel;
 class QLineEdit;
 class QMenuBar;
+class ElidedLabel;
+class SegmentedBar;
+class QSplitter;
+class QToolButton;
+class QPushButton;
+class QCloseEvent;
 class QTreeView;
 class TimelinePanel;
 class CharacterIoTab;
@@ -42,6 +48,10 @@ public:
 
   void setBuildLabel(const QString& text);
   void setPathLabel(const QString& text);
+  // The status bar's two fields. The long German sentences main() used to write into a
+  // 30px tool-bar strip go here instead.
+  void setStatus(const QString& text);
+  void setSummary(const QString& text);
 
   // Re-set the brand line in a different family. Separate from construction because the
   // face we want lives in the game archives, which are not mounted when this window is
@@ -87,6 +97,11 @@ public:
 
   // Reflect the item view's state in the toolbar. -1 = whole character.
   void setItemFocusIndicator(int slot);
+  // Window size and splitter positions, remembered between runs. Public because the menu's
+  // "Layout zurücksetzen" calls resetLayout(), and because saveLayout() runs on close.
+  void saveLayout() const;
+  void restoreLayout();
+  void resetLayout();
 
 private:
   // Window button look. Quiet at rest so the title bar stays calm; on hover the close
@@ -112,11 +127,13 @@ signals:
 
 protected:
   bool eventFilter(QObject* obj, QEvent* e) override;
+  void closeEvent(QCloseEvent* e) override;
 
 private slots:
   void onTreeActivated(const QModelIndex& index);
 
 private:
+  void installShortcuts();
   QWidget* buildTitleBar();
   QWidget* buildToolBar();
   QWidget* buildBrowser();
@@ -128,14 +145,18 @@ private:
   GLHost* canvas_ = nullptr;
   CharacterPanel* charPanel_ = nullptr;
   TimelinePanel* timeline_ = nullptr;
-  QLabel* brandLabel_ = nullptr;     // the product name in the title bar
+  QLabel* brandLabel_ = nullptr;     // "MIDNIGHT" -- the ornamental half of the wordmark
+  QLabel* brandSub_ = nullptr;       // "ModelViewer" -- dropped first when the window narrows
+  QLabel* brandVersion_ = nullptr;   // the version -- dropped second
+  ElidedLabel* contextLabel_ = nullptr;  // what is loaded, once, in the title bar
   QLabel* buildLabel_ = nullptr;
   QLabel* pathLabel_ = nullptr;
-  QLabel* exportButton_ = nullptr;   // HUD, disabled while no model is loaded
+  QLabel* exportButton_ = nullptr;   // unused since the export action moved to the tool bar
   QLabel* emptyHint_ = nullptr;      // shown over the viewport while nothing is loaded
   QLabel* viewCharChip_ = nullptr;   // toolbar: whole character
   QLabel* viewItemChip_ = nullptr;   // toolbar: only the focused piece
-  QLabel* statusPathLabel_ = nullptr;
+  QLabel* statusLabel_ = nullptr;        // "Bereit" and the short messages
+  ElidedLabel* statusPathLabel_ = nullptr;  // a one-line summary of what is loaded
   QLabel* resultLabel_ = nullptr;
   QLineEdit* search_ = nullptr;
   QTreeView* tree_ = nullptr;
@@ -152,10 +173,15 @@ private:
   QWidget* searchWrap_ = nullptr;
   QLabel* fpsLabel_ = nullptr;
   QLabel* formatsLabel_ = nullptr;
-  std::vector<QLabel*> catChips_;
-  std::vector<QLabel*> camPresets_;
-  std::vector<QLabel*> railButtons_;
-  std::vector<QLabel*> inspectorTabs_;
+  SegmentedBar* catBar_ = nullptr;        // the browser's five categories
+  SegmentedBar* viewBar_ = nullptr;       // Charakter | Nur Teil
+  SegmentedBar* camBar_ = nullptr;        // Vorn | 3/4 | Seite | Oben
+  QToolButton* gridButton_ = nullptr;
+  QToolButton* screenshotButton_ = nullptr;
+  QPushButton* exportButton2_ = nullptr;  // the primary action, in the tool bar
+  std::vector<QToolButton*> inspectorTabs_;
+  QSplitter* columns_ = nullptr;          // browser | centre | inspector
+  QSplitter* centre_ = nullptr;           // viewport over timeline
   QStackedWidget* inspectorStack_ = nullptr;
   QWidget* characterIoHost_ = nullptr;
   QWidget* exportHost_ = nullptr;

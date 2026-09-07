@@ -14,6 +14,7 @@ class QComboBox;
 class QLabel;
 class QLineEdit;
 class QListWidget;
+class QSpinBox;
 class QVBoxLayout;
 
 // The "Charakter" tool button's tab: where a character comes IN and where he goes OUT.
@@ -77,6 +78,14 @@ public:
   void refreshClips();
 
 private:
+  // The 3D-print section's button: sets format (STL) and options itself, the way "Als FBX
+  // exportieren" on the character tab does, and shows the exporter's measured report.
+  void exportForPrint();
+
+  // Index into ExportController::formats() of the STL exporter, or -1 when the plugin is
+  // not there -- then the print button says so instead of failing on click.
+  int stlFormatIndex() const;
+
   ExportController* exporters_ = nullptr;
   GLHost* canvas_ = nullptr;
   QComboBox* format_ = nullptr;
@@ -87,6 +96,9 @@ private:
   QListWidget* clipList_ = nullptr;
   QLabel* clipHint_ = nullptr;
   QLabel* status_ = nullptr;
+  QSpinBox* printHeight_ = nullptr;
+  QLabel* printHint_ = nullptr;
+  QLabel* printStatus_ = nullptr;
 };
 
 #endif

@@ -177,6 +177,14 @@ void MenuController::build()
   gridAction_->setShortcut(QKeySequence("Ctrl+G"));
   connect(gridAction_, &QAction::triggered, this, &MenuController::toggleGrid);
   add(viewMenu_, tr("Hintergrundfarbe …"), QString(), &MenuController::chooseBackground);
+  viewMenu_->addSeparator();
+  // The columns are draggable now and their positions are remembered between runs, so there
+  // has to be a way back to the defaults -- otherwise a splitter dragged to the edge once is
+  // a permanent state with no visible cause.
+  {
+    QAction* reset = viewMenu_->addAction(tr("Layout zurücksetzen"));
+    connect(reset, &QAction::triggered, win_, [this]() { if (win_) win_->resetLayout(); });
+  }
 
   // --- Charakter -----------------------------------------------------------
   // Everything here needs a character model; without one the entries are visibly
