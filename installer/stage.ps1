@@ -7,7 +7,7 @@
 # leftovers and a zero-byte database cache.
 #
 # The DLL list is not inherited from the wx package. It is the dependency closure of
-# the Qt executable, core.dll, wow.dll and the four plugins, as reported by dumpbin.
+# the Qt executable, core.dll, wow.dll and the five plugins, as reported by dumpbin.
 # jpeg62.dll and libpng16.dll were in the old package because wxWidgets needed them;
 # nothing in this build imports them, so they are gone.
 #
@@ -103,6 +103,7 @@ Stage (Join-Path $ubuild "games\wow\Release\wow.dll") "wow.dll"
 # Export button finds no formats -- which is exactly what the previous zip shipped.
 foreach ($p in @("exporters\fbx\Release\fbxexporter.dll",
                  "exporters\obj\Release\objexporter.dll",
+                 "exporters\stl\Release\stlexporter.dll",
                  "importers\armory\Release\armory.dll",
                  "importers\wowhead\Release\wowhead.dll")) {
   Stage (Join-Path $ubuild "plugins\$p") "plugins\$(Split-Path $p -Leaf)"
@@ -110,7 +111,7 @@ foreach ($p in @("exporters\fbx\Release\fbxexporter.dll",
 Stage (Join-Path $FbxDir "libfbxsdk.dll") "libfbxsdk.dll"   # fbxexporter.dll imports it
 
 # --- Qt ----------------------------------------------------------------------
-foreach ($m in @("Core", "Gui", "Widgets", "Network", "Xml")) {
+foreach ($m in @("Core", "Gui", "Widgets", "Network", "Xml", "Svg")) {
   Stage (Join-Path $QtDir "bin\Qt5$m.dll") "Qt5$m.dll"
 }
 # Without platforms\qwindows.dll Qt aborts at startup with "could not find or load
@@ -119,6 +120,9 @@ Stage (Join-Path $QtDir "plugins\platforms\qwindows.dll") "platforms\qwindows.dl
 foreach ($f in @("qjpeg.dll", "qtga.dll")) {
   Stage (Join-Path $QtDir "plugins\imageformats\$f") "imageformats\$f"
 }
+# The interface's icons are SVG. Without this plugin every icon renders blank -- and blank
+# is not obviously wrong at a glance, which is why it is worth naming here.
+Stage (Join-Path $QtDir "plugins\iconengines\qsvgicon.dll") "iconengines\qsvgicon.dll"
 
 # --- Visual C++ runtime, app-local -------------------------------------------
 # Shipped next to the exe so the installer needs no admin rights and no redist step.

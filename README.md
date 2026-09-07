@@ -21,8 +21,18 @@ and [MIGRATION.md](MIGRATION.md) for why the port is shaped the way it is.
 - **Export to Blender** as FBX with a `.wmvmat.json` sidecar, plus a bundled Blender
   add-on that rebuilds the material node graphs from it — alpha modes, glow and
   UV-scrolling effect planes included. The add-on installs itself from inside the app.
+- **Export for the 3D printer** as a binary STL in millimetres: the figure as posed on
+  screen, only the visible parts, scaled to a chosen height (a lone weapon or shield: its
+  longest side), standing on the plate, glow and particle sheets left out. The file is read back and its measured size, footprint and
+  the parts without thickness are reported (`--export STL,<path>`, `--print-height <mm>`).
+  Thickening and welding stay in Blender, where the add-on's print pipeline does them.
 - Item and transmog browser with categories, sorting and search; item sets can be
   applied on top of what is already worn.
+- **One design system, not seven.** Colour, measure, type and motion live in `Theme.h`,
+  the application has a single stylesheet, and `tools/qss-lint.ps1` fails the build if a
+  raw hex value, a per-widget stylesheet or a point-size font creeps back in. Fonts (Inter,
+  IBM Plex Mono, Cinzel) and icons (Lucide) ship with the application, so the layout is
+  measured against the faces the user actually sees.
 - Armory and NPC import, character save/load in the wx `.chr` format, light control,
   animation timeline, headless flags for scripted checks.
 
@@ -38,6 +48,21 @@ and [MIGRATION.md](MIGRATION.md) for why the port is shaped the way it is.
 | `WoWItem::mergedModel()` | accessor the item view needs to tell merged geometry from attached models |
 | `FBXHeaders::createMesh`, `FBXExporter` | vertex remapping, so an export writes only the vertices a visible pass uses instead of every vertex in the model |
 | `FBXExporter` sidecar | bone names, attachments, animation metadata, UV-scroll tracks |
+
+### The interface
+
+`Theme.h/.cpp` is the design system: colour tokens by role, a 4px measure scale, a pixel type
+scale and the one application stylesheet. `MidnightStyle` (a `QProxyStyle` over Fusion) supplies
+what a stylesheet cannot reach — tree chevrons, pixel metrics, and the focus ring, which is shown
+only for a widget the keyboard reached. `UiKit.h/.cpp` holds the parts the panels are built from:
+`ElidedLabel` (shortens instead of clipping, tooltip only when something is hidden),
+`SegmentedBar` (drops labels for icons rather than truncating them), `SearchField`, `PropertyRow`
+(a label column measured over the real German strings, not a hardcoded width).
+
+Scaling is the application's own: `ui::scale()` multiplies every measure and pixel font size.
+Qt 5.13's `AA_EnableHighDpiScaling` is deliberately not used — it rounds the device pixel ratio to
+a whole number, and `GLHost` reads its back buffer with `glReadPixels` over `width()/height()`,
+which at a ratio above 1 captures a quarter of the frame. `--ui-scale` pins it for screenshots.
 
 ## Why this exists
 

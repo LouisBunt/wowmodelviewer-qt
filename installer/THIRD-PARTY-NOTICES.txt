@@ -141,3 +141,26 @@ Repository genannte Kontaktadresse.
 ------------------------------------------------------------------
 Teil dieses Projekts, ebenfalls unter GPLv3 — dieselbe Lizenz, die Blender-
 Add-ons ohnehin verlangen.
+
+
+Inter (SIL Open Font License 1.1)
+---------------------------------
+The interface font. Copyright (c) 2016 The Inter Project Authors.
+https://github.com/rsms/inter -- licence text in resources/fonts/OFL-Inter.txt
+
+IBM Plex Mono (SIL Open Font License 1.1)
+-----------------------------------------
+Numbers, identifiers and paths. Copyright (c) 2017 IBM Corp.
+https://github.com/IBM/plex -- licence text in resources/fonts/OFL-IBMPlexMono.txt
+
+Cinzel (SIL Open Font License 1.1)
+----------------------------------
+The wordmark, when the game's own display face is not available.
+Copyright (c) 2012 Natanael Gama. https://github.com/NDISCOVER/Cinzel
+Licence text in resources/fonts/OFL-Cinzel.txt
+
+Lucide (ISC License)
+--------------------
+The icon set. Copyright (c) for portions of Lucide are held by Cole Bemis 2013-2022 as part of
+Feather (MIT); all other copyright (c) for Lucide are held by Lucide Contributors 2022.
+https://lucide.dev -- licence text in resources/icons/LICENSE.txt

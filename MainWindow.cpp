@@ -5,14 +5,20 @@
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QCloseEvent>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QSizeGrip>
 #include <QLineEdit>
 #include <QMenuBar>
+#include <QPushButton>
+#include <QSplitter>
+#include <QToolButton>
 #include <QTreeView>
 #include <QResizeEvent>
 #include <QScrollArea>
+#include <QShortcut>
+#include <QSettings>
 #include <QStackedWidget>
 #include <QSlider>
 #include <QTimer>
@@ -26,6 +32,7 @@
 #include "NpcBrowser.h"
 #include "LightPanel.h"
 #include "Theme.h"
+#include "UiKit.h"
 #include "TimelinePanel.h"
 
 
@@ -65,12 +72,12 @@ protected:
   {
     QPainter p(this);
     QLinearGradient g(0, 0, 0, height());
-    g.setColorAt(0.0, QColor(tok::kTitleTop));
-    g.setColorAt(1.0, QColor(tok::kTitleBot));
+    g.setColorAt(0.0, QColor(tok::bgChrome));
+    g.setColorAt(1.0, QColor(tok::bgVoid));
     p.fillRect(rect(), g);
     p.fillRect(rect(), QBrush(grain()));
     // The underline the stylesheet used to carry. Drawn last so the grain cannot mottle it.
-    p.fillRect(0, height() - 1, width(), 1, QColor(tok::kBorder2));
+    p.fillRect(0, height() - 1, width(), 1, QColor(tok::lineHair));
   }
 
 private:
@@ -112,11 +119,6 @@ static QWidget* wrapScroll(QWidget* body)
   s->setWidgetResizable(true);
   s->setFrameShape(QFrame::NoFrame);
   s->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-  s->setStyleSheet(
-    "QScrollArea { background:transparent; border:none; }"
-    "QScrollBar:vertical { background:#0e1114; width:10px; }"
-    "QScrollBar::handle:vertical { background:#262c35; border-radius:5px; min-height:30px; }"
-    "QScrollBar::add-line, QScrollBar::sub-line { height:0; }");
   return s;
 }
 
@@ -126,20 +128,16 @@ static QWidget* wrapScroll(QWidget* body)
 static void asOverlay(QWidget* w)
 {
   w->setAttribute(Qt::WA_NativeWindow, true);
+  // A native child has its own backing store and inherits nothing from its parent's paint, so
+  // it has to fill itself. Without this the pill shows uninitialised memory -- the previous
+  // frame's pixels smeared over each other.
+  w->setAttribute(Qt::WA_StyledBackground, true);
+  w->setProperty("role", "overlay");
   w->raise();
 }
 
-class ElidedLabel : public QLabel
-{
-public:
-  explicit ElidedLabel(const QString& t, QWidget* p = nullptr) : QLabel(p), full_(t)
-  { setMinimumWidth(1); setText(t); }
-protected:
-  void resizeEvent(QResizeEvent* e) override
-  { QLabel::resizeEvent(e); QLabel::setText(fontMetrics().elidedText(full_, Qt::ElideRight, width())); }
-private:
-  QString full_;
-};
+// ElidedLabel used to be declared here and never instantiated -- a working answer to the
+// project's most visible defect, sitting unused. It is a real class now, in UiKit.h.
 
 static QLabel* mk(const QString& text, const QString& family, int pt, const char* colour,
                   bool bold = false, qreal spacing = 0)
@@ -149,7 +147,6 @@ static QLabel* mk(const QString& text, const QString& family, int pt, const char
   if (spacing > 0)
     f.setLetterSpacing(QFont::AbsoluteSpacing, spacing);
   l->setFont(f);
-  l->setStyleSheet(QString("color:%1; background:transparent; border:none;").arg(colour));
   return l;
 }
 
@@ -158,11 +155,6 @@ static QLabel* chip(const QString& text, bool active, const QString& family, int
   auto* l = new QLabel(text);
   l->setFont(QFont(family, pt));
   l->setAlignment(Qt::AlignCenter);
-  l->setStyleSheet(active
-    ? QString("color:%1; background:%2; border:1px solid %3; border-radius:9px; padding:3px 10px;")
-        .arg(tok::kAccent).arg(tok::kAccentBg).arg(tok::kAccentBr)
-    : QString("color:%1; background:#12161b; border:1px solid %2; border-radius:9px; padding:3px 10px;")
-        .arg(tok::kMuted).arg(tok::kBorder));
   return l;
 }
 
@@ -172,8 +164,6 @@ static QLabel* icon(const QString& glyph, int size, const char* colour, const ch
   l->setFixedSize(size, size);
   l->setAlignment(Qt::AlignCenter);
   l->setFont(QFont(iconF(), size / 3 + 3));
-  l->setStyleSheet(QString("color:%1; background:%2; border:none; border-radius:6px;")
-                   .arg(colour).arg(background));
   return l;
 }
 
@@ -182,31 +172,18 @@ static QLabel* icon(const QString& glyph, int size, const char* colour, const ch
 MainWindow::MainWindow()
 {
   styled(this);
-  // The universal QWidget rule is what gives the whole window its background -- but a
-  // stylesheet set on a window also applies to every DIALOG parented to it, and a
-  // stylesheet background beats the palette. Without the QDialog rules below, the input
-  // field of an armory import came up with a near-black background from this very rule and
-  // the platform's default black text on top of it.
-  setStyleSheet(QString(
-    "QWidget { background:%1; } QLabel { border:none; }"
-    "QDialog { background:%2; }"
-    "QDialog QLabel { color:%3; background:transparent; }"
-    "QDialog QLineEdit, QDialog QComboBox, QDialog QAbstractSpinBox,"
-    " QDialog QPlainTextEdit, QDialog QTextEdit {"
-    " background:%4; color:%3; border:1px solid %5; border-radius:5px; padding:4px 7px;"
-    " selection-background-color:%6; selection-color:%7; }"
-    "QDialog QAbstractItemView { background:%4; color:%3; border:1px solid %5;"
-    " selection-background-color:%6; selection-color:%7; }"
-    "QDialog QPushButton { background:#1c2229; color:%3; border:1px solid %5;"
-    " border-radius:5px; padding:5px 15px; min-width:74px; }"
-    "QDialog QPushButton:hover { background:#232a33; }"
-    "QDialog QPushButton:default { border-color:%6; }")
-    .arg(tok::kApp).arg(tok::kPanel).arg(tok::kText).arg("#0f1216")
-    .arg(tok::kBorder).arg(tok::kAccent).arg(tok::kOnAccent));
+  // No window-wide stylesheet. It set the ground for every widget and then spent fifteen
+  // lines undoing its own cascade, because a stylesheet on a window also applies to every
+  // QDialog parented to it -- which is how an armory import ended up as black text on a
+  // near-black field. Theme::sheet() styles dialogs directly, so there is nothing to undo.
+  setProperty("role", "panel");
   // The version belongs in the title: a screenshot in a bug report then carries it
   // without the reporter having to look it up.
   setWindowTitle(QString("%1 %2").arg(WMV_APP_NAME).arg(WMV_QT_VERSION));
-  resize(1480, 900);
+  resize(ui::px(1480), ui::px(900));
+  // A floor, so the three columns and the timeline stay legible. Below this the layout is
+  // not cramped, it is broken -- the inspector's controls stop fitting at all.
+  setMinimumSize(ui::px(1120), ui::px(700));
 
   // The design has its own title bar, so the native frame goes away. On Windows this
   // costs Aero Snap and edge resizing, which the frame provided for free -- dragging
@@ -219,25 +196,123 @@ MainWindow::MainWindow()
   col->addWidget(buildTitleBar());
   col->addWidget(buildToolBar());
 
-  auto* mid = new QWidget;
-  mid->setStyleSheet("background:transparent;");
-  auto* mr = new QHBoxLayout(mid);
-  mr->setContentsMargins(0, 0, 0, 0);
-  mr->setSpacing(0);
-  mr->addWidget(buildBrowser());
+  // Three columns in a splitter, not three fixed widths.
+  //
+  // The browser was pinned at 288 px and the inspector at 324, so 612 px of every window --
+  // more than a third of the default width -- was spent on side columns the user could not
+  // change. When a name did not fit there was no remedy at all: no wider column, no scroll,
+  // no tooltip. Now the columns have a range, the viewport keeps a floor, and where the user
+  // puts the handles is remembered between runs.
+  columns_ = new QSplitter(Qt::Horizontal);
+  columns_->setChildrenCollapsible(false);
+  columns_->setHandleWidth(met::sp(met::Snug));
 
-  auto* centre = new QWidget;
-  centre->setStyleSheet("background:transparent;");
-  auto* cc = new QVBoxLayout(centre);
-  cc->setContentsMargins(0, 0, 0, 0);
-  cc->setSpacing(0);
-  cc->addWidget(buildViewport(), 1);
-  cc->addWidget(buildTimeline());
-  mr->addWidget(centre, 1);
-  mr->addWidget(buildInspector());
+  QWidget* browser = buildBrowser();
+  browser->setMinimumWidth(met::browserMin());
+  browser->setMaximumWidth(met::browserMax());
+  columns_->addWidget(browser);
+
+  // The viewport and the timeline share a vertical splitter, so the timeline can be pulled
+  // down to nothing when the model is what matters.
+  centre_ = new QSplitter(Qt::Vertical);
+  centre_->setChildrenCollapsible(false);
+  centre_->setHandleWidth(met::sp(met::Snug));
+  QWidget* viewport = buildViewport();
+  viewport->setMinimumWidth(met::canvasMin());
+  centre_->addWidget(viewport);
+  QWidget* timeline = buildTimeline();
+  centre_->addWidget(timeline);
+  centre_->setStretchFactor(0, 1);
+  centre_->setStretchFactor(1, 0);
+  columns_->addWidget(centre_);
+
+  QWidget* inspector = buildInspector();
+  inspector->setMinimumWidth(met::inspectorMin());
+  inspector->setMaximumWidth(met::inspectorMax());
+  columns_->addWidget(inspector);
+
+  columns_->setStretchFactor(0, 0);
+  columns_->setStretchFactor(1, 1);
+  columns_->setStretchFactor(2, 0);
+  columns_->setSizes({met::browserDef(), met::canvasMin(), met::inspectorDef()});
+
+  QWidget* mid = columns_;
 
   col->addWidget(mid, 1);
   col->addWidget(buildStatusBar());
+
+  restoreLayout();
+  installShortcuts();
+}
+
+// Keyboard access to the four inspector tabs and the two columns.
+//
+// Nothing in the chrome could be reached from the keyboard before: every control was a QLabel
+// with an event filter, so Tab skipped all of them and there were no accelerators at all. The
+// tool bar used to PRINT "Alt+1 Modell" next to buttons that had no such binding.
+void MainWindow::installShortcuts()
+{
+  for (int i = 0; i < 4; ++i) {
+    auto* sc = new QShortcut(QKeySequence(Qt::ALT + (Qt::Key_1 + i)), this);
+    connect(sc, &QShortcut::activated, this, [this, i]() { setInspectorTab(i); });
+  }
+  // Fold a column away when the model is what matters. A splitter can do it, but only by
+  // dragging; these give it a key.
+  auto* toggleBrowser = new QShortcut(QKeySequence(Qt::Key_T), this);
+  connect(toggleBrowser, &QShortcut::activated, this, [this]() {
+    if (!columns_) return;
+    QList<int> s = columns_->sizes();
+    const bool hidden = s[0] == 0;
+    s[1] += hidden ? -met::browserDef() : s[0];
+    s[0] = hidden ? met::browserDef() : 0;
+    columns_->setSizes(s);
+  });
+  auto* toggleInspector = new QShortcut(QKeySequence(Qt::Key_N), this);
+  connect(toggleInspector, &QShortcut::activated, this, [this]() {
+    if (!columns_) return;
+    QList<int> s = columns_->sizes();
+    const bool hidden = s[2] == 0;
+    s[1] += hidden ? -met::inspectorDef() : s[2];
+    s[2] = hidden ? met::inspectorDef() : 0;
+    columns_->setSizes(s);
+  });
+}
+
+// Where the window and the handles were last left.
+//
+// Nothing was remembered before: every start reopened at 1480x900 with columns the user could
+// not have moved anyway. QSettings, the same ini the WoW folder lives in.
+void MainWindow::saveLayout() const
+{
+  QSettings s(QStringLiteral("userSettings/qt-frontend.ini"), QSettings::IniFormat);
+  s.setValue("ui/geometry", saveGeometry());
+  if (columns_) s.setValue("ui/columns", columns_->saveState());
+  if (centre_)  s.setValue("ui/centre", centre_->saveState());
+}
+
+void MainWindow::restoreLayout()
+{
+  QSettings s(QStringLiteral("userSettings/qt-frontend.ini"), QSettings::IniFormat);
+  const QByteArray g = s.value("ui/geometry").toByteArray();
+  if (!g.isEmpty())
+    restoreGeometry(g);
+  if (columns_) columns_->restoreState(s.value("ui/columns").toByteArray());
+  if (centre_)  centre_->restoreState(s.value("ui/centre").toByteArray());
+}
+
+void MainWindow::resetLayout()
+{
+  resize(ui::px(1480), ui::px(900));
+  if (columns_)
+    columns_->setSizes({met::browserDef(), met::canvasMin(), met::inspectorDef()});
+  if (centre_)
+    centre_->setSizes({height(), ui::px(96)});
+}
+
+void MainWindow::closeEvent(QCloseEvent* e)
+{
+  saveLayout();
+  QWidget::closeEvent(e);
 }
 
 void MainWindow::setDisplayFont(const QString& family, int pointSize)
@@ -267,10 +342,12 @@ void MainWindow::setBuildLabel(const QString& text)
 
 void MainWindow::setPathLabel(const QString& text)
 {
-  if (pathLabel_)
-    pathLabel_->setText(text);
-  if (statusPathLabel_)
-    statusPathLabel_->setText(text);
+  // One place, not two. The same string used to be written into the tool bar AND the status
+  // bar, in the same mono face, so a screenshot showed the path twice while neither strip had
+  // the room for it. It goes into the title bar's context line, middle-elided, with the full
+  // string in the tooltip; the status bar keeps its own short summary.
+  if (contextLabel_)
+    contextLabel_->setFullText(text);
 }
 
 QWidget* MainWindow::buildTitleBar()
@@ -279,21 +356,44 @@ QWidget* MainWindow::buildTitleBar()
   // ground, the grain and the underline itself, and a stylesheet background would sit on
   // top of all three.
   auto* w = new TitleBarSurface;
-  w->setFixedHeight(38);
+  w->setFixedHeight(met::hBar());
   auto* row = new QHBoxLayout(w);
-  row->setContentsMargins(14, 0, 12, 0);
-  row->setSpacing(14);
+  row->setContentsMargins(met::sp(met::Edge), 0, 0, 0);
+  row->setSpacing(met::sp(met::Pad));
 
+  // The wordmark. Three labels, not one string, because they have to give way in order.
+  //
+  // What was here: the whole product name, uppercased, in the game's ornamental serif at the
+  // same optical size as the menu -- 21 wide glyphs whose sizeHint became the layout's hard
+  // minimum, so the title could only crowd the menu bar or clip. It could not shorten, because
+  // a QLabel has no elide mode.
+  //
+  // Now only "MIDNIGHT" is ornamental. Eight characters, never elided, always the same width.
+  // "ModelViewer" and the version are ordinary text that drop out as the window narrows: the
+  // name of the product survives at any size, which is the opposite of what happened before.
   auto* brand = new QHBoxLayout;
-  brand->setSpacing(8);
-  brand->addWidget(icon(QString::fromUtf8("◆"), 16, tok::kAccent, "transparent"));
-  // The name the product actually carries, not a fixed string that stopped being true
-  // when it was renamed. Version beside it, quieter, so a screenshot always carries both.
-  // Kept, because the game's own display face is only reachable once the archives are
-  // mounted -- long after this runs. setDisplayFont() swaps it in then, or leaves it alone.
-  brandLabel_ = mk(QString(WMV_APP_NAME).toUpper(), dispF(), 9, "#c9b6e8", true, 1.3);
+  brand->setSpacing(met::sp(met::Gap));
+  {
+    auto* mark = new QLabel;
+    mark->setPixmap(Theme::icon("layers", QColor(tok::accentText))
+                      .pixmap(ui::px(16), ui::px(16)));
+    mark->setFixedSize(ui::px(18), ui::px(18));
+    mark->setAlignment(Qt::AlignCenter);
+    brand->addWidget(mark);
+  }
+  brandLabel_ = new QLabel(QStringLiteral("MIDNIGHT"));
+  brandLabel_->setFont(typo::font(typo::Wordmark));
   brand->addWidget(brandLabel_);
-  brand->addWidget(mk(WMV_QT_VERSION, monoF(), 7, tok::kDim));
+
+  brandSub_ = new QLabel(QStringLiteral("ModelViewer"));
+  brandSub_->setFont(typo::font(typo::Small));
+  brandSub_->setProperty("role", "caption");
+  brand->addWidget(brandSub_);
+
+  brandVersion_ = new QLabel(WMV_QT_VERSION);
+  brandVersion_->setFont(typo::font(typo::Mono));
+  brandVersion_->setProperty("role", "mono");
+  brand->addWidget(brandVersion_);
   row->addLayout(brand);
 
   // A real QMenuBar rather than the mock-up's five labels: it brings hover states,
@@ -303,67 +403,79 @@ QWidget* MainWindow::buildTitleBar()
   //
   // setNativeMenuBar(false) keeps it inside our own title bar on platforms that would
   // otherwise lift it into a system menu bar.
+  // A real QMenuBar rather than the mock-up's five labels: it brings hover states, Alt
+  // mnemonics, keyboard navigation and window-wide shortcuts with it. Flat now -- the tiles
+  // with their own borders competed with the wordmark for the same corner of the window.
   menuBar_ = new QMenuBar;
   menuBar_->setNativeMenuBar(false);
-  menuBar_->setFont(QFont(uiF(), 9));
-  menuBar_->setStyleSheet(QString(
-    "QMenuBar { background:transparent; border:none; color:#99a2af; }"
-    // Tiles rather than bare words: a visible surface, a border and room to breathe.
-    // Still a real QMenuBar, so Alt mnemonics and keyboard navigation survive.
-    "QMenuBar::item { background:%6; border:1px solid %7; padding:5px 13px;"
-    " margin:0 3px; border-radius:7px; }"
-    "QMenuBar::item:selected { background:#1c2229; color:%1; }"
-    "QMenuBar::item:pressed { background:%2; color:%3; }"
-    "QMenu { background:%4; border:1px solid %5; padding:5px; color:#cdd3dc; }"
-    "QMenu::item { padding:5px 30px 5px 24px; border-radius:5px; }"
-    "QMenu::item:selected { background:%2; color:%3; }"
-    "QMenu::item:disabled { color:#4c545e; background:transparent; }"
-    "QMenu::separator { height:1px; background:%5; margin:5px 8px; }"
-    "QMenu::indicator { width:12px; height:12px; left:7px; }")
-    .arg(tok::kText).arg(tok::kAccentBg).arg(tok::kAccent)
-    .arg(tok::kCard).arg(tok::kBorder)
-    .arg(tok::kCardAlt).arg(tok::kBorder2));
+  menuBar_->setFont(typo::font(typo::Body));
   row->addWidget(menuBar_);
-  row->addStretch(1);
+  row->addSpacing(met::sp(met::Edge));
 
-  auto* pill = new QFrame;
-  pill->setStyleSheet(QString("background:#0f1216; border:1px solid %1; border-radius:10px;").arg(tok::kBorder));
-  auto* pr = new QHBoxLayout(pill);
-  pr->setContentsMargins(8, 3, 10, 3);
-  pr->setSpacing(7);
-  auto* dot = new QLabel;
-  dot->setFixedSize(6, 6);
-  dot->setStyleSheet("background:#5bbd7a; border:none; border-radius:3px;");
-  pr->addWidget(dot);
-  buildLabel_ = mk("CASC", monoF(), 8, tok::kMuted);
-  pr->addWidget(buildLabel_);
-  row->addWidget(pill);
+  // The context line: what is loaded, once, in the middle of the bar.
+  //
+  // The same path used to be printed twice -- in the tool bar and in the status bar -- in two
+  // 30px strips that had no room for it, and the long German sentences main() writes there
+  // ("Kein Modell geladen — links im Baum eines wählen") pushed their neighbours aside. One
+  // line, middle-elided so the file name survives, with the full path in the tooltip.
+  contextLabel_ = new ElidedLabel;
+  contextLabel_->setElideMode(Qt::ElideMiddle);
+  contextLabel_->setFont(typo::font(typo::Small));
+  contextLabel_->setProperty("role", "hint");
+  contextLabel_->setAlignment(Qt::AlignVCenter | Qt::AlignHCenter);
+  row->addWidget(contextLabel_, 1);
+  row->addSpacing(met::sp(met::Edge));
 
-  // Window buttons. They were three unlabelled dots in near-identical greys with no hover
-  // state -- you had to know which was which and aim at 11 pixels. Now they carry the
-  // glyphs everyone recognises, have a proper target, and light up when pointed at, red
-  // for close the way Chrome and most Linux desktops do it.
+  // The CASC indicator: a dot and a build number, not a bordered pill. It is a passive status,
+  // and as a pill it was the highest-contrast object in the top third of the window.
+  {
+    auto* status = new QWidget;
+    status->setAttribute(Qt::WA_StyledBackground, true);
+    auto* sr = new QHBoxLayout(status);
+    sr->setContentsMargins(0, 0, 0, 0);
+    sr->setSpacing(met::sp(met::Snug) + 2);
+    auto* dot = new QLabel;
+    dot->setFixedSize(ui::px(6), ui::px(6));
+    sr->addWidget(dot);
+    buildLabel_ = new QLabel("CASC");
+    buildLabel_->setFont(typo::font(typo::Mono));
+    buildLabel_->setProperty("role", "mono");
+    sr->addWidget(buildLabel_);
+    status->setToolTip(QString::fromUtf8("Spielarchiv eingebunden"));
+    row->addWidget(status);
+  }
+  row->addSpacing(met::sp(met::Pad));
+
+  // Window buttons. Real QToolButtons now: they were QLabels with an event filter, so they had
+  // no pressed state, could not be reached with the keyboard and were invisible to any
+  // accessibility tool. Full bar height, because the corner of a window is a target people
+  // throw the pointer at.
   {
     auto* group = new QWidget;
-    group->setStyleSheet("background:transparent;");
+    group->setAttribute(Qt::WA_StyledBackground, true);
     auto* gr = new QHBoxLayout(group);
     gr->setContentsMargins(0, 0, 0, 0);
-    gr->setSpacing(2);                    // a group, not three scattered dots
-    const struct { const char* glyph; int action; } buttons[] = {
-      { "─", 0 },   // minimise
-      { "□", 1 },   // maximise / restore
-      { "×", 2 }    // close
+    gr->setSpacing(0);
+    const struct { const char* icon; const char* tip; int action; } buttons[] = {
+      { "minus",  "Minimieren", 0 },
+      { "square", "Maximieren", 1 },
+      { "x",      "Schließen",  2 }
     };
     for (const auto& b : buttons) {
-      auto* d = new QLabel(QString::fromUtf8(b.glyph));
-      d->setFixedSize(30, 22);
-      d->setAlignment(Qt::AlignCenter);
-      d->setFont(QFont(iconF(), 9));
-      d->setCursor(Qt::PointingHandCursor);
-      d->setProperty("windowAction", b.action);
-      d->installEventFilter(this);
-      paintWindowButton(d, false);
-      gr->addWidget(d);
+      auto* t = new QToolButton;
+      t->setIcon(Theme::icon(b.icon, QColor(tok::fgMuted)));
+      t->setIconSize(QSize(ui::px(12), ui::px(12)));
+      t->setFixedSize(ui::px(44), ui::px(38));
+      t->setToolTip(QString::fromUtf8(b.tip));
+      t->setProperty("role", b.action == 2 ? "close" : "window");
+      t->setFocusPolicy(Qt::NoFocus);   // the corner buttons are not part of the tab order
+      const int action = b.action;
+      connect(t, &QToolButton::clicked, this, [this, action]() {
+        if (action == 0) showMinimized();
+        else if (action == 1) isMaximized() ? showNormal() : showMaximized();
+        else close();
+      });
+      gr->addWidget(t);
     }
     row->addWidget(group);
   }
@@ -376,134 +488,139 @@ QWidget* MainWindow::buildTitleBar()
 
 QWidget* MainWindow::buildToolBar()
 {
+  // One strip, three groups, each a real control.
+  //
+  // What was here mixed three unrelated kinds of thing in thirty pixels: three buttons that
+  // only jumped to an inspector tab visible on the right anyway, two that opened viewport
+  // menus, a view-mode pair, and the model path. All of them were QLabels with an event
+  // filter -- no hover, no pressed state, no keyboard, no disabled look -- which is most of
+  // why the window felt like a picture of an application rather than one.
+  //
+  // The tab shortcuts are gone (Alt+1..4 do it, and the tabs are two centimetres away). The
+  // camera presets and the two viewport actions move up from the HUD, so the primary action
+  // is always at the same pixel and two native overlays over the GL canvas disappear.
   auto* w = new QWidget;
   styled(w);
-  w->setFixedHeight(30);
-  w->setStyleSheet(QString("background:#0f1216; border-bottom:1px solid %1;").arg(tok::kBorder2));
+  w->setProperty("role", "chrome");
+  w->setFixedHeight(met::hCta());
   auto* row = new QHBoxLayout(w);
-  row->setContentsMargins(12, 0, 12, 0);
-  row->setSpacing(4);
+  row->setContentsMargins(met::sp(met::Pad), 0, met::sp(met::Pad), 0);
+  row->setSpacing(met::sp(met::Pad));
 
-  // The mock-up showed six "Alt+n Label" pairs. The shortcut hints were invented -- no
-  // Alt+n binding ever existed -- so they are gone, and the labels are now buttons that
-  // actually go somewhere. "Effekte" is dropped: this front-end has no effects panel to
-  // send anyone to, and a button to nowhere is worse than no button.
-  const struct { const char* label; int action; } kItems[] = {
-    // Same words as the inspector tabs they open -- a button called "Modell" that
-    // lands on a tab called "Anpassen" reads like a misclick.
-    { "Anpassen",    ToolModel      },
-    { "Import",      ToolCharacter  },
-    { "Licht",       ToolLight      },
-    { "Kamera",      ToolCamera     },
-    { "Hintergrund", ToolBackground }
-  };
-  for (const auto& it : kItems) {
-    auto* b = new QLabel(QString::fromUtf8(it.label));
-    b->setFont(QFont(uiF(), 8));
-    b->setCursor(Qt::PointingHandCursor);
-    b->setStyleSheet("color:#9aa3b0; background:transparent; border:none;"
-                     " padding:5px 10px; border-radius:5px;");
-    b->setProperty("toolButton", it.action);
-    b->installEventFilter(this);
-    row->addWidget(b);
-  }
-  // The item view used to be reachable only through a small mark deep in the equipment
-  // list. It is a view mode like any other, so it belongs where the view is switched.
-  // Same two-chip shape the item browser uses for "Einzelteile / Sets".
+  // Group 1: what is shown -- the whole character, or one worn piece.
+  viewBar_ = new SegmentedBar(SegmentedBar::Radio, w);
+  viewBar_->addSegment(QString::fromUtf8("Charakter"), "user",
+                       QString::fromUtf8("Die ganze Figur zeigen"));
+  viewBar_->addSegment(QString::fromUtf8("Nur Teil"), "eye",
+                       QString::fromUtf8("Nur ein getragenes Teil zeigen"));
+  connect(viewBar_, &SegmentedBar::activated, this,
+          [this](int i) { emit itemViewRequested(i == 1); });
+  row->addWidget(viewBar_);
+
+  // Group 2: where it is seen from.
+  camBar_ = new SegmentedBar(SegmentedBar::Radio, w);
+  const char* kCam[] = {"Vorn", "3/4", "Seite", "Oben"};
+  for (const char* c : kCam)
+    camBar_->addSegment(QString::fromUtf8(c));
+  connect(camBar_, &SegmentedBar::activated, this,
+          [this](int i) { emit cameraPresetRequested(i); });
+  row->addWidget(camBar_);
+
+  // Group 3: the viewport's own switches.
   {
-    auto* sep = new QLabel;
-    sep->setFixedWidth(1);
-    sep->setFixedHeight(16);
-    sep->setStyleSheet(QString("background:%1;").arg(tok::kBorder));
-    row->addSpacing(6);
-    row->addWidget(sep);
-    row->addSpacing(6);
+    auto* fit = uikit::iconButton("maximize-2", QString::fromUtf8("Kamera einpassen (R)"));
+    connect(fit, &QToolButton::clicked, this, &MainWindow::fitCameraRequested);
+    row->addWidget(fit);
 
-    const struct { const char* label; bool onlyItem; } kViews[] = {
-      { "Charakter", false },
-      { "Nur Teil",  true  }
-    };
-    for (const auto& v : kViews) {
-      auto* c = new QLabel(QString::fromUtf8(v.label));
-      c->setFont(QFont(uiF(), 8));
-      c->setCursor(Qt::PointingHandCursor);
-      c->setProperty("viewChip", v.onlyItem);
-      c->installEventFilter(this);
-      row->addWidget(c);
-      (v.onlyItem ? viewItemChip_ : viewCharChip_) = c;
-    }
-    setItemFocusIndicator(-1);
+    gridButton_ = uikit::iconButton("grid-3x3", QString::fromUtf8("Gitter (Strg+G)"));
+    gridButton_->setCheckable(true);
+    connect(gridButton_, &QToolButton::clicked, this, &MainWindow::gridToggleRequested);
+    row->addWidget(gridButton_);
+
+    auto* bg = uikit::iconButton("palette", QString::fromUtf8("Hintergrund"));
+    connect(bg, &QToolButton::clicked, this, &MainWindow::backgroundRequested);
+    row->addWidget(bg);
   }
 
   row->addStretch(1);
-  pathLabel_ = mk("", monoF(), 8, tok::kDim);
-  row->addWidget(pathLabel_);
+
+  screenshotButton_ = uikit::iconButton("camera", QString::fromUtf8("Screenshot (F12)"));
+  connect(screenshotButton_, &QToolButton::clicked, this, &MainWindow::screenshotRequested);
+  row->addWidget(screenshotButton_);
+
+  exportButton2_ = new QPushButton(QString::fromUtf8("Exportieren"));
+  exportButton2_->setProperty("variant", "primary");
+  exportButton2_->setCursor(Qt::PointingHandCursor);
+  exportButton2_->setIcon(Theme::icon("package", QColor(tok::onAccent)));
+  connect(exportButton2_, &QPushButton::clicked, this, &MainWindow::exportRequested);
+  row->addWidget(exportButton2_);
+
+  setItemFocusIndicator(-1);
   return w;
 }
 
 QWidget* MainWindow::buildBrowser()
 {
+  // One left edge for everything in this column.
+  //
+  // The search field, the category row, the section label and the tree used to start at four
+  // different x positions within seventeen pixels -- not aligned enough to read as indentation,
+  // not far enough apart to read as intent, which is exactly the kind of thing that registers
+  // as "sloppy" without being nameable. One margin constant now, used by all four.
   auto* w = new QWidget;
   styled(w);
-  w->setFixedWidth(288);
-  w->setStyleSheet(QString("background:%1; border-right:1px solid %2;").arg(tok::kPanel).arg(tok::kBorder2));
+  w->setProperty("role", "panel");
   auto* col = new QVBoxLayout(w);
   col->setContentsMargins(0, 0, 0, 0);
   col->setSpacing(0);
 
+  const int edge = met::sp(met::Pad);
+
   auto* searchWrap = new QWidget;
   searchWrap_ = searchWrap;
-  searchWrap->setStyleSheet("background:transparent;");
+  searchWrap->setAttribute(Qt::WA_StyledBackground, true);
+  searchWrap->setProperty("role", "panel");
   auto* sw = new QHBoxLayout(searchWrap);
-  sw->setContentsMargins(12, 12, 12, 8);
-  auto* search = new QLineEdit;
+  sw->setContentsMargins(edge, edge, edge, met::sp(met::Gap));
+  auto* search = new SearchField(QString::fromUtf8("Name oder FileDataID …"));
   search_ = search;
-  // Typing filters as you go. A rebuild walks the whole listfile, so it waits for a
-  // pause in the typing rather than running per keystroke; Enter skips the wait.
-  auto* searchDelay = new QTimer(this);
-  searchDelay->setSingleShot(true);
-  searchDelay->setInterval(350);
-  connect(searchDelay, &QTimer::timeout, this, &MainWindow::populateTree);
-  connect(search, &QLineEdit::textChanged, this, [searchDelay](const QString&) {
-    searchDelay->start();
-  });
-  connect(search, &QLineEdit::returnPressed, this, [this, searchDelay]() {
-    searchDelay->stop();
-    populateTree();
-  });
-  search->setPlaceholderText(QString::fromUtf8("Name oder FileDataID …"));
-  search->setFixedHeight(32);
-  search->setFont(QFont(uiF(), 9));
-  search->setStyleSheet(QString(
-    "QLineEdit { background:%1; border:1px solid %2; border-radius:7px; padding:0 10px; color:%3; }"
-    "QLineEdit:focus { border-color:#3a434f; }").arg(tok::kCard).arg(tok::kBorder).arg(tok::kText));
+  connect(search, &SearchField::searchChanged, this, [this](const QString&) { populateTree(); });
+  connect(search, &QLineEdit::returnPressed, this, &MainWindow::populateTree);
   sw->addWidget(search);
   col->addWidget(searchWrap);
 
+  // The categories. They were five text chips squeezed into 288 px, where "Charaktere" and
+  // "Kreaturen" came out as "arakte" and "eature" -- the clearest single example of the
+  // owner's complaint, and visible in every screenshot the project has. A segmented control
+  // drops the LABEL when the column is narrow and keeps the icon and the tooltip, so the
+  // control still says what it is instead of showing a word fragment.
   auto* cats = new QWidget;
-  cats->setStyleSheet("background:transparent;");
+  cats->setAttribute(Qt::WA_StyledBackground, true);
+  cats->setProperty("role", "panel");
   auto* cr = new QHBoxLayout(cats);
-  cr->setContentsMargins(12, 0, 12, 10);
-  cr->setSpacing(5);
-  const char* catNames[] = {"Alle", "Charaktere", "Kreaturen", "Items", "NPCs"};
-  for (int i = 0; i < 5; ++i) {
-    QLabel* c = chip(QString::fromLatin1(catNames[i]), i == 0, uiF(), 8);
-    c->setCursor(Qt::PointingHandCursor);
-    c->installEventFilter(this);
-    c->setProperty("categoryIndex", i);
-    catChips_.push_back(c);
-    cr->addWidget(c);
-  }
-  cr->addStretch(1);
+  cr->setContentsMargins(edge, 0, edge, met::sp(met::Gap));
+  cr->setSpacing(0);
+  catBar_ = new SegmentedBar(SegmentedBar::Radio, cats);
+  const struct { const char* label; const char* icon; } kCats[] = {
+    { "Alle",       "layers"    },
+    { "Charaktere", "user"      },
+    { "Kreaturen",  "paw-print" },
+    { "Items",      "swords"    },
+    { "NPCs",       "users"     },
+  };
+  for (const auto& c : kCats)
+    catBar_->addSegment(QString::fromUtf8(c.label), c.icon);
+  connect(catBar_, &SegmentedBar::activated, this, [this](int i) { setCategory(i); });
+  cr->addWidget(catBar_);
   col->addWidget(cats);
 
   auto* listHost = new QWidget;
-  listHost->setStyleSheet("background:transparent;");
+  listHost->setAttribute(Qt::WA_StyledBackground, true);
+  listHost->setProperty("role", "panel");
   auto* lr = new QVBoxLayout(listHost);
-  lr->setContentsMargins(8, 0, 8, 8);
-  lr->setSpacing(2);
-  resultLabel_ = mk(QString::fromUtf8("ERGEBNISSE"), uiF(), 7, tok::kDim, false, 1.3);
-  resultLabel_->setContentsMargins(6, 6, 6, 8);
+  lr->setContentsMargins(edge, 0, edge, met::sp(met::Gap));
+  lr->setSpacing(met::sp(met::Snug));
+  resultLabel_ = uikit::sectionLabel(QString::fromUtf8("ERGEBNISSE"));
   lr->addWidget(resultLabel_);
 
   // The real tree. No lazy expansion, no freeze/thaw: the view only asks the model
@@ -513,15 +630,14 @@ QWidget* MainWindow::buildBrowser()
   tree_->setModel(treeModel_);
   tree_->setHeaderHidden(true);
   tree_->setUniformRowHeights(true);      // lets the view skip per-row size queries
-  tree_->setFont(QFont(uiF(), 8));
-  tree_->setStyleSheet(QString(
-    "QTreeView { background:transparent; border:none; outline:none; }"
-    "QTreeView::item { padding:3px 2px; border-radius:4px; }"
-    "QTreeView::item:hover { background:#181d23; }"
-    "QTreeView::item:selected { background:#1a1226; color:%1; }"
-    "QScrollBar:vertical { background:transparent; width:10px; }"
-    "QScrollBar::handle:vertical { background:#262c35; border-radius:5px; min-height:30px; }"
-    "QScrollBar::add-line, QScrollBar::sub-line { height:0; }").arg(tok::kAccent));
+  tree_->setProperty("role", "flush");
+  tree_->setFont(typo::font(typo::Body));
+  // Middle elision, because the tail of a model path ("...male_hd.m2") is the half that
+  // identifies it; end elision would cut off exactly the informative part. Per-pixel
+  // scrolling because a 130 000-row list jumps a whole row at a time otherwise.
+  tree_->setTextElideMode(Qt::ElideMiddle);
+  tree_->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
+  tree_->setAlternatingRowColors(false);
   connect(tree_, &QTreeView::activated, this, &MainWindow::onTreeActivated);
   lr->addWidget(tree_, 1);
 
@@ -529,7 +645,8 @@ QWidget* MainWindow::buildBrowser()
   // FILES, and most armour has none of its own -- it is a texture layer on a character --
   // so the only way to find a chest piece is through the item database.
   browserStack_ = new QStackedWidget;
-  browserStack_->setStyleSheet("background:transparent;");
+  browserStack_->setAttribute(Qt::WA_StyledBackground, true);
+  browserStack_->setProperty("role", "panel");
   browserStack_->addWidget(listHost);
   itemBrowser_ = new ItemBrowser;
   browserStack_->addWidget(itemBrowser_);
@@ -539,16 +656,6 @@ QWidget* MainWindow::buildBrowser()
   npcBrowser_ = new NpcBrowser;
   browserStack_->addWidget(npcBrowser_);
   col->addWidget(browserStack_, 1);
-
-  auto* foot0 = new QWidget;
-  styled(foot0);
-  foot0->setStyleSheet(QString("background:transparent; border-top:1px solid %1;").arg(tok::kBorder2));
-  auto* fr0 = new QHBoxLayout(foot0);
-  fr0->setContentsMargins(14, 10, 14, 10);
-  fr0->addWidget(mk("Datenquelle", uiF(), 8, tok::kDim));
-  fr0->addStretch(1);
-  fr0->addWidget(mk("listfile", monoF(), 8, tok::kMuted));
-  col->addWidget(foot0);
   return w;
 }
 
@@ -576,7 +683,7 @@ void MainWindow::populateTree()
 
 void MainWindow::setCategory(int index)
 {
-  if (!treeModel_ || index < 0 || index >= (int)catChips_.size())
+  if (!treeModel_ || index < 0 || index > 4)
     return;
 
   // "Items" and "NPCs" swap the whole column over to their database browsers, which bring
@@ -595,14 +702,10 @@ void MainWindow::setCategory(int index)
   if (searchWrap_)
     searchWrap_->setVisible(!itemMode && !npcMode);
 
-  for (int i = 0; i < (int)catChips_.size(); ++i) {
-    const bool active = (i == index);
-    catChips_[i]->setStyleSheet(active
-      ? QString("color:%1; background:%2; border:1px solid %3; border-radius:9px; padding:3px 10px;")
-          .arg(tok::kAccent).arg(tok::kAccentBg).arg(tok::kAccentBr)
-      : QString("color:%1; background:#12161b; border:1px solid %2; border-radius:9px; padding:3px 10px;")
-          .arg(tok::kMuted).arg(tok::kBorder));
-  }
+  // One line where there were eight: the segmented control holds the checked state, and
+  // the stylesheet decides what checked looks like.
+  if (catBar_)
+    catBar_->setCurrent(index);
 
   if (!itemMode && !npcMode)      // the database browsers run their own queries
     populateTree();
@@ -626,146 +729,44 @@ void MainWindow::setExportFormats(const QStringList& labels)
 
 void MainWindow::setGridIndicator(bool on)
 {
-  if (railButtons_.size() <= RailGrid)
-    return;
-  railButtons_[RailGrid]->setStyleSheet(
-    QString("color:%1; background:%2; border:none; border-radius:6px;")
-      .arg(on ? tok::kAccent : tok::kMuted).arg(on ? "#22282f" : "transparent"));
+  if (gridButton_)
+    gridButton_->setChecked(on);
 }
 
 void MainWindow::setModelActionsEnabled(bool on)
 {
-  if (exportButton_) {
-    exportButton_->setStyleSheet(
-      on ? QString("background:%1; border:1px solid #c084fc; border-radius:7px;"
-                   "color:%2; padding:8px 14px;").arg(tok::kAccent).arg(tok::kOnAccent)
-         : QString("background: rgba(14,17,20,220); border:1px solid %1; border-radius:7px;"
-                   "color:%2; padding:8px 14px;").arg(tok::kBorder).arg(tok::kDim));
-    exportButton_->setProperty("enabledLook", on);
-    exportButton_->setCursor(on ? Qt::PointingHandCursor : Qt::ArrowCursor);
-    exportButton_->setToolTip(on ? QString() : tr("Erst ein Modell laden"));
-  }
+  // setEnabled, not a rebuilt stylesheet: the sheet already says what a disabled button
+  // looks like, and the button stops accepting clicks instead of only looking as if it had.
+  if (exportButton2_)
+    exportButton2_->setEnabled(on);
+  if (exportButton2_)
+    exportButton2_->setToolTip(on ? QString() : tr("Erst ein Modell laden"));
+  if (screenshotButton_)
+    screenshotButton_->setEnabled(on);
+  if (viewBar_)
+    viewBar_->setEnabled(on);
   // The hint owns the middle of an empty viewport; it would be in the way of a model.
   if (emptyHint_)
     emptyHint_->setVisible(!on);
 }
 
-void MainWindow::paintWindowButton(QLabel* b, bool hovered)
-{
-  if (!b)
-    return;
-  const bool isClose = (b->property("windowAction").toInt() == 2);
-  const char* bg  = !hovered ? "transparent" : (isClose ? tok::kDanger : tok::kRaised2);
-  const char* fg  = !hovered ? tok::kMuted   : (isClose ? "#ffffff"   : tok::kText);
-  b->setStyleSheet(QString("background:%1; color:%2; border:none; border-radius:5px;")
-                     .arg(bg).arg(fg));
-}
-
 void MainWindow::setItemFocusIndicator(int slot)
 {
-  const bool onlyItem = (slot >= 0);
-  const auto paint = [](QLabel* c, bool active) {
-    if (!c)
-      return;
-    c->setStyleSheet(active
-      ? QString("background:%1; border:1px solid %2; border-radius:9px;"
-                " padding:3px 10px; color:%3;")
-          .arg(tok::kAccentBg).arg(tok::kAccentBr).arg(tok::kAccent)
-      : QString("background:#12161b; border:1px solid %1; border-radius:9px;"
-                " padding:3px 10px; color:%2;").arg(tok::kBorder).arg(tok::kMuted));
-  };
-  paint(viewCharChip_, !onlyItem);
-  paint(viewItemChip_, onlyItem);
+  if (viewBar_)
+    viewBar_->setCurrent(slot >= 0 ? 1 : 0);
 }
 
 void MainWindow::setActiveCameraPreset(int index)
 {
-  for (int i = 0; i < (int)camPresets_.size(); ++i) {
-    const bool active = (i == index);
-    camPresets_[i]->setStyleSheet(active
-      ? QString("background: rgba(30,16,48,235); border:1px solid #4c2a75; border-radius:6px;"
-                "color:%1; padding:6px 11px;").arg(tok::kAccent)
-      : QString("background: rgba(14,17,20,220); border:1px solid %1; border-radius:6px;"
-                "color:#98a1ae; padding:6px 11px;").arg(tok::kBorder));
-  }
+  if (camBar_)
+    camBar_->setCurrent(index);
 }
 
 bool MainWindow::eventFilter(QObject* obj, QEvent* e)
 {
-  // Hover for the window buttons. They are QLabels, which have no hover state of their
-  // own and no :hover selector without a stylesheet already on them.
-  if (e->type() == QEvent::Enter || e->type() == QEvent::Leave) {
-    if (auto* b = qobject_cast<QLabel*>(obj))
-      if (b->property("windowAction").isValid()) {
-        paintWindowButton(b, e->type() == QEvent::Enter);
-        return false;                    // let the label handle it too
-      }
-  }
-
-  if (e->type() == QEvent::MouseButtonRelease) {
-    const QVariant idx = obj->property("categoryIndex");
-    if (idx.isValid()) {
-      setCategory(idx.toInt());
-      return true;
-    }
-    const QVariant view = obj->property("viewChip");
-    if (view.isValid()) {
-      emit itemViewRequested(view.toBool());
-      return true;
-    }
-    if (obj->property("exportButton").isValid()) {
-      if (!obj->property("enabledLook").toBool())
-        return true;                       // greyed out: nothing to export
-      emit exportRequested();
-      return true;
-    }
-    if (obj->property("screenshotButton").isValid()) {
-      emit screenshotRequested();
-      return true;
-    }
-    const QVariant tool = obj->property("toolButton");
-    if (tool.isValid()) {
-      switch (tool.toInt()) {
-        case ToolModel:      setInspectorTab(TabCharacter); break;
-        case ToolCharacter:  setInspectorTab(TabCharacterIo); break;
-        case ToolLight:      setInspectorTab(TabLight); break;
-        case ToolCamera:     emit cameraMenuRequested(); break;
-        case ToolBackground: emit backgroundRequested(); break;
-      }
-      return true;
-    }
-    const QVariant rail = obj->property("railButton");
-    if (rail.isValid()) {
-      switch (rail.toInt()) {
-        case RailFit:   emit fitCameraRequested(); break;
-        case RailGrid:  emit gridToggleRequested(); break;
-        case RailLight: setInspectorTab(TabLight); break;
-      }
-      return true;
-    }
-    const QVariant preset = obj->property("cameraPreset");
-    if (preset.isValid()) {
-      setActiveCameraPreset(preset.toInt());
-      emit cameraPresetRequested(preset.toInt());
-      return true;
-    }
-    const QVariant tab = obj->property("inspectorTab");
-    if (tab.isValid()) {
-      setInspectorTab(tab.toInt());
-      return true;
-    }
-    const QVariant act = obj->property("windowAction");
-    if (act.isValid()) {
-      switch (act.toInt()) {
-        case 0: showMinimized(); break;
-        case 1: isMaximized() ? showNormal() : showMaximized(); break;
-        case 2: close(); break;
-      }
-      return true;
-    }
-  }
-
-  // Frameless drag: remember the grab offset on press, move the window on drag.
+  // All that is left of what used to be a hundred-line chain of property lookups: the
+  // window drag. Everything else in the chrome is a real button with a real signal now,
+  // which is what gives it hover, pressed, disabled and keyboard states.
   if (obj->property("isTitleBar").isValid()) {
     if (e->type() == QEvent::MouseButtonPress) {
       dragOffset_ = static_cast<QMouseEvent*>(e)->globalPos() - frameGeometry().topLeft();
@@ -804,7 +805,6 @@ QWidget* MainWindow::buildViewport()
 {
   auto* host = new QWidget;
   styled(host);
-  host->setStyleSheet("background:#080a0d;");
 
   auto* g = new QGridLayout(host);
   g->setContentsMargins(14, 14, 14, 14);
@@ -823,105 +823,35 @@ QWidget* MainWindow::buildViewport()
                             "unter „Charaktere“ nach Rasse, "
                             "unter „Items“ nach Ausrüstung."), host);
   emptyHint_->setAlignment(Qt::AlignCenter);
-  emptyHint_->setFont(QFont(uiF(), 10));
-  // Not transparent: asOverlay() gives this its own native window, which cannot inherit
-  // the parent's paint and would show up as a black box. Matching the GL clear colour
-  // (GLHost's bg_) makes it sit invisibly on the viewport instead.
-  emptyHint_->setStyleSheet(QString("color:%1; background:%2; padding:20px;")
-                              .arg(tok::kMuted).arg(tok::kApp));
+  emptyHint_->setFont(typo::font(typo::Body));
+  // Not transparent: asOverlay() gives this its own native window, which cannot inherit the
+  // parent's paint and would show up as a black box. Matching the GL clear colour (GLHost's
+  // bg_) makes it sit invisibly on the viewport instead.
   g->addWidget(emptyHint_, 0, 0, 3, 3, Qt::AlignCenter);
   asOverlay(emptyHint_);
 
-  auto* rail = new QFrame(host);
-  rail->setStyleSheet(QString("QFrame { background: rgba(14,17,20,220); border:1px solid %1;"
-                              " border-radius:9px; }").arg(tok::kBorder));
-  auto* rl = new QVBoxLayout(rail);
-  rl->setContentsMargins(6, 6, 6, 6);
-  rl->setSpacing(6);
-  // Three tools, not five decorative glyphs. The mock-up's pan and zoom icons are gone:
-  // panning is the right mouse button and zooming is the wheel, so a button that only
-  // says "you can drag" earns nothing.
-  const struct { const char* glyph; int action; const char* tip; } kTools[] = {
-    { "◎", RailFit,   "Auf das Modell einpassen" },
-    { "▦", RailGrid,  "Gitter ein/aus" },
-    { "☀", RailLight, "Licht" }
-  };
-  for (const auto& t : kTools) {
-    QLabel* b = icon(QString::fromUtf8(t.glyph), 30, tok::kMuted, "transparent");
-    b->setCursor(Qt::PointingHandCursor);
-    b->setToolTip(QString::fromUtf8(t.tip));
-    b->setProperty("railButton", t.action);
-    b->installEventFilter(this);
-    railButtons_.push_back(b);
-    rl->addWidget(b);
-  }
-  g->addWidget(rail, 0, 0, Qt::AlignTop | Qt::AlignLeft);
-  asOverlay(rail);
-
-  auto* actions = new QWidget(host);
-  actions->setStyleSheet("background:transparent;");
-  auto* ar = new QHBoxLayout(actions);
-  ar->setContentsMargins(0, 0, 0, 0);
-  ar->setSpacing(8);
-  auto* shot = new QFrame;
-  shot->setStyleSheet(QString("QFrame { background: rgba(14,17,20,220); border:1px solid %1;"
-                              " border-radius:8px; }").arg(tok::kBorder));
-  auto* sl = new QHBoxLayout(shot);
-  sl->setContentsMargins(12, 6, 12, 6);
-  sl->addWidget(mk("Screenshot", uiF(), 9, "#cdd3dc"));
-  shot->setCursor(Qt::PointingHandCursor);
-  shot->setProperty("screenshotButton", true);
-  shot->installEventFilter(this);
-  ar->addWidget(shot);
-  auto* exp = new QLabel("Exportieren");
-  exp->setFont(QFont(uiF(), 9, QFont::DemiBold));
-  exp->setAlignment(Qt::AlignCenter);
-  exp->setCursor(Qt::PointingHandCursor);
-  exp->setStyleSheet(QString("background:%1; border:1px solid #c084fc; border-radius:7px;"
-                             "color:%2; padding:8px 14px;").arg(tok::kAccent).arg(tok::kOnAccent));
-  exp->setProperty("exportButton", true);
-  exp->installEventFilter(this);
-  ar->addWidget(exp);
-  exportButton_ = exp;
-  g->addWidget(actions, 0, 2, Qt::AlignTop | Qt::AlignRight);
-  asOverlay(actions);
+  // Three floating clusters are gone from the viewport.
+  //
+  // The rail's three glyphs -- fit, grid, light -- were unlabelled symbols at three different
+  // optical weights, in a card pushed hard into the corner of the render. Screenshot and
+  // Exportieren floated top-right on a different margin. The camera presets sat bottom-right.
+  // All of them are named buttons in the tool bar now, which puts the primary action at the
+  // same pixel whatever the viewport is doing, and removes three native child windows whose
+  // opaque backing showed as dark boxes the moment the user changed the background colour.
+  setActiveCameraPreset(0);
 
   auto* stats = new QFrame(host);
-  stats->setStyleSheet(QString("QFrame { background: rgba(14,17,20,220); border:1px solid %1;"
-                               " border-radius:8px; }").arg(tok::kBorder));
   auto* sr = new QHBoxLayout(stats);
   sr->setContentsMargins(12, 6, 12, 6);
   sr->setSpacing(16);
   // "60 FPS" was a hardcoded string that happened to look plausible. It is measured now;
   // updateStats() is driven from the same timer that drives the timeline.
-  fpsLabel_ = mk(QString::fromUtf8("– FPS"), monoF(), 8, "#7d8693");
+  fpsLabel_ = mk(QString::fromUtf8("– FPS"), typo::monoFamily(), 8, tok::fgMuted);
   sr->addWidget(fpsLabel_);
   for (const char* s : {"M2", "GL 4.6"})
-    sr->addWidget(mk(QString::fromUtf8(s), monoF(), 8, "#7d8693"));
+    sr->addWidget(mk(QString::fromUtf8(s), typo::monoFamily(), 8, tok::fgMuted));
   g->addWidget(stats, 2, 0, Qt::AlignBottom | Qt::AlignLeft);
   asOverlay(stats);
-
-  auto* cams = new QWidget(host);
-  cams->setStyleSheet("background:transparent;");
-  auto* cr = new QHBoxLayout(cams);
-  cr->setContentsMargins(0, 0, 0, 0);
-  cr->setSpacing(6);
-  const char* presets[] = {"Vorn", "3/4", "Seite", "Oben"};
-  for (int i = 0; i < 4; ++i) {
-    auto* c = new QLabel(QString::fromLatin1(presets[i]));
-    c->setAlignment(Qt::AlignCenter);
-    c->setFont(QFont(uiF(), 8));
-    c->setCursor(Qt::PointingHandCursor);
-    c->setProperty("cameraPreset", i);
-    c->installEventFilter(this);
-    camPresets_.push_back(c);
-    cr->addWidget(c);
-  }
-  // The mock-up highlighted "3/4" for looks. The camera actually starts where
-  // OrbitCamera::reset() puts it, which is the front view -- so highlight that.
-  setActiveCameraPreset(0);
-  g->addWidget(cams, 2, 2, Qt::AlignBottom | Qt::AlignRight);
-  asOverlay(cams);
 
   g->setColumnStretch(1, 1);
   g->setRowStretch(1, 1);
@@ -939,17 +869,12 @@ QWidget* MainWindow::buildInspector()
   auto* w = new QWidget;
   styled(w);
   w->setFixedWidth(324);
-  w->setStyleSheet(QString(
-    "QWidget { background:%1; }"
-    "QLabel { background:transparent; border:none; }")
-    .arg(tok::kPanel));
   auto* col = new QVBoxLayout(w);
   col->setContentsMargins(0, 0, 0, 0);
   col->setSpacing(0);
 
   // Tab strip. The labels drive a QStackedWidget below.
   auto* tabs = new QWidget;
-  tabs->setStyleSheet("background:transparent;");
   auto* tr = new QHBoxLayout(tabs);
   tr->setContentsMargins(0, 0, 0, 0);
   tr->setSpacing(0);
@@ -957,25 +882,32 @@ QWidget* MainWindow::buildInspector()
   // and "Charakter" already named the tool-bar button and the menu, so the one word pointed
   // at three different places and at none of them helpfully. Somebody looking for the MVLink
   // field had no reason to open it. The order is unchanged; --tab <0..3> indexes this.
-  const char* names[] = {"Anpassen", "Import", "Licht", "Export"};
-  for (int i = 0; i < (int)(sizeof(names) / sizeof(names[0])); ++i) {
-    auto* t = new QLabel(QString::fromLatin1(names[i]));
-    t->setFixedHeight(38);
-    t->setAlignment(Qt::AlignCenter);
+  const struct { const char* label; } kTabs[] = {
+    { "Anpassen" }, { "Import" }, { "Licht" }, { "Export" }
+  };
+  for (int i = 0; i < 4; ++i) {
+    auto* t = new QToolButton;
+    t->setText(QString::fromUtf8(kTabs[i].label));
+    t->setCheckable(true);
     t->setCursor(Qt::PointingHandCursor);
-    t->setProperty("inspectorTab", i);
-    t->installEventFilter(this);
+    t->setProperty("role", "tab");
+    t->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    // The same weight checked and unchecked. The old strip switched the active tab to
+    // DemiBold inside a fixed-width cell, so selecting a tab made its own text wider than
+    // the cell it had to fit into -- the label could clip on selection alone.
+    t->setFont(typo::font(typo::Strong));
+    t->setToolTip(QString::fromUtf8("%1 (Alt+%2)")
+                    .arg(QString::fromUtf8(kTabs[i].label)).arg(i + 1));
+    connect(t, &QToolButton::clicked, this, [this, i]() { setInspectorTab(i); });
     inspectorTabs_.push_back(t);
     tr->addWidget(t, 1);
   }
   col->addWidget(tabs);
 
   inspectorStack_ = new QStackedWidget;
-  inspectorStack_->setStyleSheet("background:transparent;");
 
   // Page 0 -- character
   auto* charBody = new QWidget;
-  charBody->setStyleSheet("background:transparent;");
   auto* cb = new QVBoxLayout(charBody);
   cb->setContentsMargins(16, 16, 16, 24);
   charPanel_ = new CharacterPanel;
@@ -987,13 +919,11 @@ QWidget* MainWindow::buildInspector()
   // Filled by main(), which is the first place that has both the loaded exporters and
   // the menu controller the buttons delegate to.
   auto* ioBody = new QWidget;
-  ioBody->setStyleSheet("background:transparent;");
   auto* ib = new QVBoxLayout(ioBody);
   ib->setContentsMargins(16, 16, 16, 24);
   characterIoHost_ = new QWidget;
   auto* ih = new QVBoxLayout(characterIoHost_);
   ih->setContentsMargins(0, 0, 0, 0);
-  characterIoHost_->setStyleSheet("background:transparent;");
   ib->addWidget(characterIoHost_);
   ib->addStretch(1);
   inspectorStack_->addWidget(wrapScroll(ioBody));
@@ -1001,7 +931,6 @@ QWidget* MainWindow::buildInspector()
   // Page 2 -- lighting. The four scene lights were configurable in principle since
   // Phase 0 (SceneLighting is widget-free) but had no UI at all.
   auto* lightBody = new QWidget;
-  lightBody->setStyleSheet("background:transparent;");
   auto* lb = new QVBoxLayout(lightBody);
   lb->setContentsMargins(16, 16, 16, 24);
   lightPanel_ = new LightPanel(canvas_);
@@ -1011,13 +940,11 @@ QWidget* MainWindow::buildInspector()
 
   // Page 3 -- export (filled in by main once the exporters are loaded)
   auto* expBody = new QWidget;
-  expBody->setStyleSheet("background:transparent;");
   auto* eb = new QVBoxLayout(expBody);
   eb->setContentsMargins(16, 16, 16, 24);
   exportHost_ = new QWidget;
   auto* eh = new QVBoxLayout(exportHost_);
   eh->setContentsMargins(0, 0, 0, 0);
-  exportHost_->setStyleSheet("background:transparent;");
   eb->addWidget(exportHost_);
   eb->addStretch(1);
   inspectorStack_->addWidget(wrapScroll(expBody));
@@ -1032,38 +959,57 @@ void MainWindow::setInspectorTab(int index)
   if (!inspectorStack_ || index < 0 || index >= (int)inspectorTabs_.size())
     return;
   inspectorStack_->setCurrentIndex(index);
-  for (int i = 0; i < (int)inspectorTabs_.size(); ++i) {
-    const bool active = (i == index);
-    inspectorTabs_[i]->setFont(QFont(uiF(), 9, active ? QFont::DemiBold : QFont::Normal));
-    inspectorTabs_[i]->setStyleSheet(active
-      ? QString("color:%1; background:transparent; border:none; border-bottom:2px solid %2;")
-          .arg(tok::kText).arg(tok::kAccent)
-      : QString("color:#7d8693; background:transparent; border:none; border-bottom:1px solid %1;")
-          .arg(tok::kBorder2));
-  }
+  for (int i = 0; i < (int)inspectorTabs_.size(); ++i)
+    inspectorTabs_[i]->setChecked(i == index);
 }
 
 QWidget* MainWindow::buildStatusBar()
 {
   auto* w = new QWidget;
   styled(w);
-  w->setFixedHeight(24);
-  w->setStyleSheet(QString("background:#0f1216; border-top:1px solid %1;").arg(tok::kBorder2));
+  w->setProperty("role", "chrome");
+  w->setFixedHeight(ui::px(26));
   auto* r = new QHBoxLayout(w);
-  r->setContentsMargins(14, 0, 14, 0);
-  r->setSpacing(18);
-  r->addWidget(mk("Bereit", monoF(), 7, tok::kDim));
-  statusPathLabel_ = mk("", monoF(), 7, tok::kDim);
-  r->addWidget(statusPathLabel_);
-  r->addStretch(1);
-  // Was the literal "FBX · OBJ · glTF". There is no glTF exporter -- only the fbx and obj
-  // plugins exist -- so the text promised a format the build cannot produce. main() fills
-  // this in from the exporters that actually loaded.
-  formatsLabel_ = mk(QString(), monoF(), 7, tok::kDim);
+  r->setContentsMargins(met::sp(met::Edge), 0, met::sp(met::Gap), 0);
+  r->setSpacing(met::sp(met::Edge));
+
+  statusLabel_ = new QLabel(QString::fromUtf8("Bereit"));
+  statusLabel_->setFont(typo::font(typo::Small));
+  statusLabel_->setProperty("role", "hint");
+  r->addWidget(statusLabel_);
+
+  // What is loaded, in words rather than as a second copy of the path. The path itself is
+  // in the title bar, once.
+  statusPathLabel_ = new ElidedLabel;
+  statusPathLabel_->setFont(typo::font(typo::Small));
+  statusPathLabel_->setProperty("role", "hint");
+  statusPathLabel_->setElideMode(Qt::ElideRight);
+  r->addWidget(statusPathLabel_, 1);
+
+  // Was the literal "FBX · OBJ · glTF". There is no glTF exporter, so the text promised a
+  // format the build cannot produce. main() fills this in from the exporters that loaded.
+  formatsLabel_ = new QLabel;
+  formatsLabel_->setFont(typo::font(typo::Mono));
+  formatsLabel_->setProperty("role", "mono");
   r->addWidget(formatsLabel_);
-  // Without a native frame there is no resize edge, so give the status bar a grip.
+
+  // Without a native frame there is no resize edge, so give the status bar a grip. The
+  // window also has an 8px resize band on every edge (nativeEvent), but a visible corner
+  // is what people reach for.
   auto* grip = new QSizeGrip(w);
-  grip->setFixedSize(14, 14);
+  grip->setFixedSize(ui::px(14), ui::px(14));
   r->addWidget(grip, 0, Qt::AlignBottom | Qt::AlignRight);
   return w;
+}
+
+void MainWindow::setStatus(const QString& text)
+{
+  if (statusLabel_)
+    statusLabel_->setText(text.isEmpty() ? QString::fromUtf8("Bereit") : text);
+}
+
+void MainWindow::setSummary(const QString& text)
+{
+  if (statusPathLabel_)
+    statusPathLabel_->setFullText(text);
 }

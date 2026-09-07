@@ -1,3 +1,4 @@
+#include "GameColours.h"
 #include "Theme.h"
 #include "ItemBrowser.h"
 
@@ -101,43 +102,14 @@ const struct { const char* label; int id; } kQualities[] = {
 };
 
 // The colours WoW itself uses, same table as the character panel's equipment list.
-const char* qualityColour(int q)
-{
-  switch (q) {
-    case 0:  return "#9d9d9d";
-    case 1:  return "#e8eaee";
-    case 2:  return "#1eff00";
-    case 3:  return "#0070dd";
-    case 4:  return "#a335ee";
-    case 5:  return "#ff8000";
-    case 6:  return "#e6cc80";
-    case 7:  return "#00ccff";
-    default: return "#7d8693";
-  }
-}
 
-QString comboStyle()
-{
-  return QString(
-    "QComboBox { background:%1; border:1px solid %2; border-radius:6px;"
-    " padding:3px 7px; color:%3; }"
-    "QComboBox::drop-down { border:none; width:16px; }"
-    "QComboBox QAbstractItemView { background:%1; border:1px solid %2;"
-    " selection-background-color:#1a1226; color:%3; }")
-    .arg(tok::kCard).arg(tok::kBorder).arg(tok::kText);
-}
 
 QLabel* chip(const QString& text, bool active)
 {
   auto* l = new QLabel(text);
-  l->setFont(QFont(uiFamily(), 8));
+  l->setFont(typo::font(typo::Body));
   l->setAlignment(Qt::AlignCenter);
   l->setCursor(Qt::PointingHandCursor);
-  l->setStyleSheet(active
-    ? QString("color:%1; background:#1e1030; border:1px solid #4c2a75;"
-              " border-radius:9px; padding:3px 10px;").arg(tok::kAccent)
-    : QString("color:%1; background:#12161b; border:1px solid %2;"
-              " border-radius:9px; padding:3px 10px;").arg(tok::kMuted).arg(tok::kBorder));
   return l;
 }
 
@@ -180,7 +152,7 @@ int slotRank(const QString& heading)
 ItemBrowser::ItemBrowser(QWidget* parent) : QWidget(parent)
 {
   setAttribute(Qt::WA_StyledBackground, true);
-  setStyleSheet("background:transparent;");
+  setProperty("role", "panel");
 
   auto* col = new QVBoxLayout(this);
   col->setContentsMargins(12, 0, 12, 8);
@@ -188,7 +160,6 @@ ItemBrowser::ItemBrowser(QWidget* parent) : QWidget(parent)
 
   // Items / Sets
   auto* modes = new QWidget;
-  modes->setStyleSheet("background:transparent;");
   auto* mr = new QHBoxLayout(modes);
   mr->setContentsMargins(0, 0, 0, 0);
   mr->setSpacing(5);
@@ -205,12 +176,8 @@ ItemBrowser::ItemBrowser(QWidget* parent) : QWidget(parent)
 
   search_ = new QLineEdit;
   search_->setPlaceholderText(QString::fromUtf8("Name oder Item-ID suchen …"));
-  search_->setFont(QFont(uiFamily(), 8));
+  search_->setFont(typo::font(typo::Body));
   search_->setFixedHeight(28);
-  search_->setStyleSheet(QString(
-    "QLineEdit { background:%1; border:1px solid %2; border-radius:6px;"
-    " padding:0 8px; color:%3; }"
-    "QLineEdit:focus { border-color:#3a434f; }").arg(tok::kCard).arg(tok::kBorder).arg(tok::kText));
   // Typing filters straight away. Every keystroke would mean a query against a table
   // of 110k rows, so the query waits until the typing pauses; Enter skips the wait.
   searchDelay_ = new QTimer(this);
@@ -227,8 +194,7 @@ ItemBrowser::ItemBrowser(QWidget* parent) : QWidget(parent)
   col->addWidget(search_);
 
   slot_ = new QComboBox;
-  slot_->setFont(QFont(uiFamily(), 8));
-  slot_->setStyleSheet(comboStyle());
+  slot_->setFont(typo::font(typo::Body));
   for (const auto& s : kSlots)
     slot_->addItem(QString::fromUtf8(s.label), QString::fromLatin1(s.types));
   connect(slot_, QOverload<int>::of(&QComboBox::currentIndexChanged),
@@ -236,8 +202,7 @@ ItemBrowser::ItemBrowser(QWidget* parent) : QWidget(parent)
   col->addWidget(slot_);
 
   expansion_ = new QComboBox;
-  expansion_->setFont(QFont(uiFamily(), 8));
-  expansion_->setStyleSheet(comboStyle());
+  expansion_->setFont(typo::font(typo::Body));
   for (const auto& e : kExpansions)
     expansion_->addItem(QString::fromUtf8(e.label), e.id);
   connect(expansion_, QOverload<int>::of(&QComboBox::currentIndexChanged),
@@ -245,8 +210,7 @@ ItemBrowser::ItemBrowser(QWidget* parent) : QWidget(parent)
   col->addWidget(expansion_);
 
   armor_ = new QComboBox;
-  armor_->setFont(QFont(uiFamily(), 8));
-  armor_->setStyleSheet(comboStyle());
+  armor_->setFont(typo::font(typo::Body));
   for (const auto& a : kArmorClasses)
     armor_->addItem(QString::fromUtf8(a.label), a.subclass);
   connect(armor_, QOverload<int>::of(&QComboBox::currentIndexChanged),
@@ -254,8 +218,7 @@ ItemBrowser::ItemBrowser(QWidget* parent) : QWidget(parent)
   col->addWidget(armor_);
 
   quality_ = new QComboBox;
-  quality_->setFont(QFont(uiFamily(), 8));
-  quality_->setStyleSheet(comboStyle());
+  quality_->setFont(typo::font(typo::Body));
   for (const auto& q : kQualities)
     quality_->addItem(QString::fromUtf8(q.label), q.id);
   connect(quality_, QOverload<int>::of(&QComboBox::currentIndexChanged),
@@ -263,13 +226,7 @@ ItemBrowser::ItemBrowser(QWidget* parent) : QWidget(parent)
   col->addWidget(quality_);
 
   standalone_ = new QCheckBox(QString::fromUtf8("Nur Item, ohne Figur"));
-  standalone_->setFont(QFont(uiFamily(), 8));
-  standalone_->setStyleSheet(QString(
-    "QCheckBox { color:%1; background:transparent; spacing:7px; }"
-    "QCheckBox::indicator { width:13px; height:13px; border-radius:3px;"
-    " border:1px solid %2; background:%3; }"
-    "QCheckBox::indicator:checked { background:%4; border-color:%4; }")
-    .arg(tok::kMuted).arg(tok::kBorder).arg(tok::kCard).arg(tok::kAccent));
+  standalone_->setFont(typo::font(typo::Body));
   standalone_->setToolTip(QString::fromUtf8(
     "Zeigt das eigene Modell des Items. Nur Kopf, Schulter, Umhang und Waffen haben "
     "eines -- Brust, Beine, Hände und so weiter sind Texturen auf dem Körper und "
@@ -279,8 +236,7 @@ ItemBrowser::ItemBrowser(QWidget* parent) : QWidget(parent)
   // Sets mode only: without this a set click always WIPES the current outfit first,
   // which makes mixing two sets impossible.
   keepEquip_ = new QCheckBox(QString::fromUtf8("Vorhandene Ausrüstung behalten"));
-  keepEquip_->setFont(QFont(uiFamily(), 8));
-  keepEquip_->setStyleSheet(standalone_->styleSheet());
+  keepEquip_->setFont(typo::font(typo::Body));
   keepEquip_->setVisible(false);
   col->addWidget(keepEquip_);
 
@@ -288,19 +244,10 @@ ItemBrowser::ItemBrowser(QWidget* parent) : QWidget(parent)
   QFont cf(uiFamily(), 7);
   cf.setLetterSpacing(QFont::AbsoluteSpacing, 1.3);
   count_->setFont(cf);
-  count_->setStyleSheet(QString("color:%1; background:transparent;").arg(tok::kDim));
   col->addWidget(count_);
 
   list_ = new QListWidget;
-  list_->setFont(QFont(uiFamily(), 8));
-  list_->setStyleSheet(QString(
-    "QListWidget { background:transparent; border:none; outline:none; }"
-    "QListWidget::item { padding:3px 4px; border-radius:4px; }"
-    "QListWidget::item:hover { background:#181d23; }"
-    "QListWidget::item:selected { background:#1a1226; }"
-    "QScrollBar:vertical { background:transparent; width:10px; }"
-    "QScrollBar::handle:vertical { background:#262c35; border-radius:5px; min-height:30px; }"
-    "QScrollBar::add-line, QScrollBar::sub-line { height:0; }"));
+  list_->setFont(typo::font(typo::Body));
   connect(list_, &QListWidget::itemActivated, this, [this](QListWidgetItem* it) {
     if (!it)
       return;
@@ -322,8 +269,6 @@ void ItemBrowser::initialise()
 void ItemBrowser::setMode(bool sets)
 {
   setMode_ = sets;
-  itemsChip_->setStyleSheet(chip("", !sets)->styleSheet());
-  setsChip_->setStyleSheet(chip("", sets)->styleSheet());
   // Sets are named collections; slot, armour class and quality do not apply to them.
   slot_->setEnabled(!sets);
   armor_->setEnabled(!sets);
@@ -426,7 +371,7 @@ void ItemBrowser::refreshItems()
     QFont hf(uiFamily(), 7);
     hf.setLetterSpacing(QFont::AbsoluteSpacing, 1.3);
     head->setFont(hf);
-    head->setForeground(QColor(tok::kDim));
+    head->setForeground(QColor(tok::fgMuted));
     head->setFlags(Qt::NoItemFlags);      // a heading is not a thing one can equip
     list_->addItem(head);
     for (const auto* row : entry.second)
@@ -444,7 +389,7 @@ void ItemBrowser::addItemRow(const std::vector<QString>& row)
 {
   auto* item = new QListWidgetItem(row[1]);
   item->setData(Qt::UserRole, row[0].toInt());
-  item->setForeground(QColor(qualityColour(row[2].toInt())));
+  item->setForeground(QColor(game::qualityTextColour(row[2].toInt())));
   const int ilvl = row[3].toInt();
   item->setToolTip(QString::fromUtf8("Item %1%2")
                      .arg(row[0])
@@ -480,7 +425,7 @@ void ItemBrowser::refreshSets()
       auto* item = new QListWidgetItem(
         QString::fromUtf8("%1  · %2 Teile").arg(row[1]).arg(pieces));
       item->setData(Qt::UserRole, row[0].toInt());
-      item->setForeground(QColor(tok::kText));
+      item->setForeground(QColor(tok::fgText));
       item->setToolTip(QString::fromUtf8("Set %1").arg(row[0]));
       list_->addItem(item);
     }

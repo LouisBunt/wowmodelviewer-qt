@@ -1,4 +1,5 @@
 #include "Theme.h"
+#include "UiKit.h"
 #include "InspectorTabs.h"
 
 #include <QApplication>
@@ -13,6 +14,7 @@
 #include <QMessageBox>
 #include <QUrl>
 #include <QPushButton>
+#include <QSpinBox>
 #include <QVBoxLayout>
 
 #include "BlenderAddonInstaller.h"
@@ -23,43 +25,9 @@
 #include "modelheaders.h"
 
 namespace {
-QString uiFamily()
-{
-  const QStringList have = QFontDatabase().families();
-  for (const QString& f : {QStringLiteral("IBM Plex Sans"), QStringLiteral("Segoe UI")})
-    if (have.contains(f))
-      return f;
-  return QStringLiteral("sans-serif");
-}
 
-QString monoFamily()
-{
-  const QStringList have = QFontDatabase().families();
-  for (const QString& f : {QStringLiteral("IBM Plex Mono"), QStringLiteral("Consolas")})
-    if (have.contains(f))
-      return f;
-  return QStringLiteral("monospace");
-}
 
-QString checkboxStyle()
-{
-  return QString(
-    "QCheckBox { color:%1; background:transparent; spacing:7px; }"
-    "QCheckBox::indicator { width:13px; height:13px; border-radius:3px;"
-    " border:1px solid %2; background:%3; }"
-    "QCheckBox::indicator:checked { background:%4; border-color:%4; }")
-    .arg(tok::kTextSoft).arg(tok::kBorder).arg(tok::kCard).arg(tok::kAccent);
-}
 
-QLabel* sectionLabel(const QString& text)
-{
-  auto* l = new QLabel(text);
-  QFont f(uiFamily(), 7);
-  f.setLetterSpacing(QFont::AbsoluteSpacing, 1.4);
-  l->setFont(f);
-  l->setStyleSheet(QString("color:%1; background:transparent;").arg(tok::kDim));
-  return l;
-}
 }
 
 // --- Charakter: Import und Export --------------------------------------------
@@ -69,39 +37,21 @@ QLineEdit* urlField(const QString& placeholder)
 {
   auto* e = new QLineEdit;
   e->setPlaceholderText(placeholder);
-  e->setFont(QFont(uiFamily(), 8));
-  e->setFixedHeight(28);
-  e->setStyleSheet(QString(
-    "QLineEdit { background:%1; border:1px solid %2; border-radius:6px;"
-    " padding:0 8px; color:%3; }"
-    "QLineEdit:focus { border-color:#3a434f; }").arg(tok::kCard).arg(tok::kBorder).arg(tok::kText));
   return e;
 }
 
 QPushButton* accentButton(const QString& text)
 {
   auto* b = new QPushButton(text);
-  b->setFont(QFont(uiFamily(), 8));
+  b->setProperty("variant", "primary");
   b->setCursor(Qt::PointingHandCursor);
-  b->setStyleSheet(QString(
-    "QPushButton { background:%1; border:none; border-radius:7px;"
-    " color:%2; padding:8px 12px; }"
-    "QPushButton:hover { background:#c084fc; }"
-    "QPushButton:disabled { background:#252b34; color:#5f6874; }")
-    .arg(tok::kAccent).arg(tok::kOnAccent));
   return b;
 }
 
 QPushButton* quietButton(const QString& text)
 {
   auto* b = new QPushButton(text);
-  b->setFont(QFont(uiFamily(), 8));
   b->setCursor(Qt::PointingHandCursor);
-  b->setStyleSheet(QString(
-    "QPushButton { background:%1; border:1px solid %2; border-radius:7px;"
-    " color:%3; padding:8px 12px; }"
-    "QPushButton:hover { border-color:#3a434f; }")
-    .arg(tok::kCard).arg(tok::kBorder).arg(tok::kTextSoft));
   return b;
 }
 }
@@ -111,7 +61,7 @@ CharacterIoTab::CharacterIoTab(MenuController* menus, ExportController* exporter
   : QWidget(parent), menus_(menus), exporters_(exporters), canvas_(canvas)
 {
   setAttribute(Qt::WA_StyledBackground, true);
-  setStyleSheet("background:transparent;");
+  setProperty("role", "panel");
 
   auto* col = new QVBoxLayout(this);
   col->setContentsMargins(0, 0, 0, 0);
@@ -123,7 +73,7 @@ CharacterIoTab::CharacterIoTab(MenuController* menus, ExportController* exporter
   // but through a file dialog per use -- which in practice means nobody builds a
   // collection. A name field, one button and a list is what "easy abspeichern und
   // später drauf zugreifen" actually asks for.
-  col->addWidget(sectionLabel(QString::fromUtf8("MEINE LOOKS")));
+  col->addWidget(uikit::sectionLabel(QString::fromUtf8("MEINE LOOKS")));
   lookName_ = urlField(QString::fromUtf8("Name für diesen Look …"));
   col->addWidget(lookName_);
   auto* lookSaveBtn = accentButton(QString::fromUtf8("Aktuellen Look speichern"));
@@ -135,13 +85,6 @@ CharacterIoTab::CharacterIoTab(MenuController* menus, ExportController* exporter
   // Tall enough for three thumbnail rows; the preview is the point of the list.
   lookList_->setFixedHeight(150);
   lookList_->setIconSize(QSize(44, 44));
-  lookList_->setStyleSheet(QString(
-    "QListWidget { background:%1; border:1px solid %2; border-radius:6px; color:%3;"
-    " padding:3px; }"
-    "QListWidget::item { padding:3px 6px; border-radius:4px; }"
-    "QListWidget::item:selected { background:%4; color:%5; }")
-    .arg(tok::kCard).arg(tok::kBorder).arg(tok::kTextSoft)
-    .arg(tok::kAccentBg).arg(tok::kText));
   connect(lookList_, &QListWidget::itemDoubleClicked, this,
           &CharacterIoTab::loadSelectedLook);
   col->addWidget(lookList_);
@@ -160,9 +103,8 @@ CharacterIoTab::CharacterIoTab(MenuController* menus, ExportController* exporter
   auto* lookHint = new QLabel(QString::fromUtf8(
     "Gespeichert wird alles: Rasse, Gesicht, Ausrüstung samt Farbvariante. "
     "Doppelklick lädt."));
-  lookHint->setFont(QFont(uiFamily(), 8));
+  lookHint->setFont(typo::font(typo::Body));
   lookHint->setWordWrap(true);
-  lookHint->setStyleSheet(QString("color:%1; background:transparent;").arg(tok::kDim));
   col->addWidget(lookHint);
   refreshLooks();
 
@@ -174,7 +116,7 @@ CharacterIoTab::CharacterIoTab(MenuController* menus, ExportController* exporter
   // a website and pasted back; the addon reads what the character is actually wearing,
   // which is the same job done in one step. The decoder and the --dressing-room flag stay
   // for scripts and for the 56-case test corpus -- only the control is gone.
-  col->addWidget(sectionLabel(QString::fromUtf8("AUS DEM SPIEL — MVLINK-ADDON")));
+  col->addWidget(uikit::sectionLabel(QString::fromUtf8("AUS DEM SPIEL — MVLINK-ADDON")));
 
   // The order tells the truth about freshness. The clipboard is live, so it leads; the
   // paste field is the same data by hand; the file is a snapshot from the last /reload and
@@ -183,9 +125,8 @@ CharacterIoTab::CharacterIoTab(MenuController* menus, ExportController* exporter
   auto* mvTop = new QLabel(QString::fromUtf8(
     "Im Spiel /mvlink öffnen und den Code kopieren — mehr nicht. ModelViewer erkennt "
     "ihn in der Zwischenablage und zieht den Look sofort an."));
-  mvTop->setFont(QFont(uiFamily(), 8));
+  mvTop->setFont(typo::font(typo::Body));
   mvTop->setWordWrap(true);
-  mvTop->setStyleSheet(QString("color:%1; background:transparent;").arg(tok::kTextSoft));
   col->addWidget(mvTop);
 
   mvlinkCode_ = urlField(QString::fromUtf8("… oder Code von Hand einfügen: MVM1:R=…"));
@@ -197,9 +138,8 @@ CharacterIoTab::CharacterIoTab(MenuController* menus, ExportController* exporter
   auto* mvHint = new QLabel(QString::fromUtf8(
     "Für Codes aus zweiter Hand — etwa von jemand anderem geschickt. Gesicht und "
     "Frisur kann ein Addon nicht auslesen; die bleiben, wie sie hier eingestellt sind."));
-  mvHint->setFont(QFont(uiFamily(), 8));
+  mvHint->setFont(typo::font(typo::Body));
   mvHint->setWordWrap(true);
-  mvHint->setStyleSheet(QString("color:%1; background:transparent;").arg(tok::kDim));
   col->addWidget(mvHint);
 
   col->addSpacing(2);
@@ -217,14 +157,13 @@ CharacterIoTab::CharacterIoTab(MenuController* menus, ExportController* exporter
   auto* mvInstallHint = new QLabel(QString::fromUtf8(
     "Einmalig — danach im Spiel unter Addons aktivieren. Ein Update überschreibt die "
     "Dateien; WoW sollte dabei geschlossen sein."));
-  mvInstallHint->setFont(QFont(uiFamily(), 8));
+  mvInstallHint->setFont(typo::font(typo::Body));
   mvInstallHint->setWordWrap(true);
-  mvInstallHint->setStyleSheet(QString("color:%1; background:transparent;").arg(tok::kDim));
   col->addWidget(mvInstallHint);
 
   // --- Armory
   col->addSpacing(4);
-  col->addWidget(sectionLabel(QString::fromUtf8("ARMORY")));
+  col->addWidget(uikit::sectionLabel(QString::fromUtf8("ARMORY")));
   armoryUrl_ = urlField(QString::fromUtf8("https://worldofwarcraft.blizzard.com/…"));
   col->addWidget(armoryUrl_);
   auto* amBtn = quietButton(QString::fromUtf8("Armory-Charakter importieren"));
@@ -234,7 +173,7 @@ CharacterIoTab::CharacterIoTab(MenuController* menus, ExportController* exporter
 
   // --- Datei
   col->addSpacing(4);
-  col->addWidget(sectionLabel(QString::fromUtf8("CHARAKTERDATEI")));
+  col->addWidget(uikit::sectionLabel(QString::fromUtf8("CHARAKTERDATEI")));
   auto* fileRow = new QHBoxLayout;
   fileRow->setSpacing(6);
   auto* loadBtn = quietButton(QString::fromUtf8("Laden"));
@@ -253,13 +192,12 @@ CharacterIoTab::CharacterIoTab(MenuController* menus, ExportController* exporter
 
   // --- Blender
   col->addSpacing(4);
-  col->addWidget(sectionLabel(QString::fromUtf8("NACH BLENDER")));
+  col->addWidget(uikit::sectionLabel(QString::fromUtf8("NACH BLENDER")));
   auto* blHint = new QLabel(QString::fromUtf8(
     "Schreibt FBX mit Netz, Skelett und Gewichtung. OBJ kann kein Skelett — für "
     "Blender ist FBX der Weg. Animationen wählst du im Reiter „Export“."));
-  blHint->setFont(QFont(uiFamily(), 8));
+  blHint->setFont(typo::font(typo::Body));
   blHint->setWordWrap(true);
-  blHint->setStyleSheet(QString("color:%1; background:transparent;").arg(tok::kDim));
   col->addWidget(blHint);
   auto* blBtn = accentButton(QString::fromUtf8("Als FBX exportieren"));
   connect(blBtn, &QPushButton::clicked, this, &CharacterIoTab::exportForBlender);
@@ -281,9 +219,8 @@ CharacterIoTab::CharacterIoTab(MenuController* menus, ExportController* exporter
   col->addWidget(addonBtn);
 
   status_ = new QLabel;
-  status_->setFont(QFont(uiFamily(), 8));
+  status_->setFont(typo::font(typo::Body));
   status_->setWordWrap(true);
-  status_->setStyleSheet(QString("color:%1; background:transparent;").arg(tok::kDim));
   col->addWidget(status_);
 
   col->addStretch(1);
@@ -293,8 +230,6 @@ void CharacterIoTab::setStatus(const QString& text, bool error)
 {
   if (!status_)
     return;
-  status_->setStyleSheet(QString("color:%1; background:transparent;")
-                           .arg(error ? "#d98b6a" : tok::kTextSoft));
   status_->setText(text);
 }
 
@@ -489,26 +424,19 @@ ExportTab::ExportTab(ExportController* exporters, GLHost* canvas, QWidget* paren
   : QWidget(parent), exporters_(exporters), canvas_(canvas)
 {
   setAttribute(Qt::WA_StyledBackground, true);
-  setStyleSheet("background:transparent;");
+  setProperty("role", "panel");
 
   auto* col = new QVBoxLayout(this);
   col->setContentsMargins(0, 0, 0, 0);
   col->setSpacing(12);
 
-  col->addWidget(sectionLabel(QString::fromUtf8("FORMAT")));
+  col->addWidget(uikit::sectionLabel(QString::fromUtf8("FORMAT")));
 
   format_ = new QComboBox;
-  format_->setFont(QFont(uiFamily(), 8));
-  format_->setStyleSheet(QString(
-    "QComboBox { background:%1; border:1px solid %2; border-radius:6px;"
-    " padding:4px 8px; color:%3; }"
-    "QComboBox::drop-down { border:none; width:18px; }"
-    "QComboBox QAbstractItemView { background:%1; border:1px solid %2;"
-    " selection-background-color:#1a1226; color:%3; }")
-    .arg(tok::kCard).arg(tok::kBorder).arg(tok::kText));
+  format_->setFont(typo::font(typo::Body));
   col->addWidget(format_);
 
-  col->addWidget(sectionLabel(QString::fromUtf8("OPTIONEN")));
+  col->addWidget(uikit::sectionLabel(QString::fromUtf8("OPTIONEN")));
 
   optMesh_      = new QCheckBox(QString::fromUtf8("Geometrie"));
   optSkinning_  = new QCheckBox(QString::fromUtf8("Skinning"));
@@ -519,8 +447,7 @@ ExportTab::ExportTab(ExportController* exporters, GLHost* canvas, QWidget* paren
   optSkinning_->setChecked(true);
   optSkeleton_->setChecked(true);
   for (QCheckBox* c : { optMesh_, optSkinning_, optSkeleton_, optAnimation_ }) {
-    c->setFont(QFont(uiFamily(), 8));
-    c->setStyleSheet(checkboxStyle());
+    c->setFont(typo::font(typo::Body));
     col->addWidget(c);
   }
   optSkinning_->setToolTip(QString::fromUtf8(
@@ -529,24 +456,15 @@ ExportTab::ExportTab(ExportController* exporters, GLHost* canvas, QWidget* paren
   // The clip list, shown only while "Animationen" is on. Multi-select, because the FBX
   // exporter takes a list of animation indices and writes one take per entry.
   clipList_ = new QListWidget;
-  clipList_->setFont(QFont(uiFamily(), 8));
+  clipList_->setFont(typo::font(typo::Body));
   clipList_->setSelectionMode(QAbstractItemView::ExtendedSelection);
   clipList_->setFixedHeight(150);
-  clipList_->setStyleSheet(QString(
-    "QListWidget { background:%1; border:1px solid %2; border-radius:6px; color:%3; }"
-    "QListWidget::item { padding:3px 5px; }"
-    "QListWidget::item:selected { background:#1a1226; color:%4; }"
-    "QScrollBar:vertical { background:transparent; width:9px; }"
-    "QScrollBar::handle:vertical { background:#262c35; border-radius:4px; min-height:24px; }"
-    "QScrollBar::add-line, QScrollBar::sub-line { height:0; }")
-    .arg(tok::kCard).arg(tok::kBorder).arg(tok::kText).arg(tok::kAccent));
   clipList_->setVisible(false);
   col->addWidget(clipList_);
 
   clipHint_ = new QLabel;
-  clipHint_->setFont(QFont(uiFamily(), 8));
+  clipHint_->setFont(typo::font(typo::Body));
   clipHint_->setWordWrap(true);
-  clipHint_->setStyleSheet(QString("color:%1; background:transparent;").arg(tok::kDim));
   clipHint_->setVisible(false);
   col->addWidget(clipHint_);
 
@@ -558,20 +476,13 @@ ExportTab::ExportTab(ExportController* exporters, GLHost* canvas, QWidget* paren
   });
 
   auto* button = new QPushButton(QString::fromUtf8("Modell exportieren"));
-  button->setFont(QFont(uiFamily(), 9, QFont::DemiBold));
+  button->setFont(typo::font(typo::Strong));
   button->setCursor(Qt::PointingHandCursor);
-  button->setStyleSheet(QString(
-    "QPushButton { background:%1; border:1px solid #c084fc; border-radius:8px;"
-    " color:%2; padding:9px 14px; }"
-    "QPushButton:hover { background:#c084fc; }"
-    "QPushButton:disabled { background:#252b34; border-color:%3; color:#5f6874; }")
-    .arg(tok::kAccent).arg(tok::kOnAccent).arg(tok::kBorder));
   col->addWidget(button);
 
   status_ = new QLabel;
-  status_->setFont(QFont(uiFamily(), 8));
+  status_->setFont(typo::font(typo::Body));
   status_->setWordWrap(true);
-  status_->setStyleSheet(QString("color:%1; background:transparent;").arg(tok::kDim));
   col->addWidget(status_);
 
   connect(button, &QPushButton::clicked, this, [this]() {
@@ -595,13 +506,127 @@ ExportTab::ExportTab(ExportController* exporters, GLHost* canvas, QWidget* paren
 
     exporters_->setOptions(o);
     const QString err = exporters_->exportModel(canvas_->model(), format_->currentIndex(), this);
-    if (err.isEmpty())
-      status_->setText(QString::fromUtf8("Export abgeschlossen."));
-    else
+    if (!err.isEmpty())
       status_->setText(err);
+    else if (!exporters_->lastReport().isEmpty())
+      status_->setText(exporters_->lastReport());   // STL: the measured size and warnings
+    else
+      status_->setText(QString::fromUtf8("Export abgeschlossen."));
   });
 
+  // --- 3D print ---------------------------------------------------------------
+  // Its own section, not a fifth tab: --tab 0..3 indexes the four, and a "Druck" tab next
+  // to an "Export" tab makes everyone guess. Its own button that sets format and options
+  // itself, like "Als FBX exportieren" on the character tab. Exactly one number is asked of
+  // the player: the printed height. Nozzle, walls, supports and cutting belong to the slicer.
+  col->addSpacing(6);
+  col->addWidget(uikit::sectionLabel(QString::fromUtf8("FÜR DEN 3D-DRUCK")));
+
+  auto* heightRow = new QHBoxLayout;
+  heightRow->setSpacing(6);
+  auto* heightLabel = new QLabel(QString::fromUtf8("Höhe"));
+  heightLabel->setFont(typo::font(typo::Body));
+  heightRow->addWidget(heightLabel);
+
+  printHeight_ = new QSpinBox;
+  printHeight_->setFont(typo::font(typo::Body));
+  // 200 mm is the default because it is the size at which an ordinary FDM printer still
+  // resolves the details and the figure still fits the bed (DRUCK-KONZEPT.md, Stufe 3).
+  printHeight_->setRange(20, 600);
+  printHeight_->setSingleStep(10);
+  printHeight_->setValue(200);
+  printHeight_->setSuffix(QString::fromUtf8(" mm"));
+  heightRow->addWidget(printHeight_, 1);
+
+  for (int preset : {100, 200, 300}) {
+    auto* b = quietButton(QString::number(preset));
+    b->setToolTip(QString::fromUtf8("%1 mm").arg(preset));
+    connect(b, &QPushButton::clicked, this, [this, preset]() { printHeight_->setValue(preset); });
+    heightRow->addWidget(b);
+  }
+  col->addLayout(heightRow);
+
+  printHint_ = new QLabel;
+  printHint_->setFont(typo::font(typo::Body));
+  printHint_->setWordWrap(true);
+  col->addWidget(printHint_);
+
+  // The hint changes with the number: past the Z height of widespread printers the figure
+  // has to be cut, and the place for that is the slicer -- so say so, and offer no cutting
+  // control here.
+  auto updatePrintHint = [this]() {
+    const int mm = printHeight_->value();
+    if (mm > 250)
+      printHint_->setText(QString::fromUtf8("⚠ %1 mm passt auf die meisten Drucker nicht — "
+                                            "im Slicer zerteilen (PrusaSlicer: Taste C).").arg(mm));
+    else
+      printHint_->setText(QString::fromUtf8("Schreibt die Figur so, wie sie hier steht: Pose, "
+                                            "sichtbare Teile, ohne Effektflächen, in Millimetern "
+                                            "auf der Platte. Bei einem einzelnen Teil (Waffe, Schild) "
+                                            "gilt die Zahl für die längste Seite. Dünne Flächen "
+                                            "verdickt erst Blender."));
+  };
+  connect(printHeight_, QOverload<int>::of(&QSpinBox::valueChanged), this, updatePrintHint);
+  updatePrintHint();
+
+  auto* printButton = accentButton(QString::fromUtf8("Für den Druck exportieren"));
+  connect(printButton, &QPushButton::clicked, this, &ExportTab::exportForPrint);
+  col->addWidget(printButton);
+
+  printStatus_ = new QLabel;
+  printStatus_->setFont(typo::font(typo::Body));
+  printStatus_->setWordWrap(true);
+  printStatus_->setTextInteractionFlags(Qt::TextSelectableByMouse);
+  col->addWidget(printStatus_);
+
   col->addStretch(1);
+}
+
+int ExportTab::stlFormatIndex() const
+{
+  if (!exporters_)
+    return -1;
+  const auto& formats = exporters_->formats();
+  for (size_t i = 0; i < formats.size(); ++i)
+    if (formats[i].label.compare("stl", Qt::CaseInsensitive) == 0 ||
+        formats[i].filter.contains("*.stl", Qt::CaseInsensitive))
+      return (int)i;
+  return -1;
+}
+
+void ExportTab::exportForPrint()
+{
+  if (!exporters_ || !canvas_)
+    return;
+  if (!canvas_->model()) {
+    printStatus_->setText(QString::fromUtf8("Kein Modell geladen."));
+    return;
+  }
+
+  const int stl = stlFormatIndex();
+  if (stl < 0) {
+    printStatus_->setText(QString::fromUtf8("Der STL-Exporter fehlt. Liegt stlexporter.dll im "
+                                            "Ordner \"plugins\" neben der Anwendung?"));
+    return;
+  }
+
+  // Geometry only: an STL carries no skeleton, no weights and no animation. The exporter
+  // reads the pose off the model itself, so nothing else needs switching on.
+  ExportController::Options o;
+  o.mesh = true;
+  o.skeleton = o.skinning = o.animation = false;
+  o.printHeightMm = printHeight_->value();
+  exporters_->setOptions(o);
+
+  const QString err = exporters_->exportModel(canvas_->model(), stl, this);
+  if (!err.isEmpty()) {
+    printStatus_->setText(err);
+    return;
+  }
+  // Empty error AND empty report is a cancelled dialog: nothing happened, say nothing.
+  const QString report = exporters_->lastReport();
+  if (!report.isEmpty())
+    printStatus_->setText(report);
 }
 
 void ExportTab::refreshFormats()

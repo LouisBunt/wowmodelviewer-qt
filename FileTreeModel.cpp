@@ -1,5 +1,7 @@
 #include "FileTreeModel.h"
 
+#include "Theme.h"
+
 #include <algorithm>
 #include <set>
 
@@ -294,7 +296,7 @@ QVariant FileTreeModel::data(const QModelIndex& index, int role) const
                            : QVariant(QString::fromUtf8("FileDataID %1").arg(n->fileId));
     case Qt::ForegroundRole:
       // Folders muted, files in the normal text colour -- the design's hierarchy cue.
-      return n->isFolder() ? QColor("#8a93a0") : QColor("#e8eaee");
+      return n->isFolder() ? QColor(tok::fgMuted) : QColor(tok::fgText);
     default:
       return QVariant();
   }

@@ -1,5 +1,8 @@
 #include "ExportController.h"
 
+#include <algorithm>
+#include <string>
+
 #include <QDir>
 #include <QFileDialog>
 #include <QFileInfo>
@@ -61,6 +64,14 @@ int ExportController::loadPlugins()
     formats_.push_back(f);
   }
 
+  // PLUGINMANAGER hands the plugins back in directory-walk order, which is not the same
+  // from one run to the next; with three exporters that put STL ahead of FBX in the combo
+  // box on some starts. Sort by label so the box, the menu, the status bar and --export
+  // all see FBX · OBJ · STL every time.
+  std::sort(formats_.begin(), formats_.end(), [](const Format& a, const Format& b) {
+    return a.label.compare(b.label, Qt::CaseInsensitive) < 0;
+  });
+
   return (int)formats_.size();
 }
 
@@ -72,6 +83,9 @@ QString ExportController::exportModel(WoWModel* model, int formatIndex, QWidget*
     return QObject::tr("Kein Exportformat gewählt.");
 
   Format& f = formats_[formatIndex];
+
+  // A cancelled dialog must not leave the previous export's report standing.
+  lastReport_.clear();
 
   const QString suggested = QFileInfo(model->name()).baseName();
   const QString path = QFileDialog::getSaveFileName(
@@ -102,10 +116,16 @@ QString ExportController::exportTo(WoWModel* model, int formatIndex, const QStri
                              options_.skinning, options_.animation);
   f.plugin->setAnimationsToExport(options_.clips);
 
+  // Exporter-specific settings travel as named parameters (ExporterPlugin::setParameter). A
+  // plugin that does not know the key ignores it, so every plugin gets every key.
+  f.plugin->setParameter(L"print.height_mm", std::to_wstring(options_.printHeightMm));
+
+  lastReport_.clear();
   if (!f.plugin->exportModel(model, path.toStdWString())) {
     const QString why = QString::fromStdWString(f.plugin->lastError());
     return why.isEmpty() ? QObject::tr("Export fehlgeschlagen (kein Grund gemeldet).") : why;
   }
+  lastReport_ = QString::fromStdWString(f.plugin->lastReport());
 
   // FBX only: the handshake exists for the Blender add-on, and that imports FBX. Done
   // here rather than in a caller because every export route -- dialog, character tab,

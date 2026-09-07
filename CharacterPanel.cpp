@@ -1,4 +1,6 @@
+#include "GameColours.h"
 #include "Theme.h"
+#include "UiKit.h"
 #include "CharacterPanel.h"
 
 #include <QCheckBox>
@@ -14,6 +16,7 @@
 #include <QFontDatabase>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QToolButton>
 #include <QLineEdit>
 #include <QSpinBox>
 #include <QVBoxLayout>
@@ -47,8 +50,8 @@ QIcon makeSwatch(unsigned int c0, unsigned int c1)
   };
 
   if (c0 == 0 && c1 == 0) {                 // "none"
-    p.fillRect(0, 0, w, h, QColor("#1c222a"));
-    p.setPen(QColor("#5f6874"));
+    p.fillRect(0, 0, w, h, QColor(tok::bgRaisedHover));
+    p.setPen(QColor(tok::fgDim));
     p.drawLine(0, h - 1, w - 1, 0);
   } else if (c1 != 0) {                     // dual colour
     p.fillRect(0, 0, w / 2, h, toCol(c0));
@@ -56,7 +59,7 @@ QIcon makeSwatch(unsigned int c0, unsigned int c1)
   } else {                                  // single colour
     p.fillRect(0, 0, w, h, toCol(c0));
   }
-  p.setPen(QColor("#23282f"));
+  p.setPen(QColor(tok::lineBorder));
   p.drawRect(0, 0, w - 1, h - 1);
   p.end();
 
@@ -92,32 +95,33 @@ QString uiFamily()
 CharacterPanel::CharacterPanel(QWidget* parent) : QWidget(parent)
 {
   setAttribute(Qt::WA_StyledBackground, true);
-  setStyleSheet("background:transparent;");
+  setProperty("role", "panel");
 
   auto* col = new QVBoxLayout(this);
   col->setContentsMargins(0, 0, 0, 0);
   col->setSpacing(14);
 
-  header_ = new QLabel;
-  QFont hf(uiFamily(), 7);
-  hf.setLetterSpacing(QFont::AbsoluteSpacing, 1.4);
-  header_->setFont(hf);
-  header_->setStyleSheet(QString("color:%1; background:transparent;").arg(tok::kDim));
-  col->addWidget(header_);
+  // The section headings all share this face.
+  QFont hf = typo::font(typo::Caption);
 
+  // Who is on screen. This is the panel's identity line and stays at the top; the
+  // "ANPASSUNG · 18" heading moved down to sit directly above the options it counts.
   subHeader_ = new QLabel;
-  subHeader_->setFont(QFont(uiFamily(), 8));
-  subHeader_->setStyleSheet(QString("color:%1; background:transparent;").arg(tok::kDim));
+  subHeader_->setFont(typo::font(typo::Title));
+  subHeader_->setProperty("role", "title");
   subHeader_->setWordWrap(true);
   col->addWidget(subHeader_);
 
-  rows_ = new QVBoxLayout;
-  rows_->setSpacing(10);
-  col->addLayout(rows_);
 
+  // Equipment first, customisation after it.
+  //
+  // The order used to be the other way round, and on a character with eighteen customisation
+  // options -- an orc has eighteen -- the equipment section began below the fold and thirteen
+  // slots of it never came into view at all. Somebody who opens this panel is usually dressing
+  // a character; the face is set once. What is used most is now at the top.
   equipHeader_ = new QLabel;
   equipHeader_->setFont(hf);
-  equipHeader_->setStyleSheet(QString("color:%1; background:transparent;").arg(tok::kDim));
+  equipHeader_->setProperty("role", "section");
   equipHeader_->setText(QString::fromUtf8("AUSRÜSTUNG"));
   col->addWidget(equipHeader_);
 
@@ -125,10 +129,7 @@ CharacterPanel::CharacterPanel(QWidget* parent) : QWidget(parent)
   // a wowhead item link and manual entry all end up handing over an id.
   itemInput_ = new QLineEdit;
   itemInput_->setPlaceholderText(QString::fromUtf8("Item-ID anlegen …"));
-  itemInput_->setFont(QFont(uiFamily(), 8));
-  itemInput_->setStyleSheet(QString(
-    "QLineEdit { background:%1; border:1px solid %2; border-radius:6px;"
-    " padding:4px 8px; color:%3; }").arg(tok::kCard).arg(tok::kBorder).arg(tok::kText));
+  itemInput_->setFont(typo::font(typo::Body));
   connect(itemInput_, &QLineEdit::returnPressed, this, [this]() {
     bool ok = false;
     const int id = itemInput_->text().trimmed().toInt(&ok);
@@ -143,16 +144,21 @@ CharacterPanel::CharacterPanel(QWidget* parent) : QWidget(parent)
   equipRows_->setSpacing(6);
   col->addLayout(equipRows_);
 
+
+  // The customisation options, under their own heading.
+  header_ = new QLabel;
+  header_->setFont(hf);
+  header_->setProperty("role", "section");
+  col->addWidget(header_);
+
+  rows_ = new QVBoxLayout;
+  rows_->setSpacing(10);
+  col->addLayout(rows_);
+
   // Demon hunter mode: only Night Elves and Blood Elves have the extra geosets
   // (blindfold, horns, tattoos), so the toggle stays disabled for everyone else.
   dhMode_ = new QCheckBox(QString::fromUtf8("Dämonenjäger"));
-  dhMode_->setFont(QFont(uiFamily(), 8));
-  dhMode_->setStyleSheet(QString(
-    "QCheckBox { color:%1; background:transparent; spacing:7px; }"
-    "QCheckBox::indicator { width:13px; height:13px; border-radius:3px;"
-    " border:1px solid %2; background:%3; }"
-    "QCheckBox::indicator:checked { background:%4; border-color:%4; }"
-    "QCheckBox:disabled { color:#414852; }").arg(tok::kTextSoft).arg(tok::kBorder).arg(tok::kCard).arg(tok::kAccent));
+  dhMode_->setFont(typo::font(typo::Body));
   connect(dhMode_, &QCheckBox::toggled, this, [this](bool on) {
     if (updating_ || !model_)
       return;
@@ -165,7 +171,7 @@ CharacterPanel::CharacterPanel(QWidget* parent) : QWidget(parent)
   // texture from them.
   tabardHeader_ = new QLabel(QString::fromUtf8("WAPPENROCK"));
   tabardHeader_->setFont(hf);
-  tabardHeader_->setStyleSheet(QString("color:%1; background:transparent;").arg(tok::kDim));
+  tabardHeader_->setProperty("role", "section");
   col->addWidget(tabardHeader_);
 
   tabardRows_ = new QVBoxLayout;
@@ -177,7 +183,7 @@ CharacterPanel::CharacterPanel(QWidget* parent) : QWidget(parent)
   // next to the rest of the character, under the name of the part they hide.
   geosetHeader_ = new QLabel(QString::fromUtf8("SICHTBARE TEILE"));
   geosetHeader_->setFont(hf);
-  geosetHeader_->setStyleSheet(QString("color:%1; background:transparent;").arg(tok::kDim));
+  geosetHeader_->setProperty("role", "section");
   col->addWidget(geosetHeader_);
 
   geosetRows_ = new QVBoxLayout;
@@ -265,13 +271,7 @@ void CharacterPanel::buildGeosets()
     auto* cb = new QCheckBox(variant > 0
       ? QString::fromUtf8("%1 %2").arg(geosetGroupName(group)).arg(variant)
       : geosetGroupName(group));
-    cb->setFont(QFont(uiFamily(), 8));
-    cb->setStyleSheet(QString(
-      "QCheckBox { color:%1; background:transparent; spacing:7px; }"
-      "QCheckBox::indicator { width:13px; height:13px; border-radius:3px;"
-      " border:1px solid %2; background:%3; }"
-      "QCheckBox::indicator:checked { background:%4; border-color:%4; }")
-      .arg(tok::kTextSoft).arg(tok::kBorder).arg(tok::kCard).arg(tok::kAccent));
+    cb->setFont(typo::font(typo::Body));
     cb->setChecked(g->display);
     cb->setToolTip(QString::fromUtf8("Geoset %1 · %2 Dreiecke").arg(g->id).arg(g->icount / 3));
     // Captures the INDEX, not the ModelGeosetHD*. The vector is rebuilt whenever the
@@ -388,8 +388,22 @@ void CharacterPanel::rebuild()
   }
 
   const int chrModelId = model_->infos.ChrModelID[0];
-  subHeader_->setText(QString::fromUtf8("Rasse %1 · ChrModel %2")
-                        .arg(model_->infos.raceID).arg(chrModelId));
+  // The race and sex in words, not two internal identifiers. "Rasse 2 · ChrModel 3" sat at
+  // the top of the most-used panel in a German consumer interface: a raw race index and a
+  // DB2 model id, styled as if they were a subtitle. The ids stay reachable in the tooltip
+  // for a bug report.
+  {
+    QString race;
+    const auto q = GAMEDATABASE.sqlQuery(
+      QString("SELECT Name_Lang FROM ChrRaces WHERE ID = %1").arg(model_->infos.raceID));
+    if (q.valid && !q.values.empty() && !q.values[0][0].isEmpty())
+      race = q.values[0][0];
+    const QString sex = model_->infos.sexID == 0 ? QString::fromUtf8("männlich")
+                                                 : QString::fromUtf8("weiblich");
+    subHeader_->setText(race.isEmpty() ? sex : QString("%1 · %2").arg(race).arg(sex));
+    subHeader_->setToolTip(QString::fromUtf8("Rasse %1 · ChrModel %2")
+                             .arg(model_->infos.raceID).arg(chrModelId));
+  }
 
   // Every option of this ChrModel, in the game's own order. Deliberately unfiltered:
   // filtering on ChrCustomizationID drops legitimate options on mixed models (the wx
@@ -413,33 +427,34 @@ void CharacterPanel::rebuild()
     if (choices.empty())
       continue;
 
+    // Label above its control, with the choice count pinned right. The label is elided with a
+    // tooltip rather than allowed to push the count off the edge -- which is what happened
+    // with "Hautfarbe (Untote)" and the other long option names: the number disappeared
+    // silently, and the scroll area has its horizontal bar switched off, so nothing revealed
+    // it. The combo is a WideCombo, so a long choice name is readable in the list even
+    // though the closed box is only as wide as the column.
     auto* row = new QWidget;
-    row->setStyleSheet("background:transparent;");
+    row->setAttribute(Qt::WA_StyledBackground, true);
+    row->setProperty("role", "panel");
     auto* rc = new QVBoxLayout(row);
     rc->setContentsMargins(0, 0, 0, 0);
-    rc->setSpacing(5);
+    rc->setSpacing(met::sp(met::Snug));
 
     auto* head = new QHBoxLayout;
-    auto* name = new QLabel(label);
-    name->setFont(QFont(uiFamily(), 9));
-    name->setStyleSheet(QString("color:%1; background:transparent;").arg(tok::kTextSoft));
+    head->setSpacing(met::sp(met::Gap));
+    auto* name = new ElidedLabel(label);
+    name->setFont(typo::font(typo::Body));
+    name->setProperty("role", "caption");
     auto* count = new QLabel(QString::number(choices.size()));
-    count->setFont(QFont(uiFamily(), 8));
-    count->setStyleSheet(QString("color:%1; background:transparent;").arg(tok::kDim));
-    head->addWidget(name);
-    head->addStretch(1);
+    count->setFont(typo::font(typo::Caption));
+    count->setProperty("role", "caption");
+    count->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    count->setFixedWidth(ui::px(28));   // fixed, so it cannot be pushed out by a long label
+    head->addWidget(name, 1);
     head->addWidget(count);
     rc->addLayout(head);
 
-    auto* combo = new QComboBox;
-    combo->setFont(QFont(uiFamily(), 8));
-    combo->setStyleSheet(QString(
-      "QComboBox { background:%1; border:1px solid %2; border-radius:6px;"
-      " padding:4px 8px; color:%3; }"
-      "QComboBox::drop-down { border:none; width:18px; }"
-      "QComboBox QAbstractItemView { background:%1; border:1px solid %2;"
-      " selection-background-color:#1a1226; color:%3; }")
-      .arg(tok::kCard).arg(tok::kBorder).arg(tok::kText));
+    QComboBox* combo = uikit::wideCombo();
 
     const uint current = model_->cd.get(optionId);
     int currentIndex = 0;
@@ -505,21 +520,6 @@ const struct { CharSlots slot; const char* label; } kSlots[] = {
   { CS_BRACERS,    "Armschienen" }
 };
 
-// Item quality -> the colours WoW itself uses, matching the mock-up's grid.
-const char* qualityColour(int quality)
-{
-  switch (quality) {
-    case 0:  return "#9d9d9d";   // poor
-    case 1:  return "#e8eaee";   // common
-    case 2:  return "#1eff00";   // uncommon
-    case 3:  return "#0070dd";   // rare
-    case 4:  return "#a335ee";   // epic
-    case 5:  return "#ff8000";   // legendary
-    case 6:  return "#e6cc80";   // artifact
-    case 7:  return "#00ccff";   // heirloom
-    default: return "#7d8693";
-  }
-}
 }
 
 void CharacterPanel::buildTabard()
@@ -547,24 +547,19 @@ void CharacterPanel::buildTabard()
   updating_ = true;
   for (const auto& p : parts) {
     auto* row = new QWidget;
-    row->setStyleSheet("background:transparent;");
     auto* rr = new QHBoxLayout(row);
     rr->setContentsMargins(0, 0, 0, 0);
     rr->setSpacing(8);
 
     auto* name = new QLabel(QString::fromUtf8(p.label));
-    name->setFont(QFont(uiFamily(), 8));
+    name->setFont(typo::font(typo::Body));
     name->setFixedWidth(88);
-    name->setStyleSheet(QString("color:%1; background:transparent;").arg(tok::kTextSoft));
     rr->addWidget(name);
 
     auto* spin = new QSpinBox;
     spin->setRange(0, p.max > 0 ? p.max : 0);
     spin->setValue(p.value);
-    spin->setFont(QFont(uiFamily(), 8));
-    spin->setStyleSheet(QString(
-      "QSpinBox { background:%1; border:1px solid %2; border-radius:6px;"
-      " padding:2px 6px; color:%3; }").arg(tok::kCard).arg(tok::kBorder).arg(tok::kText));
+    spin->setFont(typo::font(typo::Body));
     const int which = p.which;
     connect(spin, QOverload<int>::of(&QSpinBox::valueChanged), this, [this, which](int v) {
       if (updating_ || !model_)
@@ -607,50 +602,58 @@ void CharacterPanel::buildEquipment()
   if (!model_)
     return;
 
+  // The equipment row: two lines, so a German item name can never be cut in half.
+  //
+  // This is the defect the owner named. The row used to be one line: an 88 px fixed slot
+  // label, then the item name in a plain QLabel with minimumWidth(1) and NO elide mode, then
+  // two 10 px glyphs. In a 324 px column that left the name about 145 px -- roughly fourteen
+  // characters of "Schulterstücke des ehrfürchtigen Wächters" -- and QLabel does not
+  // ellipsise, it clips mid-glyph, with no tooltip and no way to widen anything.
+  //
+  // Now: the slot name sits on its own line above, where it has the full width and never
+  // needs to shorten; the item name gets the full width below and elides in the MIDDLE,
+  // because the tail of a WoW item name ("... des Kriegsherrn") is what distinguishes it.
+  // Anything hidden is in the tooltip. The two actions keep a reserved 56 px on the right in
+  // every row, worn or not, so no row ever changes width and the buttons do not appear and
+  // disappear under the pointer.
   for (const auto& s : kSlots) {
     auto* row = new QWidget;
-    row->setStyleSheet("background:transparent;");
+    row->setAttribute(Qt::WA_StyledBackground, true);
+    row->setProperty("role", "panel");
+    row->setMinimumHeight(met::hRow2());
     auto* rr = new QHBoxLayout(row);
-    rr->setContentsMargins(0, 0, 0, 0);
-    rr->setSpacing(8);
+    rr->setContentsMargins(0, met::sp(met::Tight), 0, met::sp(met::Tight));
+    rr->setSpacing(met::sp(met::Gap));
+
+    auto* text = new QVBoxLayout;
+    text->setContentsMargins(0, 0, 0, 0);
+    text->setSpacing(0);
 
     auto* slotName = new QLabel(QString::fromUtf8(s.label).toUpper());
-    QFont sf(uiFamily(), 7);
-    sf.setLetterSpacing(QFont::AbsoluteSpacing, 0.7);
-    slotName->setFont(sf);
-    slotName->setFixedWidth(88);
-    slotName->setStyleSheet(QString("color:%1; background:transparent;").arg(tok::kDim));
-    rr->addWidget(slotName);
+    slotName->setFont(typo::font(typo::Caption));
+    slotName->setProperty("role", "caption");
+    text->addWidget(slotName);
 
-    auto* itemName = new QLabel(QString::fromUtf8("—"));
-    itemName->setFont(QFont(uiFamily(), 8));
-    itemName->setMinimumWidth(1);
-    itemName->setStyleSheet(QString("color:%1; background:transparent;").arg(tok::kDim));
-    rr->addWidget(itemName, 1);
+    auto* itemName = new ElidedLabel(QString::fromUtf8("—"));
+    itemName->setFont(typo::font(typo::Strong));
+    itemName->setElideMode(Qt::ElideMiddle);
+    text->addWidget(itemName);
+    rr->addLayout(text, 1);
 
-    // Item view: show only this piece, the figure and the rest switched off. Toggles,
-    // so a second click brings the character back.
-    auto* focus = new QLabel(QString::fromUtf8("◉"));
-    focus->setFont(QFont(uiFamily(), 8));
-    focus->setCursor(Qt::PointingHandCursor);
-    focus->setToolTip(QString::fromUtf8("Nur dieses Teil zeigen"));
-    focus->setStyleSheet(QString("color:%1; background:transparent;").arg(tok::kDim));
+    // Item view: show only this piece, the figure and the rest switched off. Toggles, so a
+    // second click brings the character back.
+    auto* focus = uikit::iconButton("eye", QString::fromUtf8("Nur dieses Teil zeigen"));
     focus->setProperty("focusSlot", (int)s.slot);
-    focus->installEventFilter(this);
-    focus->setVisible(false);
+    connect(focus, &QToolButton::clicked, this, [this, s]() {
+      const int want = (int)s.slot;
+      setItemFocus(focusSlot_ == want ? -1 : want);
+    });
     rr->addWidget(focus);
 
-    // The only way to take a single piece OFF used to be equipping something else
-    // over it -- clearing always meant everything at once. Same clickable-label
-    // pattern the main window uses for its category chips.
-    auto* clear = new QLabel(QString::fromUtf8("×"));
-    clear->setFont(QFont(uiFamily(), 9));
-    clear->setCursor(Qt::PointingHandCursor);
-    clear->setToolTip(QString::fromUtf8("Ablegen"));
-    clear->setStyleSheet(QString("color:%1; background:transparent;").arg(tok::kDim));
+    // Taking a single piece off used to be impossible: clearing meant everything at once.
+    auto* clear = uikit::iconButton("x", QString::fromUtf8("Ablegen"));
     clear->setProperty("charSlot", (int)s.slot);
-    clear->installEventFilter(this);
-    clear->setVisible(false);
+    connect(clear, &QToolButton::clicked, this, [this, s]() { unequipSlot((int)s.slot); });
     rr->addWidget(clear);
 
     equipRows_->addWidget(row);
@@ -714,46 +717,54 @@ void CharacterPanel::refreshEquipment()
   for (const auto& s : kSlots) {
     if (i >= (int)slotLabels_.size())
       break;
-    QLabel* lbl = slotLabels_[i];
-    QLabel* clear = i < (int)clearButtons_.size() ? clearButtons_[i] : nullptr;
-    QLabel* focus = i < (int)focusButtons_.size() ? focusButtons_[i] : nullptr;
+    ElidedLabel* lbl = slotLabels_[i];
+    QToolButton* clear = i < (int)clearButtons_.size() ? clearButtons_[i] : nullptr;
+    QToolButton* focus = i < (int)focusButtons_.size() ? focusButtons_[i] : nullptr;
     ++i;
 
     WoWItem* item = model_->getItem(s.slot);
-    const bool worn = item && item->id() != 0;
-    if (clear)
-      clear->setVisible(worn);       // an "x" next to an empty slot removes nothing
+    // An id of zero is an empty slot, but so is the game's own placeholder item, whose name
+    // the database gives as "---- None ----". Printing that verbatim was worse than printing
+    // nothing: it looks like a real item with a broken name.
+    const QString rawName = item ? item->name() : QString();
+    const bool placeholder = rawName.startsWith(QStringLiteral("----"));
+    const bool worn = item && item->id() != 0 && !placeholder;
+
+    // Hidden, not removed. setVisible() on these used to make every row change width as
+    // items came and went, so a button could vanish from under the pointer between the
+    // decision to click and the click. The space is reserved in every row.
+    if (clear) {
+      clear->setEnabled(worn);
+      clear->setVisible(true);
+      clear->setIcon(Theme::icon("x", QColor(worn ? tok::fgMuted : tok::bgPanel)));
+    }
     if (focus) {
-      // Only offered where there IS geometry to look at: texture-only armour would
-      // switch the body off and leave an empty viewport.
+      // Only offered where there IS geometry to look at: texture-only armour would switch
+      // the body off and leave an empty viewport.
       const bool showable = worn && item &&
                             (!item->models().empty() || item->mergedModel() != nullptr);
-      focus->setVisible(showable);
       const bool active = (focusSlot_ == (int)s.slot);
-      focus->setStyleSheet(QString("color:%1; background:transparent;")
-                             .arg(active ? tok::kAccent : tok::kDim));
+      focus->setEnabled(showable);
+      focus->setVisible(true);
+      focus->setChecked(active);
+      focus->setIcon(Theme::icon(active ? "eye-off" : "eye",
+                                 QColor(active ? tok::accentText
+                                               : showable ? tok::fgMuted : tok::bgPanel)));
       focus->setToolTip(active ? QString::fromUtf8("Wieder alles zeigen")
                                : QString::fromUtf8("Nur dieses Teil zeigen"));
     }
+
     if (!worn) {
-      lbl->setText(QString::fromUtf8("—"));
-      lbl->setStyleSheet(QString("color:%1; background:transparent;").arg(tok::kDim));
+      lbl->setFullText(QString::fromUtf8("—"));
+      lbl->setTooltipSuffix(QString());
       continue;
     }
 
-    const QString name = item->name();
-    lbl->setText(name.isEmpty() ? QString::number(item->id()) : name);
-    lbl->setStyleSheet(QString("color:%1; background:transparent;")
-                         .arg(qualityColour(item->quality())));
+    lbl->setFullText(rawName.isEmpty() ? QString::number(item->id()) : rawName);
+    // The quality colour is the game's own semantics, not the theme's -- purple means epic
+    // whatever the interface looks like around it.
+    lbl->setTooltipSuffix(QString::fromUtf8("Item %1").arg(item->id()));
   }
-
-  int worn = 0;
-  for (const auto& s : kSlots) {
-    WoWItem* it = model_->getItem(s.slot);
-    if (it && it->id() != 0)
-      ++worn;
-  }
-  equipHeader_->setText(QString::fromUtf8("AUSRÜSTUNG · %1").arg(worn));
 }
 
 void CharacterPanel::equipById(int itemId)

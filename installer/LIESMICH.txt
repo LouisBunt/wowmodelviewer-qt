@@ -97,6 +97,10 @@ Weitere Optionen, vor allem zum Pruefen ohne Mausbedienung:
     --shot-frame <n>           statt nach ~1,5 s bei Bild n auslesen. Der Takt ist fest,
                                Bild n also immer derselbe Moment -- zwei Laeufe mit
                                verschiedenen Nummern zeigen, ob sich etwas bewegt
+    --ui-scale <faktor>        Groesse der Oberflaeche festlegen (1.0, 1.25, 1.5, 2.0).
+                               Ohne Angabe richtet sie sich nach der Bildschirm-DPI.
+                               Fuer vergleichbare Screenshots festnageln.
+    --print-height <mm>        Druckhoehe fuer den STL-Export
 
 
 Bedienung
@@ -106,6 +110,14 @@ Bedienung
     Mittlere Maustaste / Rad  zoomen
     Umschalt                  feinere Schritte
     R                         Kamera auf das Modell zuruecksetzen
+    Alt+1 bis Alt+4           Reiter rechts: Anpassen, Import, Licht, Export
+    T                         Browser-Spalte ein- und ausklappen
+    N                         Inspector-Spalte ein- und ausklappen
+
+Die drei Spalten lassen sich an ihren Kanten ziehen; Breite und Fensterlage werden
+gemerkt. Ansicht > "Layout zuruecksetzen" stellt die Vorgabe wieder her. Das Fenster
+laesst sich an allen Kanten in der Groesse aendern, Doppelklick auf die Titelleiste
+maximiert.
 
 Doppelklick auf einen Eintrag im Dateibaum laedt das Modell. Unter "Charaktere"
 steht statt des rohen character/-Ordners eine Rassenauswahl.
@@ -258,6 +270,22 @@ Neu in 1.6 und 1.7
   waehlst.
 - Neues Farbschema, Name und Version in der Titelleiste, deutlichere
   Fensterknoepfe.
+
+
+Neu in dieser Fassung: die Oberflaeche
+--------------------------------------
+- Namen werden nicht mehr abgeschnitten. Ausruestungszeilen sind zweizeilig (Slot oben,
+  Item-Name darunter ueber die volle Breite); was nicht passt, endet mit "..." und steht
+  vollstaendig im Tooltip. Die Kategorie-Schalter links zeigen bei wenig Platz nur noch
+  ihr Symbol statt eines Wortfragments ("arakte").
+- Alles reagiert. Was frueher nur wie ein Knopf aussah, ist einer: mit Hover, gedruecktem
+  Zustand, Tastaturfokus und einem sichtbaren Aus-Zustand.
+- Die Ausruestung steht jetzt oben im Reiter "Anpassen" -- vorher lag sie hinter bis zu
+  achtzehn Anpassungszeilen und war ohne Scrollen nicht zu sehen.
+- Die Spalten sind verstellbar und werden gemerkt; das Fenster hat eine Mindestgroesse.
+- Ein Modellpfad steht nur noch einmal im Fenster, mittig in der Titelleiste.
+- Mitgelieferte Schriften (Inter, IBM Plex Mono, Cinzel) und Symbole (Lucide), damit die
+  Oberflaeche auf jedem Rechner gleich aussieht und gleich gemessen wird.
 
 
 Datenuebertragung

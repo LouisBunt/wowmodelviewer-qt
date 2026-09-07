@@ -43,7 +43,7 @@ QString comboStyle()
     "QComboBox::drop-down { border:none; width:16px; }"
     "QComboBox QAbstractItemView { background:%1; border:1px solid %2;"
     " selection-background-color:%4; color:%3; }")
-    .arg(tok::kCard).arg(tok::kBorder).arg(tok::kText).arg(tok::kAccentSel);
+    .arg(tok::bgRaised).arg(tok::lineBorder).arg(tok::fgText).arg(tok::accentTint);
 }
 
 // SQL string literals come from the user's search box. The quote is DOUBLED, not
@@ -60,7 +60,7 @@ QString sqlEscape(QString s)
 NpcBrowser::NpcBrowser(QWidget* parent) : QWidget(parent)
 {
   setAttribute(Qt::WA_StyledBackground, true);
-  setStyleSheet("background:transparent;");
+  setProperty("role", "panel");
 
   auto* col = new QVBoxLayout(this);
   col->setContentsMargins(12, 0, 12, 8);
@@ -68,13 +68,8 @@ NpcBrowser::NpcBrowser(QWidget* parent) : QWidget(parent)
 
   search_ = new QLineEdit;
   search_->setPlaceholderText(QString::fromUtf8("NPC-Name …"));
-  search_->setFont(QFont(uiFamily(), 8));
+  search_->setFont(typo::font(typo::Body));
   search_->setFixedHeight(28);
-  search_->setStyleSheet(QString(
-    "QLineEdit { background:%1; border:1px solid %2; border-radius:6px;"
-    " padding:0 8px; color:%3; }"
-    "QLineEdit:focus { border-color:%4; }")
-    .arg(tok::kCard).arg(tok::kBorder).arg(tok::kText).arg(tok::kAccentBr));
   // No debounce timer here, unlike ItemBrowser: Creature holds 23k named rows against
   // Item's 139k, and the three-way join runs on indexed keys, so a query per keystroke
   // is cheap enough to keep the code simpler.
@@ -90,8 +85,7 @@ NpcBrowser::NpcBrowser(QWidget* parent) : QWidget(parent)
   col->addWidget(search_);
 
   type_ = new QComboBox;
-  type_->setFont(QFont(uiFamily(), 8));
-  type_->setStyleSheet(comboStyle());
+  type_->setFont(typo::font(typo::Body));
   // Filled in initialise() from the CreatureType table -- 15 rows the database already
   // localises, so hardcoding a copy here would only give it a chance to go stale.
   connect(type_, QOverload<int>::of(&QComboBox::currentIndexChanged),
@@ -102,22 +96,12 @@ NpcBrowser::NpcBrowser(QWidget* parent) : QWidget(parent)
   QFont cf(uiFamily(), 7);
   cf.setLetterSpacing(QFont::AbsoluteSpacing, 1.3);
   count_->setFont(cf);
-  count_->setStyleSheet(QString("color:%1; background:transparent;").arg(tok::kDim));
   col->addWidget(count_);
 
   list_ = new QListWidget;
-  list_->setFont(QFont(uiFamily(), 8));
+  list_->setFont(typo::font(typo::Body));
   // Big enough to recognise a silhouette, small enough that rows stay rows.
   list_->setIconSize(QSize(24, 24));
-  list_->setStyleSheet(QString(
-    "QListWidget { background:transparent; border:none; outline:none; }"
-    "QListWidget::item { padding:3px 4px; border-radius:4px; }"
-    "QListWidget::item:hover { background:%1; }"
-    "QListWidget::item:selected { background:%2; }"
-    "QScrollBar:vertical { background:transparent; width:10px; }"
-    "QScrollBar::handle:vertical { background:%3; border-radius:5px; min-height:30px; }"
-    "QScrollBar::add-line, QScrollBar::sub-line { height:0; }")
-    .arg(tok::kRaised).arg(tok::kAccentSel).arg(tok::kRaised2));
   connect(list_, &QListWidget::itemActivated, this, [this](QListWidgetItem* it) {
     emitRow(it);
   });
@@ -195,7 +179,7 @@ void NpcBrowser::refresh()
       item->setData(kRoleCreature, row[0].toInt());
       item->setData(kRoleDisplay, row[2].toInt());
       item->setData(kRoleFileData, row[3].toInt());
-      item->setForeground(QColor(tok::kText));
+      item->setForeground(QColor(tok::fgText));
       decorate(item, row[2].toInt());
       list_->addItem(item);
     }

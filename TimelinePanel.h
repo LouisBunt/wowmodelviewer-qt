@@ -8,6 +8,8 @@
 class WoWModel;
 class QComboBox;
 class QLabel;
+class QToolButton;
+class SegmentedBar;
 class QSlider;
 
 // The animation strip along the bottom of the design: animation picker, transport,
@@ -39,14 +41,15 @@ private:
 
   WoWModel* model_ = nullptr;
   QComboBox* animList_ = nullptr;
-  QLabel* playButton_ = nullptr;
+  QToolButton* playButton_ = nullptr;
   QLabel* timeLabel_ = nullptr;
   QSlider* scrubber_ = nullptr;
-  std::vector<QLabel*> speedChips_;
+  SegmentedBar* speedBar_ = nullptr;
   bool updating_ = false;
 
-protected:
-  bool eventFilter(QObject* obj, QEvent* e) override;
+private:
+  void transportAction(int action);
+  void applySpeed(int index);
 };
 
 #endif
