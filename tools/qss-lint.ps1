@@ -30,11 +30,27 @@ $exempt = @("Theme.cpp", "Theme.h", "GameColours.h")
 $files = Get-ChildItem -Path $root -Filter *.cpp -File | Where-Object { $_.Name -notin $exempt }
 $files += Get-ChildItem -Path $root -Filter *.h -File | Where-Object { $_.Name -notin $exempt }
 
+$targets = @()
+foreach ($f in $files) {
+  $targets += [pscustomobject]@{ Path = $f.FullName; Name = $f.Name; Full = $true }
+}
+
+# The installer's front-end is a second program with its own main(). It installs no
+# application stylesheet and sets no application style, so it builds its look from local
+# stylesheet strings and its own QFont calls -- rules 2 and 3 cannot apply to it. Rule 1
+# can, and is the one that matters here: it includes the same Theme.h, and its colours have
+# to come from the same tokens, or the setup ends up looking like the version it replaces.
+# It is checked because it drifted exactly that way once and only the compiler noticed.
+$setupui = Join-Path $root "installer\setupui\main.cpp"
+if (Test-Path $setupui) {
+  $targets += [pscustomobject]@{ Path = $setupui; Name = "setupui/main.cpp"; Full = $false }
+}
+
 $findings = @()
 
-foreach ($f in $files) {
+foreach ($f in $targets) {
   $lineNo = 0
-  foreach ($line in Get-Content $f.FullName) {
+  foreach ($line in Get-Content $f.Path) {
     $lineNo++
     # Comments explain the old values on purpose; they are documentation, not style.
     $code = $line -replace '//.*$', ''
@@ -42,10 +58,10 @@ foreach ($f in $files) {
       $findings += [pscustomobject]@{ Rule = "raw-colour"; File = $f.Name; Line = $lineNo; Text = $code.Trim() }
     }
     # main.cpp installs the one application stylesheet; that is the point, not a violation.
-    if (($code -match 'setStyleSheet\s*\(') -and ($code -notmatch 'Theme::sheet\(\)')) {
+    if ($f.Full -and ($code -match 'setStyleSheet\s*\(') -and ($code -notmatch 'Theme::sheet\(\)')) {
       $findings += [pscustomobject]@{ Rule = "local-stylesheet"; File = $f.Name; Line = $lineNo; Text = $code.Trim() }
     }
-    if ($code -match 'QFont\s*\([^)]*,\s*\d+\s*[,)]') {
+    if ($f.Full -and ($code -match 'QFont\s*\([^)]*,\s*\d+\s*[,)]')) {
       $findings += [pscustomobject]@{ Rule = "point-size-font"; File = $f.Name; Line = $lineNo; Text = $code.Trim() }
     }
     if ($code -match 'tok::k[A-Z]') {

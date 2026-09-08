@@ -52,16 +52,6 @@
 #include <functional>
 #include <set>
 
-// Tokens the mock-up uses beyond Theme.h. Same names as its CSS variables.
-namespace tok {
-const char* const kBorderFocus = "#3a434f";
-const char* const kScrubTrack  = "#0a0d10";
-const char* const kMeta        = "#7d8693";
-const char* const kTextQuiet   = "#cdd3dc";
-const char* const kBrandInk    = "#c9b6e8";
-const char* const kScrollThumb = "#262c35";
-}
-
 // ---------------------------------------------------------------------------------
 // Small helpers in the style of MainWindow.cpp
 // ---------------------------------------------------------------------------------
@@ -81,17 +71,17 @@ static QLabel* mk(const QString& text, const QString& family, int pt, const char
 static QLabel* kicker(const QString& text)
 {
   // The small uppercase line above every page title.
-  return mk(text.toUpper(), "Segoe UI", 7, tok::kDim, false, 1.3);
+  return mk(text.toUpper(), "Segoe UI", 7, tok::fgMuted, false, 1.3);
 }
 
 static QLabel* pageTitle(const QString& text)
 {
-  return mk(text, "Georgia", 14, tok::kText, true, 0.6);
+  return mk(text, "Georgia", 14, tok::fgText, true, 0.6);
 }
 
 static QLabel* bodyText(const QString& text)
 {
-  auto* l = mk(text, "Segoe UI", 9, tok::kTextSoft);
+  auto* l = mk(text, "Segoe UI", 9, tok::fgSoft);
   l->setWordWrap(true);
   return l;
 }
@@ -100,7 +90,7 @@ static QFrame* card()
 {
   auto* f = new QFrame;
   f->setStyleSheet(QString("QFrame { background:%1; border:1px solid %2; border-radius:8px; }")
-                     .arg(tok::kCard).arg(tok::kBorder2));
+                     .arg(tok::bgPanel).arg(tok::lineBorder));
   return f;
 }
 
@@ -108,7 +98,7 @@ static QFrame* hairline()
 {
   auto* f = new QFrame;
   f->setFixedHeight(1);
-  f->setStyleSheet(QString("background:%1; border:none;").arg(tok::kBorder2));
+  f->setStyleSheet(QString("background:%1; border:none;").arg(tok::lineBorder));
   return f;
 }
 
@@ -121,7 +111,7 @@ static QPushButton* flatButton(const QString& text)
     "QPushButton { color:%1; background:%2; border:1px solid %3; border-radius:7px;"
     "              padding:8px 14px; }"
     "QPushButton:hover { background:%4; }")
-    .arg(tok::kTextSoft).arg(tok::kRaised).arg(tok::kBorder).arg(tok::kRaised2));
+    .arg(tok::fgSoft).arg(tok::bgRaised).arg(tok::lineBorder).arg(tok::bgRaisedHover));
   return b;
 }
 
@@ -138,9 +128,9 @@ public:
     auto* row = new QHBoxLayout(this);
     row->setContentsMargins(12, 0, 4, 0);
     row->setSpacing(8);
-    row->addWidget(mk(QString::fromUtf8("◆"), "Segoe UI Symbol", 8, tok::kAccent));
+    row->addWidget(mk(QString::fromUtf8("◆"), "Segoe UI Symbol", 8, tok::accent));
     row->addWidget(mk(QString::fromUtf8("ModelViewer: Midnight — Setup"),
-                      "Segoe UI", 8, "#99a2af", false, 0.3));
+                      "Segoe UI", 8, tok::fgMuted, false, 0.3));
     row->addStretch(1);
 
     auto btn = [](const QString& glyph, const char* hoverBg, const char* hoverFg) {
@@ -152,11 +142,11 @@ public:
       b->setStyleSheet(QString(
         "QPushButton { color:%1; background:transparent; border:none; border-radius:5px; }"
         "QPushButton:hover { background:%2; color:%3; }")
-        .arg(tok::kDim).arg(hoverBg).arg(hoverFg));
+        .arg(tok::fgMuted).arg(hoverBg).arg(hoverFg));
       return b;
     };
-    auto* mini = btn(QString::fromUtf8("—"), tok::kRaised, tok::kTextSoft);
-    auto* close = btn(QString::fromUtf8("✕"), tok::kDanger, tok::kOnAccent);
+    auto* mini = btn(QString::fromUtf8("—"), tok::bgRaised, tok::fgSoft);
+    auto* close = btn(QString::fromUtf8("✕"), tok::danger, tok::onAccent);
     QObject::connect(mini, &QPushButton::clicked, window, &QWidget::showMinimized);
     QObject::connect(close, &QPushButton::clicked, window, &QWidget::close);
     row->addWidget(mini);
@@ -168,11 +158,11 @@ protected:
   {
     QPainter p(this);
     QLinearGradient g(0, 0, 0, height());
-    g.setColorAt(0.0, QColor(tok::kTitleTop));
-    g.setColorAt(1.0, QColor(tok::kTitleBot));
+    g.setColorAt(0.0, QColor(tok::bgChrome));
+    g.setColorAt(1.0, QColor(tok::bgVoid));
     p.fillRect(rect(), g);
     p.fillRect(rect(), QBrush(grain()));
-    p.fillRect(0, height() - 1, width(), 1, QColor(tok::kBorder2));
+    p.fillRect(0, height() - 1, width(), 1, QColor(tok::lineBorder));
   }
 
   // Qt 5.13 has no QWindow::startSystemMove yet; classic offset dragging instead.
@@ -239,9 +229,9 @@ public:
 
     auto* markRow = new QHBoxLayout;
     markRow->setSpacing(7);
-    markRow->addWidget(mk(QString::fromUtf8("◆"), "Segoe UI Symbol", 9, tok::kAccent), 0,
+    markRow->addWidget(mk(QString::fromUtf8("◆"), "Segoe UI Symbol", 9, tok::accent), 0,
                        Qt::AlignBaseline);
-    markRow->addWidget(mk("MODELVIEWER", "Georgia", 14, tok::kBrandInk, true, 1.3), 0,
+    markRow->addWidget(mk("MODELVIEWER", "Georgia", 14, tok::brandWordmark, true, 1.3), 0,
                        Qt::AlignBaseline);
     markRow->addStretch(1);
     col->addLayout(markRow);
@@ -253,11 +243,11 @@ public:
       r->addStretch(1);
       return r;
     };
-    auto* mid = mk("MIDNIGHT", "Georgia", 10, tok::kMuted, false, 3.0);
+    auto* mid = mk("MIDNIGHT", "Georgia", 10, tok::fgMuted, false, 3.0);
     auto* midRow = indent(mid);
     midRow->setContentsMargins(19, 3, 0, 0);
     col->addLayout(midRow);
-    auto* ver = mk("Version " + version, "Consolas", 7, tok::kDim);
+    auto* ver = mk("Version " + version, "Consolas", 7, tok::fgMuted);
     auto* verRow = indent(ver);
     verRow->setContentsMargins(19, 10, 0, 0);
     col->addLayout(verRow);
@@ -272,7 +262,7 @@ public:
       r.dot->setFixedSize(17, 17);
       r.dot->setAlignment(Qt::AlignCenter);
       r.dot->setFont(QFont("Consolas", 7));
-      r.label = mk(s, "Segoe UI", 8, tok::kFaint, false, 0.2);
+      r.label = mk(s, "Segoe UI", 8, tok::fgDim, false, 0.2);
       row->addWidget(r.dot);
       row->addWidget(r.label);
       row->addStretch(1);
@@ -281,8 +271,8 @@ public:
     }
     col->addStretch(1);
 
-    auto* sys = mk(QString::fromUtf8("x64 · Windows 10 / 11"), "Consolas", 7, tok::kFaint);
-    auto* bld = mk("Setup-Build " + version, "Consolas", 7, tok::kFaint);
+    auto* sys = mk(QString::fromUtf8("x64 · Windows 10 / 11"), "Consolas", 7, tok::fgDim);
+    auto* bld = mk("Setup-Build " + version, "Consolas", 7, tok::fgDim);
     col->addWidget(sys);
     col->addSpacing(4);
     col->addWidget(bld);
@@ -299,11 +289,11 @@ public:
       r.dot->setText(done ? QString::fromUtf8("✓") : QString::number(i + 1));
       r.dot->setStyleSheet(QString(
         "background:%1; color:%2; border:1px solid %3; border-radius:8px;")
-        .arg(cur ? tok::kAccentBg : "transparent")
-        .arg(cur ? tok::kAccentHi : done ? tok::kAccent : tok::kFaint)
-        .arg(cur ? tok::kAccentHi : done ? tok::kAccentBr : tok::kBorder2));
+        .arg(cur ? tok::accentTint : "transparent")
+        .arg(cur ? tok::accentText : done ? tok::accent : tok::fgDim)
+        .arg(cur ? tok::accentText : done ? tok::accentGlow : tok::lineBorder));
       r.label->setStyleSheet(QString("color:%1; background:transparent;")
-        .arg(cur ? tok::kText : done ? tok::kMeta : tok::kFaint));
+        .arg(cur ? tok::fgText : done ? tok::fgMuted : tok::fgDim));
     }
   }
 
@@ -312,19 +302,19 @@ protected:
   {
     QPainter p(this);
     QLinearGradient g(0, 0, 0, height());
-    g.setColorAt(0.0, QColor(tok::kTitleTop));
-    g.setColorAt(1.0, QColor(tok::kVoid));
+    g.setColorAt(0.0, QColor(tok::bgChrome));
+    g.setColorAt(1.0, QColor(tok::bgVoid));
     p.fillRect(rect(), g);
     // The violet bloom behind the wordmark.
     QRadialGradient r(QPointF(100, 80), 170);
-    QColor glow(tok::kAccent);
+    QColor glow(tok::accent);
     glow.setAlphaF(0.14);
     r.setColorAt(0.0, glow);
     glow.setAlphaF(0.0);
     r.setColorAt(0.62, glow);
     p.setRenderHint(QPainter::Antialiasing);
     p.fillRect(rect(), QBrush(r));
-    p.fillRect(width() - 1, 0, 1, height(), QColor(tok::kBorder2));
+    p.fillRect(width() - 1, 0, 1, height(), QColor(tok::lineBorder));
   }
 
 private:
@@ -349,12 +339,12 @@ public:
     box_->setFixedSize(14, 14);
     box_->setAlignment(Qt::AlignCenter);
     box_->setFont(QFont("Segoe UI", 7));
-    label_ = mk(text, "Segoe UI", 9, tok::kTextSoft);
+    label_ = mk(text, "Segoe UI", 9, tok::fgSoft);
     label_->setWordWrap(true);
     row->addWidget(box_, 0, Qt::AlignTop);
     row->addWidget(label_, 1);
     if (!hint.isEmpty())
-      row->addWidget(mk(hint, "Consolas", 7, tok::kDim), 0, Qt::AlignTop);
+      row->addWidget(mk(hint, "Consolas", 7, tok::fgMuted), 0, Qt::AlignTop);
     paint();
   }
 
@@ -379,14 +369,14 @@ private:
       // Part of the installation, not a choice: a grey tick that cannot be removed.
       box_->setText(QString::fromUtf8("✓"));
       box_->setStyleSheet(QString("background:%1; color:%2; border:1px solid %3; border-radius:3px;")
-                            .arg(tok::kRaised).arg(tok::kTextQuiet).arg(tok::kBorderFocus));
+                            .arg(tok::bgRaised).arg(tok::fgSoft).arg(tok::lineStrong));
       return;
     }
     box_->setText(on_ ? QString::fromUtf8("✓") : QString());
     box_->setStyleSheet(QString("background:%1; color:%2; border:1px solid %3; border-radius:3px;")
-                          .arg(on_ ? tok::kAccent : tok::kCardAlt)
-                          .arg(tok::kOnAccent)
-                          .arg(on_ ? tok::kAccentHi : tok::kBorderFocus));
+                          .arg(on_ ? tok::accent : tok::bgRaised)
+                          .arg(tok::onAccent)
+                          .arg(on_ ? tok::accentText : tok::lineStrong));
   }
 
   QLabel* box_;
@@ -419,7 +409,7 @@ protected:
     QPainterPath clip;
     clip.addRoundedRect(QRectF(rect()).adjusted(0.5, 0.5, -0.5, -0.5), 2, 2);
     p.setClipPath(clip);
-    p.fillRect(rect(), QColor(tok::kScrubTrack));
+    p.fillRect(rect(), QColor(tok::bgWell));
     int x = 0;
     const int wA = int(width() * qBound(0.0, a_, 1.0));
     p.fillRect(0, 0, wA, height(), QColor(aC_));
@@ -429,14 +419,14 @@ protected:
       p.fillRect(x, 0, wB, height(), QColor(bC_));
     }
     p.setClipping(false);
-    p.setPen(QColor(tok::kBorder2));
+    p.setPen(QColor(tok::lineBorder));
     p.setBrush(Qt::NoBrush);
     p.drawRoundedRect(QRectF(rect()).adjusted(0.5, 0.5, -0.5, -0.5), 2, 2);
   }
 
 private:
   double a_ = 0, b_ = 0;
-  const char* aC_ = tok::kAccent;
+  const char* aC_ = tok::accent;
   const char* bC_ = nullptr;
 };
 
@@ -449,7 +439,7 @@ struct Options
   QString innerExe;      // the Inno setup to run silently; empty = simulate
   int totalFiles = 1300;
   int sizeMb = 450;
-  QString version = "1.0.1";
+  QString version = "1.1.0";
   QString shotsDir;      // autopilot: step through, grab each page as PNG, quit
 };
 
@@ -460,7 +450,7 @@ public:
   {
     setWindowFlags(Qt::Window | Qt::FramelessWindowHint);
     setFixedSize(760, 520);
-    setStyleSheet(QString("SetupWindow { background:%1; }").arg(tok::kApp));
+    setStyleSheet(QString("SetupWindow { background:%1; }").arg(tok::bgChrome));
     setAttribute(Qt::WA_StyledBackground, true);
 
     readExisting();
@@ -505,8 +495,8 @@ protected:
   void paintEvent(QPaintEvent*) override
   {
     QPainter p(this);
-    p.fillRect(rect(), QColor(tok::kApp));
-    p.setPen(QColor(tok::kBorder));
+    p.fillRect(rect(), QColor(tok::bgChrome));
+    p.setPen(QColor(tok::lineBorder));
     p.drawRect(rect().adjusted(0, 0, -1, -1));
   }
 
@@ -547,7 +537,7 @@ private:
       "QScrollBar:vertical { background:%1; width:10px; }"
       "QScrollBar::handle:vertical { background:%2; border-radius:5px; min-height:30px; }"
       "QScrollBar::add-line, QScrollBar::sub-line { height:0; }")
-      .arg(tok::kApp).arg(tok::kScrollThumb));
+      .arg(tok::bgChrome).arg(tok::lineStrong));
     return s;
   }
 
@@ -567,13 +557,13 @@ private:
     row->setContentsMargins(0, 9, 0, 9);
     QString text = name;
     if (!sub.isEmpty())
-      text += QString(" <span style='color:%1'>· %2</span>").arg(tok::kDim).arg(sub);
-    auto* l = mk(QString(), "Segoe UI", 8, tok::kTextSoft);
+      text += QString(" <span style='color:%1'>· %2</span>").arg(tok::fgMuted).arg(sub);
+    auto* l = mk(QString(), "Segoe UI", 8, tok::fgSoft);
     l->setText(text);
     l->setTextFormat(Qt::RichText);
     row->addWidget(l);
     row->addStretch(1);
-    row->addWidget(mk(right, "Consolas", 8, tok::kMeta));
+    row->addWidget(mk(right, "Consolas", 8, tok::fgMuted));
     cardCol->addLayout(row);
     if (!last)
       cardCol->addWidget(hairline());
@@ -610,12 +600,12 @@ private:
     auto* dot = new QLabel;
     dot->setFixedSize(6, 6);
     dot->setStyleSheet(QString("background:%1; border-radius:3px;")
-                         .arg(existingDir_.isEmpty() ? tok::kOk : tok::kAccent));
+                         .arg(existingDir_.isEmpty() ? tok::ok : tok::accent));
     status->addWidget(dot);
     const QString found = existingDir_.isEmpty()
       ? "Keine bestehende Installation gefunden."
       : QString::fromUtf8("Version %1 gefunden — wird aktualisiert.").arg(existingVersion_);
-    status->addWidget(mk(found, "Segoe UI", 8, tok::kMeta));
+    status->addWidget(mk(found, "Segoe UI", 8, tok::fgMuted));
     status->addStretch(1);
     l->addLayout(status);
     l->addStretch(1);
@@ -642,7 +632,7 @@ private:
       "QScrollBar:vertical { background:transparent; width:10px; }"
       "QScrollBar::handle:vertical { background:%4; border-radius:5px; min-height:30px; }"
       "QScrollBar::add-line, QScrollBar::sub-line { height:0; }")
-      .arg(tok::kCardAlt).arg(tok::kBorder2).arg(tok::kTextSoft).arg(tok::kScrollThumb));
+      .arg(tok::bgWell).arg(tok::lineBorder).arg(tok::fgSoft).arg(tok::lineStrong));
     box->setPlainText(licenseText());
     l->addWidget(box);
 
@@ -678,7 +668,7 @@ private:
     pathField_->setFont(QFont("Consolas", 8));
     pathField_->setStyleSheet(QString(
       "QLineEdit { background:%1; border:1px solid %2; border-radius:6px; padding:4px 8px;"
-      "            color:%3; }").arg(tok::kCard).arg(tok::kBorder).arg(tok::kTextQuiet));
+      "            color:%3; }").arg(tok::bgWell).arg(tok::lineBorder).arg(tok::fgSoft));
     auto* browse = flatButton(QString::fromUtf8("Durchsuchen …"));
     QObject::connect(browse, &QPushButton::clicked, [this] {
       const QString d = QFileDialog::getExistingDirectory(this,
@@ -702,8 +692,8 @@ private:
     cc->setContentsMargins(14, 14, 14, 14);
     cc->setSpacing(0);
     auto* head = new QHBoxLayout;
-    driveLabel_ = mk("LAUFWERK", "Segoe UI", 8, tok::kDim, false, 1.3);
-    driveSize_ = mk("", "Consolas", 8, tok::kMeta);
+    driveLabel_ = mk("LAUFWERK", "Segoe UI", 8, tok::fgMuted, false, 1.3);
+    driveSize_ = mk("", "Consolas", 8, tok::fgMuted);
     head->addWidget(driveLabel_);
     head->addStretch(1);
     head->addWidget(driveSize_);
@@ -715,15 +705,15 @@ private:
     auto statRow = [&](const QString& k, QLabel*& v, const char* colour) {
       auto* r = new QHBoxLayout;
       r->setContentsMargins(0, 0, 0, 7);
-      r->addWidget(mk(k, "Segoe UI", 8, tok::kTextSoft));
+      r->addWidget(mk(k, "Segoe UI", 8, tok::fgSoft));
       r->addStretch(1);
       v = mk("", "Consolas", 8, colour);
       r->addWidget(v);
       cc->addLayout(r);
     };
-    statRow(QString::fromUtf8("Benötigt"), needLabel_, tok::kAccentHi);
-    statRow(QString::fromUtf8("Verfügbar"), availLabel_, tok::kMeta);
-    statRow("Frei nach Installation", afterLabel_, tok::kMeta);
+    statRow(QString::fromUtf8("Benötigt"), needLabel_, tok::accentText);
+    statRow(QString::fromUtf8("Verfügbar"), availLabel_, tok::fgMuted);
+    statRow("Frei nach Installation", afterLabel_, tok::fgMuted);
     l->addWidget(c);
     l->addStretch(1);
     updateDisk();
@@ -780,8 +770,8 @@ private:
     l->addSpacing(14);
 
     auto* head = new QHBoxLayout;
-    currentLine_ = mk(QString::fromUtf8("Vorbereitung …"), "Consolas", 8, tok::kTextQuiet);
-    pctLabel_ = mk("0 %", "Consolas", 9, tok::kAccentHi);
+    currentLine_ = mk(QString::fromUtf8("Vorbereitung …"), "Consolas", 8, tok::fgSoft);
+    pctLabel_ = mk("0 %", "Consolas", 9, tok::accentText);
     head->addWidget(currentLine_, 1);
     head->addWidget(pctLabel_);
     l->addLayout(head);
@@ -793,7 +783,7 @@ private:
     auto* logHead = new QHBoxLayout;
     logHead->addWidget(kicker("Protokoll"));
     logHead->addStretch(1);
-    logCount_ = mk("0 Zeilen", "Consolas", 7, tok::kFaint);
+    logCount_ = mk("0 Zeilen", "Consolas", 7, tok::fgDim);
     logHead->addWidget(logCount_);
     l->addLayout(logHead);
     l->addSpacing(7);
@@ -812,7 +802,7 @@ private:
       "QScrollBar:horizontal { background:transparent; height:10px; }"
       "QScrollBar::handle:horizontal { background:%4; border-radius:5px; min-width:30px; }"
       "QScrollBar::add-line, QScrollBar::sub-line { width:0; height:0; }")
-      .arg(tok::kCardAlt).arg(tok::kBorder2).arg(tok::kMuted).arg(tok::kScrollThumb));
+      .arg(tok::bgWell).arg(tok::lineBorder).arg(tok::fgMuted).arg(tok::lineStrong));
     l->addWidget(log_);
     l->addStretch(1);
     return page;
@@ -854,7 +844,7 @@ private:
     auto* bar = new QWidget;
     bar->setFixedHeight(54);
     bar->setStyleSheet(QString("background:%1; border-top:1px solid %2;")
-                         .arg(tok::kBar).arg(tok::kBorder2));
+                         .arg(tok::bgChrome).arg(tok::lineBorder));
     auto* row = new QHBoxLayout(bar);
     row->setContentsMargins(20, 0, 20, 0);
     row->setSpacing(8);
@@ -867,7 +857,7 @@ private:
       "QPushButton { color:%1; background:transparent; border:none; }"
       "QPushButton:hover { color:%2; }"
       "QPushButton:disabled { color:%3; }")
-      .arg(tok::kDim).arg(tok::kTextSoft).arg(tok::kFaint));
+      .arg(tok::fgMuted).arg(tok::fgSoft).arg(tok::fgDim));
     QObject::connect(cancel_, &QPushButton::clicked, [this] {
       if (!running_)
         close();
@@ -946,10 +936,10 @@ private:
       ? QString("QPushButton { color:%1; background:%2; border:1px solid %3; border-radius:7px;"
                 "              padding:9px 14px; }"
                 "QPushButton:hover { background:%3; }")
-          .arg(tok::kOnAccent).arg(tok::kAccent).arg(tok::kAccentHi)
+          .arg(tok::onAccent).arg(tok::accent).arg(tok::accentText)
       : QString("QPushButton { color:%1; background:%2; border:1px solid %3; border-radius:7px;"
                 "              padding:9px 14px; }")
-          .arg(tok::kFaint).arg(tok::kCard).arg(tok::kBorder2));
+          .arg(tok::fgDim).arg(tok::bgRaised).arg(tok::lineBorder));
   }
 
   void startAutopilot()
@@ -1007,7 +997,7 @@ private:
     driveSize_->setText(QString::number(totalGb, 'f', 0) + " GB");
     const double usedFrac = totalGb > 0 ? (totalGb - availGb) / totalGb : 0;
     // The needed sliver would be invisible at true scale; the mock-up magnifies it 6x.
-    diskBar_->set(usedFrac, tok::kRaised2, qMax(0.012, needGb / totalGb * 6), tok::kAccent);
+    diskBar_->set(usedFrac, tok::bgRaisedHover, qMax(0.012, needGb / totalGb * 6), tok::accent);
     auto de = [](double v, int prec) { return QString::number(v, 'f', prec).replace('.', ','); };
     needLabel_->setText(QString::number(opt_.sizeMb) + " MB");
     availLabel_->setText(de(availGb, 1) + " GB");
@@ -1041,7 +1031,7 @@ private:
 
     if (opt_.innerExe.isEmpty()) {
       // Development without an engine: walk a canned script so the page can be styled.
-      appendLog("+0,0s", "Simulation — kein --inner übergeben", tok::kAccentHi);
+      appendLog("+0,0s", "Simulation — kein --inner übergeben", tok::accentText);
       simTimer_ = new QTimer(this);
       QObject::connect(simTimer_, &QTimer::timeout, [this] {
         static const char* files[] = { "core.dll", "wow.dll", "WoWModelViewer-Qt.exe",
@@ -1072,7 +1062,7 @@ private:
                      [this](int code, QProcess::ExitStatus st) { onInstallDone(code, st); });
     QObject::connect(proc_, &QProcess::errorOccurred, [this](QProcess::ProcessError) {
       appendLog(stamp(), "Setup-Prozess konnte nicht gestartet werden: "
-                           + proc_->errorString(), tok::kDanger);
+                           + proc_->errorString(), tok::danger);
       onInstallDone(-1, QProcess::CrashExit);
     });
     proc_->start(opt_.innerExe, args);
@@ -1109,13 +1099,13 @@ private:
         setProgressFile(path.mid(path.lastIndexOf('\\') + 1));
         setPct(qMin(99, int(qint64(filesSeen_) * 100 / qMax(1, opt_.totalFiles))));
         if ((filesSeen_ % 25) == 1 || path.endsWith(".exe") || path.endsWith(".dll"))
-          appendLog(stamp(), "Entpacke " + QDir::toNativeSeparators(path), tok::kMuted);
+          appendLog(stamp(), "Entpacke " + QDir::toNativeSeparators(path), tok::fgMuted);
       } else if (line.contains("Starting the installation process")) {
-        appendLog(stamp(), "Installation beginnt", tok::kMuted);
+        appendLog(stamp(), "Installation beginnt", tok::fgMuted);
       } else if (line.contains("Installation process succeeded")) {
-        appendLog(stamp(), "Dateien geschrieben, Einträge registriert", tok::kOk);
+        appendLog(stamp(), "Dateien geschrieben, Einträge registriert", tok::ok);
       } else if (line.contains("Exception message:") || line.contains("Error:")) {
-        appendLog(stamp(), line, tok::kDanger);
+        appendLog(stamp(), line, tok::danger);
       }
     }
   }
@@ -1128,14 +1118,14 @@ private:
   void setPct(int pct)
   {
     pctLabel_->setText(QString::number(pct) + " %");
-    progress_->set(pct / 100.0, tok::kAccent);
+    progress_->set(pct / 100.0, tok::accent);
   }
 
   void appendLog(const QString& t, const QString& text, const char* colour)
   {
     log_->append(QString("<span style='color:%1'>%2</span>&nbsp;&nbsp;"
                          "<span style='color:%3'>%4</span>")
-                   .arg(tok::kFaint).arg(t).arg(colour)
+                   .arg(tok::fgDim).arg(t).arg(colour)
                    .arg(text.toHtmlEscaped()));
     ++logLines_;
     logCount_->setText(QString::number(logLines_) + " Zeilen");
@@ -1155,7 +1145,7 @@ private:
       setPct(100);
       runTitle_->setText("Dateien geschrieben");
       appendLog(stamp(), QString::fromUtf8("Installation abgeschlossen in %1 s").arg(secs),
-                tok::kOk);
+                tok::ok);
       buildSummary(secs);
       step_ = 5;
     } else {
@@ -1163,7 +1153,7 @@ private:
       runTitle_->setText("Installation fehlgeschlagen");
       appendLog(stamp(), QString::fromUtf8(
                   "Setup endete mit Code %1 — vollständiges Protokoll: %2")
-                  .arg(code).arg(QDir::toNativeSeparators(logPath_)), tok::kDanger);
+                  .arg(code).arg(QDir::toNativeSeparators(logPath_)), tok::danger);
     }
     refresh();
   }
@@ -1182,9 +1172,9 @@ private:
     for (int i = 0; i < 4; ++i) {
       auto* r = new QHBoxLayout;
       r->setContentsMargins(0, 9, 0, 9);
-      r->addWidget(mk(rows[i].k, "Segoe UI", 8, tok::kDim));
+      r->addWidget(mk(rows[i].k, "Segoe UI", 8, tok::fgMuted));
       r->addStretch(1);
-      auto* v = mk(rows[i].v, "Consolas", 8, tok::kTextQuiet);
+      auto* v = mk(rows[i].v, "Consolas", 8, tok::fgSoft);
       r->addWidget(v);
       summaryCol_->addLayout(r);
       if (i < 3)

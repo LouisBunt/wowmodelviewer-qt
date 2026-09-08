@@ -1,4 +1,4 @@
-ModelViewer: Midnight 1.0
+ModelViewer: Midnight 1.1
 =========================
 
 Was das ist
@@ -115,9 +115,9 @@ Bedienung
     N                         Inspector-Spalte ein- und ausklappen
 
 Die drei Spalten lassen sich an ihren Kanten ziehen; Breite und Fensterlage werden
-gemerkt. Ansicht > "Layout zuruecksetzen" stellt die Vorgabe wieder her. Das Fenster
-laesst sich an allen Kanten in der Groesse aendern, Doppelklick auf die Titelleiste
-maximiert.
+gemerkt. Ansicht > "Layout zuruecksetzen" stellt die Vorgabe wieder her. Doppelklick
+auf die Titelleiste maximiert; die Fenstergroesse aenderst du am Griff rechts unten in
+der Statuszeile.
 
 Doppelklick auf einen Eintrag im Dateibaum laedt das Modell. Unter "Charaktere"
 steht statt des rohen character/-Ordners eine Rassenauswahl.
@@ -126,10 +126,11 @@ Menueleiste oben: Datei, Ansicht, Charakter, Export, Hilfe -- mit Tastenkuerzeln
 (F7/F8 Charakter speichern und laden, F5/F6/F9 Ausruestung, F12 Screenshot,
 Strg+1..4 Kameraansichten, Strg+G Gitter).
 
-Werkzeugzeile darunter: Anpassen, Import, Licht, Kamera, Hintergrund -- das sind
-anklickbare Schalter, keine Beschriftungen. Rechts daneben "Charakter" und
-"Nur Teil": damit schaltest du zwischen ganzer Figur und einem einzelnen Teil um,
-ohne die Ausruestungsliste aufklappen zu muessen.
+Werkzeugzeile darunter, von links: "Charakter | Nur Teil" schaltet zwischen der ganzen
+Figur und einem einzelnen getragenen Teil um, ohne die Ausruestungsliste aufklappen zu
+muessen. Daneben die vier Kameraansichten (Vorn, 3/4, Seite, Oben), dann Einpassen,
+Gitter und Hintergrundfarbe. Ganz rechts Screenshot und "Exportieren". Die Reiter des
+Inspectors stehen nicht mehr in der Werkzeugzeile; sie haben Alt+1 bis Alt+4.
 
 Rechts im Inspector: Anpassen (Aussehen, Ausruestung, sichtbare Teile,
 Daemonenjaeger-Schalter, Wappenrock), Import (MVLink, Armory, gespeicherte
@@ -238,6 +239,34 @@ Der Import findet die zuletzt exportierte Datei von selbst (3D-Ansicht >
 Seitenleiste > WMV).
 
 
+Fuer den 3D-Drucker
+-------------------
+Reiter "Export", Abschnitt "3D-Druck": Hoehe eintragen (20 bis 600 mm, Vorgabe 200,
+Knoepfe fuer 100/200/300) und "Fuer den Druck exportieren". Geschrieben wird eine
+binaere STL in Millimetern.
+
+In der Datei steht die Figur so, wie sie im Fenster steht: dieselbe Pose, dieselben
+sichtbaren Teile, dieselbe Ausruestung. Sie wird auf die eingetragene Hoehe skaliert
+und auf z = 0 gestellt, damit sie im Slicer auf der Platte steht statt darueber oder
+darunter. Leucht- und Partikelflaechen fallen weg -- die haben nichts, was sich drucken
+liesse. Ein einzelnes Schwert oder Schild hat keine Koerpergroesse; solche Teile werden
+stattdessen an ihrer laengsten Kante gemessen.
+
+Danach wird die geschriebene Datei wieder eingelesen und ausgemessen. Was darunter
+steht, kommt aus der Datei selbst: die tatsaechliche Groesse, die Aufstandsflaeche auf
+der Platte und die Teile ohne Dicke. Steht die Figur auf einer Zehe, sagt es das hier
+und nicht erst der Slicer.
+
+Was der Export bewusst nicht tut: Umhaenge und Roecke aufdicken, die offenen Naehte an
+Handgelenk, Knoechel und Hals schliessen, die Teile zu einem wasserdichten Koerper
+verschmelzen. Das macht das Blender-Add-on (Seitenleiste > WMV > Druck), das dafuer
+OpenVDB mitbringt.
+
+Auf der Befehlszeile:
+
+    WoWModelViewer-Qt.exe 917116 --print-height 180 --export STL,C:\figur.stl
+
+
 Neu in 1.6 und 1.7
 ------------------
 - Import aus der Wowhead-Anprobe, mit Ausruestung, Anpassungen und den richtigen
@@ -272,8 +301,16 @@ Neu in 1.6 und 1.7
   Fensterknoepfe.
 
 
-Neu in dieser Fassung: die Oberflaeche
---------------------------------------
+Neu in 1.1: der Drucker
+-----------------------
+- STL-Export fuer den 3D-Drucker, in Millimetern und auf eine gewaehlte Hoehe skaliert;
+  siehe "Fuer den 3D-Drucker" weiter oben.
+- Das Blender-Add-on bringt die zweite Haelfte mit: messen, aufdicken, verschmelzen,
+  vereinfachen, exportieren -- einzeln oder in einem Zug.
+
+
+Neu in 1.1: die Oberflaeche
+---------------------------
 - Namen werden nicht mehr abgeschnitten. Ausruestungszeilen sind zweizeilig (Slot oben,
   Item-Name darunter ueber die volle Breite); was nicht passt, endet mit "..." und steht
   vollstaendig im Tooltip. Die Kategorie-Schalter links zeigen bei wenig Platz nur noch
