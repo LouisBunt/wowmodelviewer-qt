@@ -1,13 +1,19 @@
 cmake_minimum_required(VERSION 3.16)
-project(WoWModelViewerQt VERSION 1.0.1)
+project(WoWModelViewerQt VERSION 1.1.0)
 
 # The version the running application reports -- window title, About box, trace and log.
-# Without it a bug report cannot say which build it came from. Keep in step with
-# MyAppVersion in installer/MVMidnight.iss.
+# Without it a bug report cannot say which build it came from. Five other places carry the
+# same number and none of them can read this one, so a release moves all six:
+#   installer/MVMidnight.iss          MyAppVersion, MyAppVersionNumeric
+#   installer/setupui/CMakeLists.txt  project(... VERSION)
+#   installer/setupui/main.cpp        Options::version, the fallback when /VERSION is absent
+#   installer/setupui/setupui.rc      VERSIONINFO -- what SmartScreen shows while the user
+#                                     decides whether to trust the extracted front-end
+#   installer/THIRD-PARTY-NOTICES.txt the "Stand" line
 # 1.0.0 is the public numbering: releases before it (1.5.0-1.8.0) were the early-access
 # line that only existed on this machine and in the repo history. The public count
 # starts where the public does.
-set(WMV_QT_VERSION "1.0.1")
+set(WMV_QT_VERSION "1.1.0")
 
 # The product name, in one place. It reached five files last time it changed.
 set(WMV_APP_NAME "ModelViewer: Midnight")

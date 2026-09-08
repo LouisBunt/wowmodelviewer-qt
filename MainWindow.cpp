@@ -993,9 +993,9 @@ QWidget* MainWindow::buildStatusBar()
   formatsLabel_->setProperty("role", "mono");
   r->addWidget(formatsLabel_);
 
-  // Without a native frame there is no resize edge, so give the status bar a grip. The
-  // window also has an 8px resize band on every edge (nativeEvent), but a visible corner
-  // is what people reach for.
+  // Without a native frame there is no resize edge, so give the status bar a grip. It is
+  // the ONLY way to resize this window: the 8px hit-test band on the frame is not built
+  // yet, so the grip is not a convenience here, it is the mechanism.
   auto* grip = new QSizeGrip(w);
   grip->setFixedSize(ui::px(14), ui::px(14));
   r->addWidget(grip, 0, Qt::AlignBottom | Qt::AlignRight);
