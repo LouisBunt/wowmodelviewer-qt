@@ -204,3 +204,6 @@ SDK; see that file's FBX section before redistributing the binaries.
 
 World of Warcraft is the property of Blizzard Entertainment. This program contains no
 game data — it reads the installation on your own machine. Not affiliated with Blizzard.
+
+---
+<sub>Teilweise mit KI-Unterstützung (Claude) entwickelt.</sub>
