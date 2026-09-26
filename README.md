@@ -34,6 +34,13 @@ and [MIGRATION.md](MIGRATION.md) for why the port is shaped the way it is.
   raw hex value, a per-widget stylesheet or a point-size font creeps back in. Fonts (Inter,
   IBM Plex Mono, Cinzel) and icons (Lucide) ship with the application, so the layout is
   measured against the faces the user actually sees.
+- **No WoW installation needed**: the online mode streams the game data from Blizzard's
+  public CDN into a local cache on this machine, like wow.export's CDN mode. It is an explicit
+  choice — in the first-start dialog, under Datei › Spieldaten-Quelle, or per run with
+  `--online [region]` — never a silent download. The first start fetches about 400 MB (archive
+  indexes and file tables, over parallel HTTPS, with a progress bar and a cancel button),
+  every WoW patch about 280 MB more, and each model the first time it is shown; a start
+  without network opens what is cached.
 - Armory and NPC import, character save/load in the wx `.chr` format, light control,
   animation timeline, headless flags for scripted checks.
 
@@ -49,6 +56,13 @@ and [MIGRATION.md](MIGRATION.md) for why the port is shaped the way it is.
 | `WoWItem::mergedModel()` | accessor the item view needs to tell merged geometry from attached models |
 | `FBXHeaders::createMesh`, `FBXExporter` | vertex remapping, so an export writes only the vertices a visible pass uses instead of every vertex in the model |
 | `FBXExporter` sidecar | bone names, attachments, animation metadata, UV-scroll tracks |
+| `CASCFolder::initOnline` / `setConfig` / `errorText`, `WoWFolder::setOnline` | online mode: `versions` and `cdns` come from Blizzard's version service over HTTPS and stay in the cache, so a start without network opens the cached build; the region's CDN hosts get four Blizzard fallbacks; the storage opens from the cache with `CascOpenStorageEx` and never touches port 1119 |
+| `onlineRefreshed` / `cancelOnlineOpen` / progress callback in `CASCFolder`, `WoWFolder` | the front-end can tell an offline start from a fresh one, show the whole online open as one progress bar, and cancel a first download from the splash |
+| `CASCFolder::addExtraEncryptionKeys` | online, wowdev's TACT key list is refreshed over HTTPS (a conditional request, cached for offline starts) and added to the shipped `extraEncryptionKeys.csv` |
+| `CDNPrefetch` (new) | before the open, the build and CDN configs, the 1,401 archive indexes and the encoding table are fetched over parallel HTTPS, verified and written into CascLib's cache layout, instead of one after another over a single connection |
+| `ThirdParty/casclib` | one patch set on the vendored snapshot of upstream 9fb2d38: an archived file is fetched with an HTTP range request instead of its whole archive, every download is verified before it enters the cache and written under a temporary name, sockets time out, online opens skip the download manifest — file by file in `ThirdParty/casclib/LOCAL-CHANGES.md` |
+| `GameDatabase::initFromXML` | the database cache is keyed by build **and** data language (`build\|locale\|schemaN`), so a change of the online language rebuilds it |
+| `Source/games/wow/CMakeLists.txt` | `wow.dll` builds `CDNPrefetch.cpp` and links `Qt5::Network` |
 
 ### The interface
 
@@ -75,8 +89,8 @@ multi-year rewrite of everything.
 
 This is a fork. Upstream stays on wxWidgets, so GUI fixes there have to be carried over
 by hand. Fixes in `core`/`wow` mostly still merge normally — the exceptions are the
-engine changes listed above, which touch `games/wow` and the FBX plugin and have to be
-re-applied if upstream ever rewrites those files.
+engine changes listed above, which touch `core`, `games/wow`, the vendored CascLib and the
+FBX plugin and have to be re-applied if upstream ever rewrites those files.
 
 ## Building
 
@@ -134,8 +148,9 @@ stage a package (below) and run it from there, or copy the fresh binaries over a
 one. The flip side is that a *relative* `--shot` / `--export` path now lands next to the
 executable rather than in the caller's directory — pass absolute paths in scripts.
 
-Both positional arguments are optional; the install folder is remembered in
-`userSettings\qt-frontend.ini` and asked for once if it cannot be found:
+Both positional arguments are optional; the data source (install folder or online) is
+remembered in `userSettings\qt-frontend.ini` and asked for once if there is none. A lone
+numeric first argument is the model id, with the folder taken from the settings:
 
 ```
 build\Release\WoWModelViewer-Qt.exe "C:\Program Files (x86)\World of Warcraft" 917116
@@ -152,12 +167,15 @@ Useful for checking things without touching the mouse:
 | `--focus <slot>` | item view: show only that slot's piece (-1 = off) |
 | `--unequip <slot>[,…]` | take pieces off |
 | `--export <format>,<path>` | export without the dialog |
+| `--online [region]` | this run streams from Blizzard's CDN (`eu`, `us`, `kr`, `tw`, `cn`); never saved |
+| `--locale <xxYY>` / `--cache <dir>` | data language and cache folder for an online run |
 | `--shot <file.png>` | save the GL image after ~1.5 s and exit |
 
-`--shot` exits with code 0 on success, which makes it usable as a smoke test. Any of
-these flags also puts the process in *scripted* mode: startup failures then report to
+`--shot` exits with code 0 on success, which makes it usable as a smoke test. `--shot` and
+`--export` also put the process in *scripted* mode: startup failures then report to
 `userSettings\qt-frontend-trace.txt` and exit 1 instead of raising a modal dialog that
-would hang the run.
+would hang the run. That includes a scripted run with no data source at all (no folder, no
+`--online`, nothing remembered), where an interactive start would ask.
 
 ## Packaging
 
@@ -203,7 +221,11 @@ package. Note that `fbxexporter.dll` is GPLv3 code linked against the proprietar
 SDK; see that file's FBX section before redistributing the binaries.
 
 World of Warcraft is the property of Blizzard Entertainment. This program contains no
-game data — it reads the installation on your own machine. Not affiliated with Blizzard.
+game data. It reads the installation on your own machine — or, only in the online mode,
+which has to be chosen explicitly, it downloads the files it needs on demand from
+Blizzard's public CDN into a local cache on your machine. Those files remain Blizzard's
+property and are never redistributed, neither by the program nor by this project. Not
+affiliated with Blizzard.
 
 ---
 <sub>Teilweise mit KI-Unterstützung (Claude) entwickelt.</sub>
