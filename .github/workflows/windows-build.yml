@@ -1,0 +1,209 @@
+# Builds the Windows setup on a GitHub-hosted runner, the way installer/build-setup.ps1 builds it
+# on a developer machine: the engine (upstream/) first, then the application, then the payload and
+# the Inno package. The finished MV-Midnight-Setup-<version>.exe is attached to the run as the
+# artifact "MV-Midnight-Setup".
+#
+# What the repository does not carry is fetched here:
+#   Qt 5.13.2 msvc2017_64          application, engine and setup front-end
+#   GLEW, libjpeg, libpng          vcpkg; the engine links them, the application links GLEW
+#   wxWidgets 3.2                  headers and import libraries only -- the engine's configure
+#                                  step requires them, but the wx executable is never built here
+#   FBX SDK 2020.3.9               the FBX exporter, and libfbxsdk.dll in the payload
+#   listfile.csv                   the newest release of wowdev/wow-listfile
+name: Windows build
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  qss-lint:
+    name: Design-system lint
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - name: tools/qss-lint.ps1 -Strict
+        shell: pwsh
+        run: ./tools/qss-lint.ps1 -Strict
+
+  setup:
+    name: Build the setup
+    runs-on: windows-2022
+    timeout-minutes: 120
+    env:
+      WX_VERSION: 3.2.8
+      FBX_URL: https://damassets.autodesk.net/content/dam/autodesk/www/files/fbx202039_fbxsdk_vs2022_win.exe
+      LISTFILE_URL: https://github.com/wowdev/wow-listfile/releases/latest/download/community-listfile.csv
+      # vcpkg's own binary cache, kept between runs by the cache steps below. Without it every
+      # run compiles libjpeg-turbo, libpng, zlib and GLEW from source again.
+      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}\vcpkg-cache
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Qt 5.13.2 (msvc2017_64)
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: 5.13.2
+          host: windows
+          target: desktop
+          arch: win64_msvc2017_64
+          dir: 'C:\'
+          # Widgets, Network and Xml are in qtbase; the SVG icon engine is in qtsvg and the TGA
+          # image plugin in qtimageformats. Nothing else is staged.
+          archives: qtbase qtsvg qtimageformats
+          cache: false
+
+      - name: Qt location
+        run: |
+          $qt = if ($env:QT_ROOT_DIR) { $env:QT_ROOT_DIR -replace '\\', '/' } else { "C:/Qt/5.13.2/msvc2017_64" }
+          if (-not (Test-Path "$qt/lib/cmake/Qt5")) { throw "Qt 5.13.2 not found at $qt" }
+          "QT_DIR=$qt" >> $env:GITHUB_ENV
+
+      - name: Restore the vcpkg cache
+        id: vcpkg-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: vcpkg-cache
+          key: vcpkg-${{ runner.os }}-glew-jpeg-png-v1
+
+      - name: GLEW, libjpeg, libpng (vcpkg)
+        run: |
+          New-Item -ItemType Directory -Force $env:VCPKG_DEFAULT_BINARY_CACHE | Out-Null
+          & "$env:VCPKG_INSTALLATION_ROOT/vcpkg.exe" install `
+            glew:x64-windows-static-md libjpeg-turbo:x64-windows libpng:x64-windows
+          if ($LASTEXITCODE -ne 0) { throw "vcpkg install failed" }
+
+      # Saved right away rather than at the end of the job, so a later failure does not throw
+      # the compiled packages away with it.
+      - name: Save the vcpkg cache
+        if: steps.vcpkg-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: vcpkg-cache
+          key: vcpkg-${{ runner.os }}-glew-jpeg-png-v1
+
+      - name: wxWidgets 3.2 (headers and import libraries)
+        run: |
+          $base = "https://github.com/wxWidgets/wxWidgets/releases/download/v$env:WX_VERSION"
+          $wx = Join-Path $env:GITHUB_WORKSPACE "upstream\ThirdParty\wxWidgets3"
+          foreach ($f in @("wxWidgets-$env:WX_VERSION-headers.7z", "wxMSW-$($env:WX_VERSION)_vc14x_x64_Dev.7z")) {
+            $archive = Join-Path $env:RUNNER_TEMP $f
+            curl.exe -fsSL --retry 3 -o $archive "$base/$f"
+            if ($LASTEXITCODE -ne 0) { throw "download failed: $f" }
+            7z x $archive "-o$wx" -y -bso0 -bsp0
+            if ($LASTEXITCODE -ne 0) { throw "unpack failed: $f" }
+          }
+          foreach ($need in @("include\wx\wx.h", "lib\vc14x_x64_dll\mswu\wx\setup.h")) {
+            if (-not (Test-Path (Join-Path $wx $need))) { throw "wxWidgets: $need missing after unpacking" }
+          }
+
+      - name: FBX SDK 2020.3.9
+        run: |
+          $exe = Join-Path $env:RUNNER_TEMP "fbxsdk.exe"
+          curl.exe -fsSL --retry 3 -o $exe $env:FBX_URL
+          if ($LASTEXITCODE -ne 0) { throw "FBX SDK download failed" }
+          # The installer is an NSIS package. 7-Zip unpacks it without running it, so there is
+          # no licence page waiting for a click; only the headers and the x64 release libraries.
+          $sdk = Join-Path $env:RUNNER_TEMP "fbxsdk"
+          7z x $exe "-o$sdk" include "lib\x64\release" -y -bso0 -bsp0
+          if ($LASTEXITCODE -ne 0) { throw "FBX SDK unpack failed" }
+          $lib = Join-Path $sdk "lib\x64\release"
+          # Where the engine's FBX exporter looks for it (Source/plugins/exporters/fbx).
+          $dst = Join-Path $env:GITHUB_WORKSPACE "upstream\ThirdParty\fbx_x64"
+          New-Item -ItemType Directory -Force (Join-Path $dst "lib") | Out-Null
+          Copy-Item (Join-Path $sdk "include") (Join-Path $dst "include") -Recurse -Force
+          Copy-Item (Join-Path $lib "libfbxsdk.lib"), (Join-Path $lib "libfbxsdk.dll") (Join-Path $dst "lib")
+          "FBX_LIB_DIR=$lib" >> $env:GITHUB_ENV
+
+      # Before the engine is configured: its wx target lists listfile.csv among its files, and
+      # CMake refuses to generate a project whose files are missing.
+      - name: listfile.csv (wowdev/wow-listfile)
+        run: |
+          $out = "upstream/bin_support/wow/listfile.csv"
+          curl.exe -fsSL --retry 3 -o $out $env:LISTFILE_URL
+          if ($LASTEXITCODE -ne 0) { throw "listfile download failed" }
+          "listfile.csv: {0:N1} MB" -f ((Get-Item $out).Length / 1MB)
+
+      - name: Configure the engine
+        run: |
+          $vcpkg = $env:VCPKG_INSTALLATION_ROOT -replace '\\', '/'
+          # CascLib's CMakeLists asks for CMake 3.2. CMake 4 refuses anything below 3.5 unless
+          # told otherwise; older CMake ignores the setting.
+          cmake -S upstream -B upstream/build-x64 -G "Visual Studio 17 2022" -A x64 `
+            "-DQT_LOCATION=$env:QT_DIR" "-DWMV_VCPKG_ROOT=$vcpkg" -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+          if ($LASTEXITCODE -ne 0) { throw "engine: configure failed" }
+
+      - name: Build the engine (core, wow, plugins)
+        run: |
+          cmake --build upstream/build-x64 --config Release --parallel `
+            --target core wow armory wowhead objexporter fbxexporter stlexporter
+          if ($LASTEXITCODE -ne 0) { throw "engine: build failed" }
+
+      - name: Configure the application
+        run: |
+          $vcpkg = $env:VCPKG_INSTALLATION_ROOT -replace '\\', '/'
+          cmake -S . -B build -G "Visual Studio 17 2022" -A x64 `
+            "-DQT_LOCATION=$env:QT_DIR" "-DVCPKG_STATIC=$vcpkg/installed/x64-windows-static-md"
+          if ($LASTEXITCODE -ne 0) { throw "application: configure failed" }
+
+      - name: Build the application and the tests
+        run: |
+          cmake --build build --config Release --parallel
+          if ($LASTEXITCODE -ne 0) { throw "application: build failed" }
+
+      - name: Locate the VC++ runtime and Inno Setup
+        run: |
+          $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -property installationPath
+          $redist = Get-ChildItem "$vs\VC\Redist\MSVC" -Directory |
+                    Where-Object { $_.Name -match '^\d+\.\d+\.\d+$' } |
+                    Sort-Object { [version]$_.Name } | Select-Object -Last 1
+          $crt = Join-Path $redist.FullName "x64\Microsoft.VC143.CRT"
+          if (-not (Test-Path "$crt\msvcp140.dll")) { throw "VC++ runtime not found under $crt" }
+          "VC_REDIST=$crt" >> $env:GITHUB_ENV
+
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            choco install innosetup -y --no-progress
+            if ($LASTEXITCODE -ne 0) { throw "Inno Setup install failed" }
+          }
+          if (-not (Test-Path $iscc)) { throw "ISCC.exe not found at $iscc" }
+          "ISCC=$iscc" >> $env:GITHUB_ENV
+
+      - name: Stage the payload
+        run: |
+          ./installer/stage.ps1 -QtDir $env:QT_DIR -FbxDir $env:FBX_LIB_DIR -VcRedist $env:VC_REDIST `
+            -OpenSslDir "$env:GITHUB_WORKSPACE/upstream/bin_support/openssl"
+
+      - name: Build the setup
+        run: ./installer/build-setup.ps1 -SkipStage -QtDir $env:QT_DIR -VcRedist $env:VC_REDIST -Iscc $env:ISCC
+
+      - name: Upload the setup
+        uses: actions/upload-artifact@v4
+        with:
+          name: MV-Midnight-Setup
+          path: installer/dist/MV-Midnight-Setup-*.exe
+          if-no-files-found: error
+          # Already LZMA-compressed by Inno; zipping it again only costs time.
+          compression-level: 0
+          retention-days: 14
+
+      # After the upload, so a failing test still leaves the setup to look at.
+      - name: Tests
+        run: |
+          $env:PATH = ($env:QT_DIR -replace '/', '\') + "\bin;" + $env:PATH
+          ctest --test-dir build -C Release --output-on-failure
+          if ($LASTEXITCODE -ne 0) { throw "tests failed" }

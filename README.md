@@ -200,6 +200,11 @@ script also measures the payload so the front-end's progress bar divides by the 
 file count. `/VERYSILENT /DIR=... /MERGETASKS=...` bypasses the front-end entirely
 and behaves like any Inno setup.)
 
+GitHub Actions runs the same build on a Windows runner for every push to `master` and
+every pull request (`.github/workflows/windows-build.yml`): it fetches Qt, the vcpkg
+packages, the FBX SDK and the listfile, builds the engine, the application and the setup,
+runs the tests, and attaches `MV-Midnight-Setup-<version>.exe` to the run as an artifact.
+
 The setup carries the same `AppId` as WoW Model Viewer Midnight, so it upgrades that
 installation in place and removes its executable and wxWidgets DLLs.
 
