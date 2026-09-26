@@ -188,3 +188,6 @@ Type: filesandordirs; Name: "{app}\userSettings"
 Type: files; Name: "{app}\wowdb.sqlite"
 Type: files; Name: "{app}\wowdb.sqlite.build"
 Type: files; Name: "{app}\listfile.csv.etag"
+; The online mode's download cache (about 400 MB, more with every WoW patch). A cache the user
+; moved elsewhere in the source dialog is not found from here and stays; LIESMICH says so.
+Type: filesandordirs; Name: "{app}\cdn-cache"

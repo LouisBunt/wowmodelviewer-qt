@@ -7,6 +7,8 @@
 #include <QString>
 #include <vector>
 
+#include "GameSource.h"
+
 class CharInfos;
 class ExportController;
 class GLHost;
@@ -38,6 +40,17 @@ public:
   // Fills the menu bar MainWindow left empty, and connects the viewport's HUD buttons
   // to the same actions so the two entry points cannot drift apart.
   void build();
+
+  // The game data source this run mounted. Set before build(): the source dialog starts from
+  // it, and the MVLink routes need to know whether there is a WoW folder at all.
+  void setGameSource(const GameSource& source) { source_ = source; }
+
+  // The WoW installation the MVLink addon goes into and its SavedVariables come from: this
+  // run's folder when it runs from one, otherwise the one remembered in the settings. Empty
+  // online on a machine without WoW -- then only the clipboard and paste routes work.
+  QString wowInstallFolder() const;
+  // Remembers a WoW folder for MVLink without changing the data source.
+  void setWoWInstallFolder(const QString& folder);
 
   // Enable/disable whatever depends on there being a (character) model. Call after
   // anything replaces the model.
@@ -102,6 +115,10 @@ signals:
   // itself. The connection is direct, so host->model() is the new model on return.
   void loadFileRequested(GameFile* file);
 
+  // The data source was changed and the user wants it now. main() closes the window and
+  // starts a new process once this one has shut down -- CASC is mounted once per process.
+  void restartRequested();
+
 private:
   QMenu* addMenu(const QString& title);
   QAction* add(QMenu* menu, const QString& text, const QString& shortcut,
@@ -110,7 +127,7 @@ private:
   // --- Datei
   void openByFileDataId();
   void takeScreenshot();
-  void changeGameFolder();
+  void changeGameSource();
 
   // --- Ansicht
   void chooseBackground();
@@ -195,6 +212,7 @@ private:
 
   MainWindow* win_ = nullptr;
   GLHost* host_ = nullptr;
+  GameSource source_;
   ExportController* exporters_ = nullptr;
   QNetworkAccessManager net_;               // the async Wowhead fetch
   QPointer<QNetworkReply> activeReply_;     // at most one fetch in flight
