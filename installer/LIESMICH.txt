@@ -1,4 +1,4 @@
-ModelViewer: Midnight 1.1
+ModelViewer: Midnight 1.5
 =========================
 
 Was das ist
@@ -383,6 +383,20 @@ Neu in 1.1: die Oberflaeche
 - Ein Modellpfad steht nur noch einmal im Fenster, mittig in der Titelleiste.
 - Mitgelieferte Schriften (Inter, IBM Plex Mono, Cinzel) und Symbole (Lucide), damit die
   Oberflaeche auf jedem Rechner gleich aussieht und gleich gemessen wird.
+
+
+Neu in 1.5: ohne WoW-Installation
+---------------------------------
+- Online-Modus: Die Spieldaten koennen von Blizzards oeffentlichen Download-Servern
+  kommen statt aus einer WoW-Installation; siehe "Ohne WoW-Installation" weiter oben.
+  Er laeuft nur, wenn du ihn waehlst, und startet danach auch ohne Internet mit dem,
+  was schon geladen ist.
+- Die Quelle der Spieldaten laesst sich jederzeit wechseln, unter Datei >
+  "Spieldaten-Quelle ...".
+- Behoben: Der Statuspunkt in der Titelleiste wurde nie gezeichnet. Eine FileDataID
+  allein auf der Befehlszeile wurde fuer einen WoW-Ordner gehalten, sodass das
+  Druck-Beispiel oben scheiterte. Ein Skriptlauf ohne Ordner blieb an einem Dialog
+  haengen.
 
 
 Datenuebertragung
