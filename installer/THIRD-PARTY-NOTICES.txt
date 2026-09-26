@@ -52,8 +52,10 @@ Quellcode:  https://download.qt.io/archive/qt/5.13/
 ------------------------------------------------------------------
 Copyright (C) The OpenSSL Project. Verwendet unter der Apache-Lizenz 2.0.
 
-Wird für HTTPS-Verbindungen benötigt (Wowhead-Anprobe, Armory-Import).
-Ohne diese Dateien startet das Programm, kann aber nichts aus dem Netz laden.
+Wird für HTTPS-Verbindungen benötigt (Wowhead-Anprobe, Armory-Import und im
+Online-Modus die Versionsabfrage, die Startdateien und die TACT-Schlüssel). Ohne
+diese Dateien startet das Programm mit einer WoW-Installation, kann aber nichts
+aus dem Netz laden; der erste Start im Online-Modus ist dann nicht möglich.
 
 Lizenztext: https://www.openssl.org/source/license.html
 
@@ -62,8 +64,10 @@ Lizenztext: https://www.openssl.org/source/license.html
 ------------------------------------------------------------------
 Copyright (C) Ladislav Zezula. Verwendet unter der MIT-Lizenz.
 
-Lesen die Spielarchive von World of Warcraft (CASC). Fest in core.dll
-eingebunden, keine eigenen Dateien im Paket.
+Lesen die Spielarchive von World of Warcraft (CASC). Fest in wow.dll
+eingebunden, keine eigenen Dateien im Paket. CascLib ist für den Online-Modus
+verändert (Bereichsabfragen, geprüfte Downloads, Zeitlimits); die Änderungen
+stehen Datei für Datei in upstream/ThirdParty/casclib/LOCAL-CHANGES.md.
 
 Lizenztexte: upstream/ThirdParty/stormlib/LICENSE
              upstream/ThirdParty/casclib/LICENSE
@@ -102,17 +106,27 @@ Sammlung von Schlüsseln wird beim Start an die Archiv-Bibliothek übergeben und
 macht solche Dateien lesbar — darunter Inhalte, die im Spiel noch nicht
 freigeschaltet sind.
 
+Im Online-Modus lädt das Programm bei jedem Start zusätzlich die aktuelle Liste
+desselben Projekts (WoW.txt, von raw.githubusercontent.com) in den Cache
+(wow\tactkeys.txt) und nimmt sie zu diesen Schlüsseln hinzu; ohne Internet gilt
+die zuletzt geladene Fassung.
+
 Die Schlüssel stammen nicht von diesem Projekt und werden nicht von Blizzard
 bereitgestellt. Wer das nicht möchte, kann die Datei aus dem Programmordner
-löschen: Fehlt sie, startet das Programm unverändert und lässt verschlüsselte
-Dateien einfach aus.
+löschen: Fehlt sie, startet das Programm mit einer WoW-Installation unverändert
+und lässt verschlüsselte Dateien einfach aus. Im Online-Modus reicht das nicht,
+dort kommt die aktuelle Liste bei jedem Start hinzu.
 
 
 9. World of Warcraft
 ------------------------------------------------------------------
 World of Warcraft und alle zugehörigen Grafiken, Modelle, Texturen und Namen
 sind Eigentum der Blizzard Entertainment, Inc. Dieses Programm enthält KEINE
-Spieldaten — es liest die Dateien der Installation auf dem eigenen Rechner.
+Spieldaten — es liest die Dateien der Installation auf dem eigenen Rechner oder
+lädt sie, nur im ausdrücklich gewählten Online-Modus, bei Bedarf von Blizzards
+öffentlichen Download-Servern in einen Cache auf dem eigenen Rechner. Die Dateien
+bleiben Eigentum von Blizzard und werden weder vom Programm noch vom Projekt
+weitergegeben.
 Wer damit Inhalte exportiert, bleibt an Blizzards Nutzungsbedingungen gebunden.
 
 Dieses Projekt steht in keiner Verbindung zu Blizzard Entertainment und wird

@@ -45,6 +45,16 @@ target_include_directories(stltest PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/../upstream/ThirdParty)
 add_test(NAME stl_geometry COMMAND stltest)
 
+# The data-source layer: settings, command line, cache folder, the worker that keeps the splash
+# alive. QtCore only -- no network, no game data -- so the online mode's bookkeeping is checked
+# on any machine, while the download itself needs Blizzard's servers and is not.
+add_executable(sourcetest
+  sourcetest/main.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/../GameSource.cpp)
+target_include_directories(sourcetest PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
+target_link_libraries(sourcetest Qt5::Core)
+add_test(NAME game_source COMMAND sourcetest)
+
 # The interface's building blocks. Compiled from the front-end's own sources, so a change to
 # Theme.h or UiKit.cpp is checked here rather than only being looked at in a screenshot.
 # Runs offscreen: no display, no game data, no GL.

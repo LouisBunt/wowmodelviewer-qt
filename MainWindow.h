@@ -47,6 +47,10 @@ public:
   GLHost* canvas() const { return canvas_; }
 
   void setBuildLabel(const QString& text);
+  // The data-source indicator in the title bar: a dot, a short label ("CASC · 12.1.0",
+  // "CDN · 12.1.0 · offline") and the details in the tooltip. `degraded` turns the dot from
+  // the ok colour to the warn colour -- the online mode without a connection.
+  void setDataSource(const QString& label, const QString& tooltip, bool degraded);
   void setPathLabel(const QString& text);
   // The status bar's two fields. The long German sentences main() used to write into a
   // 30px tool-bar strip go here instead.
@@ -150,6 +154,8 @@ private:
   QLabel* brandVersion_ = nullptr;   // the version -- dropped second
   ElidedLabel* contextLabel_ = nullptr;  // what is loaded, once, in the title bar
   QLabel* buildLabel_ = nullptr;
+  QLabel* sourceDot_ = nullptr;      // the indicator's dot, painted by setDataSource()
+  QWidget* sourceStatus_ = nullptr;  // dot + label; carries the tooltip
   QLabel* pathLabel_ = nullptr;
   QLabel* exportButton_ = nullptr;   // unused since the export action moved to the tool bar
   QLabel* emptyHint_ = nullptr;      // shown over the viewport while nothing is loaded

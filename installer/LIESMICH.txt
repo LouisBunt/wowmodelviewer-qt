@@ -7,7 +7,8 @@ Ein neues Frontend fuer WoW Model Viewer auf Qt statt wxWidgets. Die Modell-,
 Render- und Datenschicht ist im Kern dieselbe wie im Original: core.dll und
 wow.dll werden weiterbenutzt. Umgebaut ist im Wesentlichen die Oberflaeche --
 dazu einige gezielte Eingriffe in wow.dll und den FBX-Exporter, die unten bei
-"Neu" genannt sind.
+"Neu" genannt sind, sowie die Engine-Teile des Online-Modus (siehe "Ohne
+WoW-Installation").
 
 Diese Version ersetzt die wxWidgets-Ausgabe (WoW Model Viewer Midnight). Beim
 Einrichten werden deren Programmdateien entfernt; die Spieldaten-Hilfsdateien
@@ -21,13 +22,16 @@ weiter unten ehrlich aufgelistet.
 Voraussetzungen
 ---------------
 - Windows 10 oder 11, 64 Bit
-- eine installierte, aktuelle World-of-Warcraft-Installation (Retail). Mitgeliefert
-  sind Datendefinitionen fuer die Hauptversionen 9.2, 10.0, 10.1 und 12.x. Fuer
-  einen Client dazwischen wird die naechstniedrigere Fassung genommen; Anpassungen
-  und Items koennen dann von der eigenen Spielversion abweichen.
+- eine aktuelle World-of-Warcraft-Installation (Retail) -- oder, ohne sie, eine
+  Internetverbindung fuer den Online-Modus (siehe "Ohne WoW-Installation").
+  Mitgeliefert sind Datendefinitionen fuer die Hauptversionen 9.2, 10.0, 10.1
+  und 12.x. Fuer einen Client dazwischen wird die naechstniedrigere Fassung
+  genommen; Anpassungen und Items koennen dann von der eigenen Spielversion
+  abweichen.
 - OpenGL. Ueber Remotedesktop oder in einer virtuellen Maschine ohne Grafik-
   durchreichung startet die 3D-Ansicht in der Regel nicht.
-- rund 350 MB Platz, dazu bis zu 100 MB fuer den Datenbank-Cache
+- rund 350 MB Platz, dazu bis zu 100 MB fuer den Datenbank-Cache; im Online-Modus
+  ausserdem rund 400 MB fuer den ersten Download und etwa 280 MB je neuer WoW-Version
 - Blender 3.0 oder neuer, falls das mitgelieferte Import-Add-on genutzt wird
 
 WoW darf waehrenddessen laufen. Wird das Spiel gerade aktualisiert, kann das
@@ -40,9 +44,11 @@ Ueber den Startmenue-Eintrag. Beim ersten Start wird
 
     C:\Program Files (x86)\World of Warcraft
 
-geprueft. Liegt dein WoW woanders, fragt die Anwendung einmal nach dem Ordner
-und merkt sich die Antwort in userSettings\qt-frontend.ini -- danach faellt die
-Frage weg.
+geprueft. Liegt dort keins, fragt die Anwendung einmal, woher die Spieldaten
+kommen sollen: aus einem WoW-Ordner ("WoW-Ordner waehlen ...") oder online von
+Blizzards Servern ("Online laden", siehe "Ohne WoW-Installation"). Die Antwort
+steht danach in userSettings\qt-frontend.ini, die Frage faellt weg; aendern laesst
+sie sich jederzeit unter Datei > "Spieldaten-Quelle ...".
 
 Gewaehlt wird das Installationsverzeichnis, nicht der Data-Unterordner: gesucht
 wird die Datei .build.info, und die liegt eine Ebene darueber. Bei der ueblichen
@@ -52,17 +58,22 @@ Battle.net-Installation ist das der Ordner "World of Warcraft" selbst, nicht
 Beides laesst sich auch mitgeben, etwa fuer Skripte:
 
     WoWModelViewer-Qt.exe "<WoW-Ordner>" [FileDataID] [Optionen]
+    WoWModelViewer-Qt.exe [FileDataID] --online [Region] [Optionen]
     WoWModelViewer-Qt.exe "D:\World of Warcraft" 917116
+    WoWModelViewer-Qt.exe 917116 --online eu --locale deDE
 
-Der zweite Parameter ist das Modell, das beim Start geladen wird. Ohne ihn startet
+Der zweite Parameter ist das Modell, das beim Start geladen wird; steht die
+FileDataID allein vorn, kommt der Ordner aus den Einstellungen. Ohne sie startet
 das Programm mit leerer Ansicht -- links im Baum waehlst du dann selbst. Wird ein
 Ordner auf der Befehlszeile angegeben, erscheint nie ein Dialog: ein Skript soll
-fehlschlagen, nicht haengen bleiben. Dateipfade in --shot und --export bitte
-absolut angeben.
+fehlschlagen, nicht haengen bleiben. Ebenso endet ein Lauf mit --shot oder
+--export, der keine Spieldaten-Quelle hat, mit Code 1, statt nachzufragen.
+Dateipfade in --shot und --export bitte absolut angeben.
 
 Der erste Start dauert laenger als die folgenden: die Datenbank wird einmal aus
 den DB2-Dateien aufgebaut und danach als wowdb.sqlite zwischengespeichert. Der
-Cache wird automatisch verworfen, wenn sich der WoW-Build aendert.
+Cache wird automatisch verworfen, wenn sich der WoW-Build oder die Sprache der
+Spieldaten aendert.
 
 Weitere Optionen, vor allem zum Pruefen ohne Mausbedienung:
 
@@ -101,6 +112,50 @@ Weitere Optionen, vor allem zum Pruefen ohne Mausbedienung:
                                Ohne Angabe richtet sie sich nach der Bildschirm-DPI.
                                Fuer vergleichbare Screenshots festnageln.
     --print-height <mm>        Druckhoehe fuer den STL-Export
+    --online [region]          Spieldaten fuer diesen Lauf online laden (eu, us, kr, tw,
+                               cn); ohne Angabe gilt die gespeicherte Region. Wird
+                               nicht gespeichert, ein Skript aendert nichts am
+                               naechsten normalen Start.
+    --locale <xxYY>            Sprache der Spieldaten im Online-Modus: deDE, enUS, enGB,
+                               frFR, esES, esMX, itIT, ptBR, ruRU, koKR, zhTW, zhCN
+    --cache <ordner>           Cache-Ordner fuer den Online-Modus (Vorgabe: cdn-cache
+                               neben dem Programm)
+
+
+Ohne WoW-Installation: der Online-Modus
+---------------------------------------
+Wer World of Warcraft nicht installiert hat, laesst die Spieldaten von Blizzards
+oeffentlichen Download-Servern kommen -- wie der "CDN"-Modus von wow.export. Das
+geschieht nur, wenn du es ausdruecklich waehlst: beim ersten Start "Online laden",
+spaeter unter Datei > "Spieldaten-Quelle ...", fuer einen einzelnen Lauf --online.
+
+Der erste Start laedt einmalig rund 400 MB: die Verzeichnisse und Tabellen, ohne
+die sich keine einzige Datei finden laesst. Das dauert auf einer schnellen Leitung
+unter einer Minute, sonst einige Minuten; das Ladebild zeigt den Fortschritt und hat
+"Abbrechen" -- beim naechsten Start geht es dort weiter. Danach wird nur noch
+geladen, was du dir neu ansiehst; ein Charakter mit Texturen sind etwa 20 MB. Mit
+jeder neuen WoW-Version kommen die Tabellen einmal neu, rund 280 MB.
+
+Alles Geladene liegt im Ordner "cdn-cache" neben dem Programm; ein anderer Ort
+laesst sich im selben Dialog unter "Ordner ..." waehlen. Ohne Internet startet das
+Programm mit dem zuletzt vollstaendig geladenen Stand: die Titelleiste zeigt dann
+"CDN ... offline", und es geht nur, was schon einmal geladen wurde. Unter Datei >
+"Spieldaten-Quelle ..." stehen die Groesse des Caches und "Leeren" -- im laufenden
+Online-Betrieb wird er beim naechsten Start geleert. Die Deinstallation entfernt
+den Ordner "cdn-cache" neben dem Programm; einen Cache an einem anderen Ort vorher
+mit "Leeren" loeschen.
+
+Verschluesselte Dateien: Zu den mitgelieferten TACT-Schluesseln nimmt der
+Online-Modus bei jedem Start die aktuelle Liste des Projekts wowdev/TACTKeys
+hinzu. Sie liegt danach im Cache und gilt auch ohne Internet.
+
+Region und Sprache: Die Region waehlt Blizzards Server und den Spielstand (Europa,
+Amerika, Korea, Taiwan; China nur ueber --online cn). Die Sprache bestimmt die
+Namen von Items, NPCs und Anpassungen, die Oberflaeche bleibt deutsch. Ein Wechsel
+gilt ab dem naechsten Start und baut die Datenbank einmal neu auf.
+
+Was online nicht geht: das MVLink-Addon in WoW installieren und seine Ablage lesen
+-- beides braucht eine WoW-Installation. Codes aus dem Addon einfuegen geht.
 
 
 Bedienung
@@ -154,8 +209,9 @@ NPCs mit Namen finden
 Links im Browser die Kategorie "NPCs": nach Namen suchen ("Thrall"), nach Typ
 filtern (Bestie, Humanoid, ...), Doppelklick zeigt den NPC -- mit der richtigen
 Haut und den richtigen Koerperteilen, nicht nur der nackten Modelldatei. Die
-Namen kommen aus der Datenbank der eigenen WoW-Installation; es wird nichts
-aus dem Netz geladen.
+Namen kommen aus der Datenbank der Spieldaten -- der eigenen WoW-Installation
+oder, im Online-Modus, dem Cache; fuer die Suche selbst wird nichts aus dem Netz
+geladen.
 
 Beim ersten Anzeigen eines NPCs entsteht sein Vorschaubild und haengt ab dann
 in der Liste; Draufzeigen mit der Maus zeigt es gross. Die Sammlung waechst
@@ -182,6 +238,10 @@ Aussehen direkt aus dem Spiel holen (MVLink)
 MVLink ist ein kleines WoW-Addon, das mitgeliefert wird. Es liest, was deine
 Figur gerade traegt -- auch das, was du im Transmog-Fenster nur anprobiert und
 noch nicht gekauft hast -- und macht daraus einen kurzen Code.
+
+Das Addon braucht eine WoW-Installation auf diesem Rechner. Im Online-Modus ohne
+bekannte Installation fragt der Knopf zuerst nach dem WoW-Ordner (gemerkt nur fuer
+MVLink), und "Ablage lesen" bleibt aus; Codes einfuegen geht immer.
 
 Einrichten: Reiter "Import", Knopf "MVLink-Addon in WoW installieren". Danach im
 Spiel unter Addons aktivieren und einmal /reload. Das Addon selbst oeffnest du
@@ -329,6 +389,27 @@ Datenuebertragung
 -----------------
 Das Programm arbeitet lokal. Verbindungen ins Netz entstehen nur hier:
 
+- Online-Modus, nur wenn er gewaehlt ist. Er spricht genau diese Server an:
+
+    *.version.battle.net        HTTPS: bei jedem Start die aktuelle Spielversion
+                                und die Liste der Download-Server
+    raw.githubusercontent.com   HTTPS: bei jedem Start die TACT-Schluessel aus
+                                dem Projekt wowdev/TACTKeys; ist die Liste
+                                unveraendert, bleibt es bei einer Rueckfrage
+    Blizzards Download-Server   HTTPS: die Startdateien (Verzeichnisse und
+                                Dateitabelle) beim ersten Start und nach einer
+                                neuen WoW-Version; klappt HTTPS mit einem
+                                Server nicht, ueber HTTP
+                                HTTP auf Port 80: einzelne Spieldateien, wenn
+                                sie zum ersten Mal gebraucht werden
+
+  Blizzards Download-Server sind die, die Blizzards Liste fuer die gewaehlte
+  Region nennt (fuer Europa zurzeit nur level3.blizzard.com), und dazu
+  level3.blizzard.com, us.cdn.blizzard.com, eu.cdn.blizzard.com und
+  cdn.blizzard.com. Die HTTPS-Verbindungen nehmen den in Windows eingestellten
+  Proxy; die einzelnen Spieldateien gehen ohne Proxy direkt hinaus. Gesendet
+  wird nur, welche Datei gebraucht wird -- keine Kontodaten, nichts
+  Persoenliches.
 - Wowhead-Import mit einem Outfit- oder Set-Link: die betreffende Seite wird von
   wowhead.com abgerufen. Anprobe-Links (dressing-room) werden dagegen rein
   oertlich ausgewertet, dabei geht nichts hinaus.
@@ -336,10 +417,10 @@ Das Programm arbeitet lokal. Verbindungen ins Netz entstehen nur hier:
   geschickt, der die Blizzard-API abfragt. Dieser Dienst wird vom Projekt
   betrieben, nicht von Blizzard. Ohne Armory-Import entsteht diese Verbindung
   nicht.
-- Die Dateiliste (listfile.csv) liegt bei und wird nur nachgeladen, wenn eine
-  neuere Fassung angeboten wird.
 
-Es werden keine Nutzungsdaten erhoben und nichts im Hintergrund gesendet.
+Die Dateiliste (listfile.csv) liegt bei und wird nicht aus dem Netz nachgeladen.
+Es werden keine Nutzungsdaten erhoben, es gibt keine Telemetrie, und nichts wird
+im Hintergrund gesendet.
 
 
 Was noch fehlt
@@ -369,6 +450,18 @@ Was noch fehlt
 - Karten- und ADT-Ansicht ist bewusst weggelassen.
 - Aero Snap und Groessenaenderung an den Fensterkanten fehlen, weil der native
   Rahmen entfaellt.
+- Online-Modus: Einzelne Spieldateien kommen ueber einfaches HTTP auf Port 80,
+  ohne Proxy. Netze, die Port 80 sperren oder nur ueber einen Proxy ins Internet
+  lassen, bleiben aussen vor, auch wenn die Startdateien noch ankommen.
+- Online-Modus: Der Cache wird nie von selbst kleiner; jede neue WoW-Version legt
+  rund 280 MB dazu. "Leeren" unter Datei > "Spieldaten-Quelle ..." raeumt auf.
+- Online-Modus: Waehrend das Dateiverzeichnis (rund 50 MB) am Stueck laedt, steht
+  der Balken; die Uhr daneben laeuft weiter. "Abbrechen" wartet in dieser Zeit
+  bis zu zehn Sekunden und beendet das Programm dann.
+- Online-Modus: Ein Modell, das zum ersten Mal angezeigt wird, laedt seine
+  Dateien, waehrend das Fenster wartet -- auf einer langsamen Leitung einige
+  Sekunden.
+- Online-Modus: nur Retail. PTR und Classic lassen sich nicht online laden.
 - --armory beendet den Prozess nach --shot nicht mehr von selbst, sobald die
   Netzwerkschicht benutzt wurde. Betrifft nur die Befehlszeile.
 
@@ -419,5 +512,9 @@ OpenSSL, die Dateiliste und die TACT-Schluessel. Herkunft und Bedingungen stehen
 in THIRD-PARTY-NOTICES.txt.
 
 World of Warcraft gehoert Blizzard Entertainment. Dieses Programm enthaelt keine
-Spieldaten, es liest die Installation auf dem eigenen Rechner. Das Projekt steht
-in keiner Verbindung zu Blizzard.
+Spieldaten. Es liest sie aus der WoW-Installation auf dem eigenen Rechner oder
+laedt sie -- nur im Online-Modus, den man ausdruecklich waehlen muss -- bei Bedarf
+von Blizzards oeffentlichen Download-Servern in einen Cache auf diesem Rechner.
+Die Dateien bleiben Eigentum von Blizzard und werden nicht weitergegeben, weder
+vom Programm noch vom Projekt. Das Projekt steht in keiner Verbindung zu
+Blizzard.

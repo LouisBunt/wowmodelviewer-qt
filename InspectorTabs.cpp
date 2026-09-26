@@ -21,6 +21,7 @@
 #include "ExportController.h"
 #include "GLHost.h"
 #include "MenuController.h"
+#include "SourceDialog.h"
 #include "WoWModel.h"
 #include "modelheaders.h"
 
@@ -143,23 +144,22 @@ CharacterIoTab::CharacterIoTab(MenuController* menus, ExportController* exporter
   col->addWidget(mvHint);
 
   col->addSpacing(2);
-  auto* mvFileBtn2 = quietButton(QString::fromUtf8("Ablage lesen (Stand: letztes /reload)"));
-  connect(mvFileBtn2, &QPushButton::clicked, this, &CharacterIoTab::importMVLinkFromGame);
-  col->addWidget(mvFileBtn2);
+  mvFileBtn_ = quietButton(QString::fromUtf8("Ablage lesen (Stand: letztes /reload)"));
+  connect(mvFileBtn_, &QPushButton::clicked, this, &CharacterIoTab::importMVLinkFromGame);
+  col->addWidget(mvFileBtn_);
 
   // Neither route works until the addon is actually in the game folder, and the setup
   // cannot put it there -- at install time nobody knows where WoW lives. So it ships beside
   // the exe and lands here, the same way the Blender add-on does.
   col->addSpacing(2);
-  auto* mvInstallBtn = quietButton(QString::fromUtf8("MVLink-Addon in WoW installieren"));
-  connect(mvInstallBtn, &QPushButton::clicked, this, &CharacterIoTab::installMVLinkAddon);
-  col->addWidget(mvInstallBtn);
-  auto* mvInstallHint = new QLabel(QString::fromUtf8(
-    "Einmalig — danach im Spiel unter Addons aktivieren. Ein Update überschreibt die "
-    "Dateien; WoW sollte dabei geschlossen sein."));
-  mvInstallHint->setFont(typo::font(typo::Body));
-  mvInstallHint->setWordWrap(true);
-  col->addWidget(mvInstallHint);
+  mvInstallBtn_ = quietButton(QString());
+  connect(mvInstallBtn_, &QPushButton::clicked, this, &CharacterIoTab::installMVLinkAddon);
+  col->addWidget(mvInstallBtn_);
+  mvInstallHint_ = new QLabel;
+  mvInstallHint_->setFont(typo::font(typo::Body));
+  mvInstallHint_->setWordWrap(true);
+  col->addWidget(mvInstallHint_);
+  refreshMVLinkState();
 
   // --- Armory
   col->addSpacing(4);
@@ -264,10 +264,38 @@ void CharacterIoTab::importMVLinkFromGame()
     setStatus(err, true);
 }
 
+void CharacterIoTab::refreshMVLinkState()
+{
+  const bool haveWoW = menus_ && !menus_->wowInstallFolder().isEmpty();
+  mvFileBtn_->setEnabled(haveWoW);
+  mvFileBtn_->setToolTip(haveWoW ? QString()
+                                 : QString::fromUtf8("Braucht eine WoW-Installation auf diesem "
+                                                     "Rechner — die Ablage schreibt das Spiel."));
+  // The ellipsis is the promise of a question: without a known folder the button asks first.
+  mvInstallBtn_->setText(haveWoW ? QString::fromUtf8("MVLink-Addon in WoW installieren")
+                                 : QString::fromUtf8("MVLink-Addon installieren …"));
+  mvInstallHint_->setText(haveWoW
+    ? QString::fromUtf8("Einmalig — danach im Spiel unter Addons aktivieren. Ein Update "
+                        "überschreibt die Dateien; WoW sollte dabei geschlossen sein.")
+    : QString::fromUtf8("Die Spieldaten kommen online; eine WoW-Installation ist hier nicht "
+                        "bekannt. Das Addon läuft im Spiel und braucht eine — der Knopf fragt "
+                        "nach dem Ordner. Ohne Installation bleibt der Code-Weg oben, etwa für "
+                        "Codes, die dir jemand schickt."));
+}
+
 void CharacterIoTab::installMVLinkAddon()
 {
   if (!menus_)
     return;
+  // Online without a known installation: ask for one first. It is remembered for MVLink only
+  // -- the game data keep coming from where they come from.
+  if (menus_->wowInstallFolder().isEmpty()) {
+    const QString picked = SourceDialog::askForWoWFolder(this, QString());
+    if (picked.isEmpty())
+      return;
+    menus_->setWoWInstallFolder(picked);
+    refreshMVLinkState();
+  }
   QString dest;
   const QString err = menus_->installMVLinkAddon(&dest);
   if (!err.isEmpty()) {

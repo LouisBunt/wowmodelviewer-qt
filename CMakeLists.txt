@@ -115,6 +115,12 @@ add_executable(WoWModelViewer-Qt WIN32
   TimelinePanel.h
   FileTreeModel.cpp
   FileTreeModel.h
+  GameSource.cpp
+  GameSource.h
+  LoadingSplash.cpp
+  LoadingSplash.h
+  SourceDialog.cpp
+  SourceDialog.h
   MVLinkCode.cpp
   WowheadDressingRoom.cpp
   WowheadDressingRoom.h
