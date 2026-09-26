@@ -1,7 +1,7 @@
 # Builds the Windows setup on a GitHub-hosted runner, the way installer/build-setup.ps1 builds it
 # on a developer machine: the engine (upstream/) first, then the application, then the payload and
 # the Inno package. The finished MV-Midnight-Setup-<version>.exe is attached to the run as the
-# artifact "MV-Midnight-Setup".
+# artifact "MV-Midnight-Setup". A tag v<version> also publishes it as a GitHub release.
 #
 # What the repository does not carry is fetched here:
 #   Qt 5.13.2 msvc2017_64          application, engine and setup front-end
@@ -15,6 +15,7 @@ name: Windows build
 on:
   push:
     branches: [master]
+    tags: ['v*']
   pull_request:
   workflow_dispatch:
 
@@ -207,3 +208,44 @@ jobs:
           $env:PATH = ($env:QT_DIR -replace '/', '\') + "\bin;" + $env:PATH
           ctest --test-dir build -C Release --output-on-failure
           if ($LASTEXITCODE -ne 0) { throw "tests failed" }
+
+  release:
+    name: Publish the release
+    # Only for a version tag. The setup is the one the job above built from that tag, and the
+    # notes are installer/RELEASE-<version>.md from the same commit.
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [qss-lint, setup]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: MV-Midnight-Setup
+          path: dist
+
+      - name: Create the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          setup="dist/MV-Midnight-Setup-$version.exe"
+          notes="installer/RELEASE-$version.md"
+          [ -f "$setup" ] || { echo "no $setup -- does the tag match MyAppVersion?"; exit 1; }
+          [ -f "$notes" ] || { echo "no $notes"; exit 1; }
+          size=$(stat -c %s "$setup" | awk '{ printf "%.1f", $1 / 1048576 }' | tr . ,)
+          hash=$(sha256sum "$setup" | cut -d' ' -f1)
+          # The release title carries the heading, so the notes start below it. Size and hash
+          # go underneath, as in earlier releases -- they only exist once the setup does, so
+          # they are added here instead of being committed with the notes.
+          {
+            sed '1{/^# /d}' "$notes" | sed '1{/^$/d}'
+            echo
+            echo "    $(basename "$setup")  ($size MB)"
+            echo "    SHA-256  $hash"
+          } > "$RUNNER_TEMP/notes.md"
+          gh release create "$GITHUB_REF_NAME" "$setup" --verify-tag \
+            --title "ModelViewer: Midnight $version" --notes-file "$RUNNER_TEMP/notes.md"
