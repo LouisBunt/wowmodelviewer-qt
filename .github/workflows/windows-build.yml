@@ -1,7 +1,8 @@
 # Builds the Windows setup on a GitHub-hosted runner, the way installer/build-setup.ps1 builds it
 # on a developer machine: the engine (upstream/) first, then the application, then the payload and
 # the Inno package. The finished MV-Midnight-Setup-<version>.exe is attached to the run as the
-# artifact "MV-Midnight-Setup". A tag v<version> also publishes it as a GitHub release.
+# artifact "MV-Midnight-Setup". A tag v<version> also publishes it as a GitHub release, whether
+# the tag was pushed or made on github.com together with a new release.
 #
 # What the repository does not carry is fetched here:
 #   Qt 5.13.2 msvc2017_64          application, engine and setup front-end
@@ -247,5 +248,13 @@ jobs:
             echo "    $(basename "$setup")  ($size MB)"
             echo "    SHA-256  $hash"
           } > "$RUNNER_TEMP/notes.md"
-          gh release create "$GITHUB_REF_NAME" "$setup" --verify-tag \
-            --title "ModelViewer: Midnight $version" --notes-file "$RUNNER_TEMP/notes.md"
+          title="ModelViewer: Midnight $version"
+          if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
+            # Made by hand on github.com -- the only way to create a tag there is to publish a
+            # release with it. It gets the same setup, title and notes as a pushed tag would.
+            gh release upload "$GITHUB_REF_NAME" "$setup" --clobber
+            gh release edit "$GITHUB_REF_NAME" --title "$title" --notes-file "$RUNNER_TEMP/notes.md"
+          else
+            gh release create "$GITHUB_REF_NAME" "$setup" --verify-tag \
+              --title "$title" --notes-file "$RUNNER_TEMP/notes.md"
+          fi
