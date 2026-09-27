@@ -7,9 +7,15 @@
 #include <QHBoxLayout>
 #include <QKeyEvent>
 #include <QListView>
+#include <QMouseEvent>
 #include <QPainter>
+#include <QStandardItemModel>
+#include <QStyleOptionComboBox>
+#include <QStylePainter>
+#include <QStyledItemDelegate>
 #include <QTimer>
 #include <QVBoxLayout>
+#include <QWheelEvent>
 
 #include "Theme.h"
 
@@ -232,6 +238,203 @@ void SearchField::keyPressEvent(QKeyEvent* e)
     return;
   }
   QLineEdit::keyPressEvent(e);
+}
+
+// =================================================================================================
+// CheckCombo
+// =================================================================================================
+CheckCombo::CheckCombo(const QString& allText, const QString& plural, QWidget* parent)
+  : QComboBox(parent), allText_(allText), plural_(plural)
+{
+  setMinimumHeight(met::hCtl());
+  setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+
+  auto* list = new QListView(this);
+  list->setTextElideMode(Qt::ElideNone);
+  setView(list);
+  // The combo's own delegate draws the CURRENT row as the ticked one, the way a menu marks its
+  // choice. Here the ticks are the rows' own check states, which the plain delegate draws.
+  setItemDelegate(new QStyledItemDelegate(this));
+
+  auto* model = new QStandardItemModel(this);
+  auto* all = new QStandardItem(allText_);
+  all->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);
+  model->appendRow(all);
+  setModel(model);
+
+  // Installed after setView, so it runs before the popup's own filter -- which would take the
+  // click, close the list and make the row current.
+  view()->viewport()->installEventFilter(this);
+  view()->installEventFilter(this);
+}
+
+void CheckCombo::addCheckItem(const QString& text, const QVariant& data)
+{
+  auto* item = new QStandardItem(text);
+  item->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable | Qt::ItemIsUserCheckable);
+  item->setData(Qt::Unchecked, Qt::CheckStateRole);
+  item->setData(data, Qt::UserRole);
+  static_cast<QStandardItemModel*>(model())->appendRow(item);
+}
+
+int CheckCombo::checkCount() const
+{
+  return count() - 1;
+}
+
+bool CheckCombo::isChecked(int item) const
+{
+  if (item < 0 || item >= checkCount())
+    return false;
+  return model()->index(item + 1, 0).data(Qt::CheckStateRole).toInt() == Qt::Checked;
+}
+
+void CheckCombo::setChecked(int item, bool on)
+{
+  if (item < 0 || item >= checkCount() || isChecked(item) == on)
+    return;
+  model()->setData(model()->index(item + 1, 0), on ? Qt::Checked : Qt::Unchecked,
+                   Qt::CheckStateRole);
+  ticksChanged();
+}
+
+void CheckCombo::clearChecks()
+{
+  if (!anyChecked())
+    return;
+  for (int i = 0; i < checkCount(); ++i)
+    model()->setData(model()->index(i + 1, 0), Qt::Unchecked, Qt::CheckStateRole);
+  ticksChanged();
+}
+
+bool CheckCombo::anyChecked() const
+{
+  for (int i = 0; i < checkCount(); ++i)
+    if (isChecked(i))
+      return true;
+  return false;
+}
+
+QVariantList CheckCombo::checkedData() const
+{
+  QVariantList out;
+  for (int i = 0; i < checkCount(); ++i)
+    if (isChecked(i))
+      out << model()->index(i + 1, 0).data(Qt::UserRole);
+  return out;
+}
+
+QStringList CheckCombo::checkedTexts() const
+{
+  QStringList out;
+  for (int i = 0; i < checkCount(); ++i)
+    if (isChecked(i))
+      out << itemText(i + 1);
+  return out;
+}
+
+QString CheckCombo::summary() const
+{
+  const QStringList names = checkedTexts();
+  if (names.isEmpty())
+    return allText_;
+  // Two names still say more than a number. From three on the list is longer than the box,
+  // and a cut-off "Kopf, Schulter, Br..." hides exactly what was added last.
+  if (names.size() <= 2)
+    return names.join(QStringLiteral(", "));
+  return QStringLiteral("%1 %2").arg(names.size()).arg(plural_);
+}
+
+bool CheckCombo::activateRow(int row)
+{
+  if (row == 0) {
+    clearChecks();
+    return false;          // "Alle ..." is a choice, not a tick: done, close the list
+  }
+  if (row < 1 || row > checkCount())
+    return true;
+  setChecked(row - 1, !isChecked(row - 1));
+  return true;             // stay open for the next tick
+}
+
+void CheckCombo::ticksChanged()
+{
+  // The full list in the tooltip, because the box may only show a count.
+  setToolTip(anyChecked() ? checkedTexts().join(QStringLiteral(", ")) : QString());
+  update();
+  emit selectionChanged();
+}
+
+void CheckCombo::paintEvent(QPaintEvent*)
+{
+  // QComboBox would paint its current row. This one has no current row, only ticks.
+  QStylePainter p(this);
+  QStyleOptionComboBox opt;
+  initStyleOption(&opt);
+  opt.currentIcon = QIcon();
+  const QRect text = style()->subControlRect(QStyle::CC_ComboBox, &opt,
+                                             QStyle::SC_ComboBoxEditField, this);
+  opt.currentText = fontMetrics().elidedText(summary(), Qt::ElideRight, text.width() - 2);
+  p.drawComplexControl(QStyle::CC_ComboBox, opt);
+  p.drawControl(QStyle::CE_ComboBoxLabel, opt);
+}
+
+void CheckCombo::showPopup()
+{
+  // As wide as the longest entry plus its tick box, like uikit::wideCombo().
+  const QFontMetrics fm(view()->font());
+  int w = 0;
+  for (int i = 0; i < count(); ++i)
+    w = qMax(w, fm.horizontalAdvance(itemText(i)));
+  w += met::sp(met::Edge) * 2 + ui::px(12) + ui::px(24);
+  view()->setMinimumWidth(qMax(w, width()));
+  QComboBox::showPopup();
+  // The combo marks its current row, which here is always "Alle ..." -- and a marked "Alle"
+  // above two ticked rows reads as if everything were chosen. The mark follows the mouse and
+  // the arrow keys from here on, as in any list.
+  view()->clearSelection();
+}
+
+void CheckCombo::wheelEvent(QWheelEvent* e)
+{
+  // A plain combo steps through its rows under the wheel. Here that would only move an
+  // invisible current row, and it would steal the scroll from the list around the box.
+  e->ignore();
+}
+
+bool CheckCombo::eventFilter(QObject* obj, QEvent* e)
+{
+  if (obj == view()->viewport()) {
+    // Press and double-click are taken as well: the popup would otherwise act on them before
+    // the release arrives.
+    if (e->type() == QEvent::MouseButtonPress || e->type() == QEvent::MouseButtonDblClick)
+      return true;
+    if (e->type() == QEvent::MouseButtonRelease) {
+      const auto* me = static_cast<QMouseEvent*>(e);
+      const QModelIndex idx = view()->indexAt(me->pos());
+      if (idx.isValid() && !activateRow(idx.row()))
+        hidePopup();
+      return true;
+    }
+  } else if (obj == view() && e->type() == QEvent::KeyPress) {
+    const auto* ke = static_cast<QKeyEvent*>(e);
+    const int row = view()->currentIndex().row();
+    switch (ke->key()) {
+      case Qt::Key_Space:
+        if (!activateRow(row))
+          hidePopup();
+        return true;
+      case Qt::Key_Return:
+      case Qt::Key_Enter:
+        if (row == 0)
+          activateRow(0);
+        hidePopup();
+        return true;
+      default:
+        break;
+    }
+  }
+  return QComboBox::eventFilter(obj, e);
 }
 
 // =================================================================================================

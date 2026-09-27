@@ -6,8 +6,8 @@
 #include <QString>
 #include <QWidget>
 
+class CheckCombo;
 class QCheckBox;
-class QComboBox;
 class QLabel;
 class QLineEdit;
 class QListWidget;
@@ -18,8 +18,9 @@ class QTimer;
 // The file tree is the wrong tool for transmog: it lists MODEL FILES, and most armour has
 // no model file of its own -- chest, legs, gloves, belt, boots, shirt and tabard are
 // texture layers composed onto a character body. Browsing them means browsing the item
-// DATABASE instead, which is what this does: filter by slot, expansion, quality and name,
-// or switch to the game's own item sets.
+// DATABASE instead, which is what this does: filter by slot, expansion, armour class, quality
+// and name, or switch to the game's own item sets. Each of the four lists takes several ticks
+// at once -- head and shoulders, epic and legendary -- and an empty list means "all".
 //
 // Requires ItemSparse.ExpansionID and OverallQualityID, which only became readable once
 // the sparse-record walk in wow.dll could reach past the leading strings.
@@ -48,14 +49,14 @@ private:
   void setMode(bool sets);
 
   // One result row -> one list entry. Split out because the rows are emitted twice:
-  // straight through when a slot filter is set, and under slot headings when it is not.
+  // straight through when exactly one slot is ticked, and under slot headings otherwise.
   // `row` is ID, name, quality, item level, inventory type.
   void addItemRow(const std::vector<QString>& row);
 
-  QComboBox* slot_ = nullptr;
-  QComboBox* expansion_ = nullptr;
-  QComboBox* armor_ = nullptr;      // armour class: cloth / leather / mail / plate
-  QComboBox* quality_ = nullptr;
+  CheckCombo* slot_ = nullptr;
+  CheckCombo* expansion_ = nullptr;
+  CheckCombo* armor_ = nullptr;      // armour class: cloth / leather / mail / plate
+  CheckCombo* quality_ = nullptr;
   QLineEdit* search_ = nullptr;
   QCheckBox* standalone_ = nullptr;
   QCheckBox* keepEquip_ = nullptr;   // sets mode only

@@ -127,6 +127,58 @@ void testScale()
   ui::setScale(before);
 }
 
+// --- CheckCombo ------------------------------------------------------------------------------
+// The item browser's filter lists. What they say while closed is all the user sees of a
+// filter, so a wrong summary is a filter that looks off while it is on -- or the reverse.
+void testCheckCombo()
+{
+  CheckCombo c(QStringLiteral("Alle Slots"), QStringLiteral("Slots"));
+  c.addCheckItem(QStringLiteral("Kopf"), QStringLiteral("1"));
+  c.addCheckItem(QStringLiteral("Schulter"), QStringLiteral("3"));
+  c.addCheckItem(QStringLiteral("Brust"), QStringLiteral("5,20"));
+
+  int changes = 0;
+  QObject::connect(&c, &CheckCombo::selectionChanged, [&changes]() { changes++; });
+
+  // Nothing ticked reads like the single-choice box it replaces, and restricts nothing.
+  CHECK(c.checkCount() == 3);
+  CHECK(!c.anyChecked());
+  CHECK(c.summary() == QStringLiteral("Alle Slots"));
+  CHECK(c.checkedData().isEmpty());
+
+  // A click on a row ticks it and keeps the list open for the next one.
+  CHECK(c.activateRow(1));
+  CHECK(c.isChecked(0));
+  CHECK(c.summary() == QStringLiteral("Kopf"));
+  CHECK(c.activateRow(2));
+  CHECK(c.summary() == QStringLiteral("Kopf, Schulter"));
+
+  // From three on the box counts, and the names move to the tooltip.
+  CHECK(c.activateRow(3));
+  CHECK(c.summary() == QStringLiteral("3 Slots"));
+  CHECK(c.toolTip() == QStringLiteral("Kopf, Schulter, Brust"));
+  CHECK((c.checkedData()
+         == QVariantList{QStringLiteral("1"), QStringLiteral("3"), QStringLiteral("5,20")}));
+  CHECK(changes == 3);
+
+  // A second click takes the tick away again.
+  CHECK(c.activateRow(2));
+  CHECK(!c.isChecked(1));
+  CHECK(c.summary() == QStringLiteral("Kopf, Brust"));
+
+  // The "Alle" row clears every tick and closes the list.
+  CHECK(!c.activateRow(0));
+  CHECK(!c.anyChecked());
+  CHECK(c.summary() == QStringLiteral("Alle Slots"));
+  CHECK(c.toolTip().isEmpty());
+  CHECK(changes == 5);
+
+  // Clearing an empty list is no change, so it starts no query; a row past the end does nothing.
+  c.clearChecks();
+  CHECK(c.activateRow(99));
+  CHECK(changes == 5);
+}
+
 // --- the stylesheet -------------------------------------------------------------------------
 void testSheet()
 {
@@ -147,6 +199,7 @@ void testSheet()
   // four are the ones that looked half-native before.
   for (const char* needed : {"QScrollBar::add-line", "QScrollBar::handle:vertical",
                              "QComboBox::down-arrow", "QComboBox QAbstractItemView",
+                             "QComboBox QAbstractItemView::indicator:checked",
                              "QSpinBox::up-arrow", "QSpinBox::down-button"})
     CHECK(sheet.contains(QLatin1String(needed)));
 
@@ -212,6 +265,7 @@ int main(int argc, char** argv)
   testElidedLabel();
   testMeasuredColumn();
   testScale();
+  testCheckCombo();
   testSheet();
   testPalette();
   testIcons();
