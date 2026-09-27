@@ -204,8 +204,10 @@ GitHub Actions runs the same build on a Windows runner for every push to `master
 every pull request (`.github/workflows/windows-build.yml`): it fetches Qt, the vcpkg
 packages, the FBX SDK and the listfile, builds the engine, the application and the setup,
 runs the tests, and attaches `MV-Midnight-Setup-<version>.exe` to the run as an artifact.
-Pushing a tag `v<version>` publishes that setup as the GitHub release, with
+A tag `v<version>` publishes that setup as the GitHub release, with
 `installer/RELEASE-<version>.md` as its notes and the file's size and SHA-256 underneath.
+The tag can be pushed, or made on github.com by publishing a new release with it (target
+`master`); the workflow then fills in that release.
 
 The setup carries the same `AppId` as WoW Model Viewer Midnight, so it upgrades that
 installation in place and removes its executable and wxWidgets DLLs.
