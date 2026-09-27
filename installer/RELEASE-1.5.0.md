@@ -2,7 +2,7 @@
 
 ModelViewer braucht keine WoW-Installation mehr. Die Spieldaten können jetzt
 direkt von Blizzards öffentlichen Download-Servern kommen — so wie im CDN-Modus
-von wow.export.
+von wow.export. Außerdem nimmt die Item-Suche jetzt mehrere Filter auf einmal.
 
 Die Nummer springt von 1.1 auf 1.5. Mit den frühen Testfassungen „1.5-beta“ und
 „1.6-beta“ aus dem Sommer hat sie nichts zu tun: 1.5.0 ist neuer als beide.
@@ -52,6 +52,16 @@ lesen — beides braucht eine WoW-Installation. Codes aus dem Addon einfügen ge
 Auf der Befehlszeile, nur für diesen einen Lauf und ohne etwas zu speichern:
 
     WoWModelViewer-Qt.exe 917116 --online eu --locale deDE
+
+## Item-Suche: mehrere Filter auf einmal
+
+Die vier Listen der Item-Suche — Slot, Erweiterung, Rüstungsart und Qualität — nehmen
+jetzt mehrere Haken zugleich: Kopf und Schulter, Stoff und Leder, Episch und Legendär.
+Innerhalb einer Liste heißt das „oder“, zwischen den Listen „und“: Wer Kopf und Schulter
+ankreuzt und dazu Legion und Episch, bekommt die epischen Kopf- und Schulterteile aus
+Legion. Die Liste bleibt beim Ankreuzen offen, der oberste Eintrag „Alle …“ nimmt alle
+Haken wieder heraus. Geschlossen zeigt sie ein oder zwei Namen oder die Anzahl
+(„3 Slots“), und der Tooltip nennt alle.
 
 ## Behoben
 

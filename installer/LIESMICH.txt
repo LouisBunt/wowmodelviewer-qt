@@ -393,6 +393,10 @@ Neu in 1.5: ohne WoW-Installation
   was schon geladen ist.
 - Die Quelle der Spieldaten laesst sich jederzeit wechseln, unter Datei >
   "Spieldaten-Quelle ...".
+- Item-Suche mit Mehrfachauswahl: In den Listen Slot, Erweiterung, Ruestungsart und
+  Qualitaet lassen sich mehrere Eintraege zugleich ankreuzen, etwa Kopf und Schulter
+  oder Episch und Legendaer. Innerhalb einer Liste gilt "oder", zwischen den Listen
+  "und". Der oberste Eintrag ("Alle ...") nimmt alle Haken einer Liste wieder heraus.
 - Behoben: Der Statuspunkt in der Titelleiste wurde nie gezeichnet. Eine FileDataID
   allein auf der Befehlszeile wurde fuer einen WoW-Ordner gehalten, sodass das
   Druck-Beispiel oben scheiterte. Ein Skriptlauf ohne Ordner blieb an einem Dialog

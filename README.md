@@ -27,7 +27,8 @@ and [MIGRATION.md](MIGRATION.md) for why the port is shaped the way it is.
   longest side), standing on the plate, glow and particle sheets left out. The file is read back and its measured size, footprint and
   the parts without thickness are reported (`--export STL,<path>`, `--print-height <mm>`).
   Thickening and welding stay in Blender, where the add-on's print pipeline does them.
-- Item and transmog browser with categories, sorting and search; item sets can be
+- Item and transmog browser with categories, sorting and search, and filters that take
+  several ticks at once (slot, expansion, armour class, quality); item sets can be
   applied on top of what is already worn.
 - **One design system, not seven.** Colour, measure, type and motion live in `Theme.h`,
   the application has a single stylesheet, and `tools/qss-lint.ps1` fails the build if a

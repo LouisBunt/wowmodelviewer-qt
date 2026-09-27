@@ -410,6 +410,14 @@ QComboBox QAbstractItemView {
 }
 QComboBox QAbstractItemView::item { min-height: @hRow; padding: 0 @spGap; border-radius: @rCtl; }
 QComboBox QAbstractItemView::item:hover { background: @ovHover; }
+/* The tick boxes of a CheckCombo's list, drawn like every other checkbox. */
+QComboBox QAbstractItemView::indicator {
+  width: 15px; height: 15px; border: 1px solid @strong; background: @well; border-radius: @rCtl;
+}
+QComboBox QAbstractItemView::indicator:hover { border-color: @accent; }
+QComboBox QAbstractItemView::indicator:checked {
+  background: @accentFill; border-color: @accentFill; image: url(:/icons/check.svg);
+}
 
 QSpinBox, QDoubleSpinBox {
   background: @well; color: @text; border: 1px solid @border; border-radius: @rCtl;

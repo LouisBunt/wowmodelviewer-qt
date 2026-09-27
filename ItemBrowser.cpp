@@ -1,11 +1,11 @@
 #include "GameColours.h"
 #include "Theme.h"
+#include "UiKit.h"
 #include "ItemBrowser.h"
 
 #include <map>
 
 #include <QCheckBox>
-#include <QComboBox>
 #include <QEvent>
 #include <QFontDatabase>
 #include <QHBoxLayout>
@@ -119,6 +119,16 @@ QString sqlEscape(QString s)
   return s.replace('\'', ' ').replace('"', ' ');
 }
 
+// The ticked entries of one filter list as the inside of an SQL IN (...). They come from the
+// tables above, never from typing, so they need no escaping.
+QString sqlList(const QVariantList& values)
+{
+  QStringList out;
+  for (const QVariant& v : values)
+    out << v.toString();
+  return out.join(',');
+}
+
 // Item.InventoryType -> the heading the item is filed under. Built from kSlots so the
 // grouping and the filter dropdown can never drift apart. Types kSlots does not list
 // (rings, trinkets, bags) carry no appearance and are already excluded by the query.
@@ -193,37 +203,37 @@ ItemBrowser::ItemBrowser(QWidget* parent) : QWidget(parent)
   });
   col->addWidget(search_);
 
-  slot_ = new QComboBox;
-  slot_->setFont(typo::font(typo::Body));
+  // Four lists, each taking several ticks. The "Alle ..." entry of each table is not a tick of
+  // its own: it becomes the text of the empty list and the row that clears it. A tick waits
+  // for the same pause as typing, so ticking three qualities in a row runs one query, not three.
+  slot_ = new CheckCombo(QString::fromUtf8(kSlots[0].label), QString::fromUtf8("Slots"));
   for (const auto& s : kSlots)
-    slot_->addItem(QString::fromUtf8(s.label), QString::fromLatin1(s.types));
-  connect(slot_, QOverload<int>::of(&QComboBox::currentIndexChanged),
-          this, [this](int) { refresh(); });
-  col->addWidget(slot_);
+    if (*s.types)
+      slot_->addCheckItem(QString::fromUtf8(s.label), QString::fromLatin1(s.types));
 
-  expansion_ = new QComboBox;
-  expansion_->setFont(typo::font(typo::Body));
+  expansion_ = new CheckCombo(QString::fromUtf8(kExpansions[0].label),
+                              QString::fromUtf8("Erweiterungen"));
   for (const auto& e : kExpansions)
-    expansion_->addItem(QString::fromUtf8(e.label), e.id);
-  connect(expansion_, QOverload<int>::of(&QComboBox::currentIndexChanged),
-          this, [this](int) { refresh(); });
-  col->addWidget(expansion_);
+    if (e.id != -99)
+      expansion_->addCheckItem(QString::fromUtf8(e.label), e.id);
 
-  armor_ = new QComboBox;
-  armor_->setFont(typo::font(typo::Body));
+  armor_ = new CheckCombo(QString::fromUtf8(kArmorClasses[0].label),
+                          QString::fromUtf8("Rüstungsarten"));
   for (const auto& a : kArmorClasses)
-    armor_->addItem(QString::fromUtf8(a.label), a.subclass);
-  connect(armor_, QOverload<int>::of(&QComboBox::currentIndexChanged),
-          this, [this](int) { refresh(); });
-  col->addWidget(armor_);
+    if (a.subclass != -99)
+      armor_->addCheckItem(QString::fromUtf8(a.label), a.subclass);
 
-  quality_ = new QComboBox;
-  quality_->setFont(typo::font(typo::Body));
+  quality_ = new CheckCombo(QString::fromUtf8(kQualities[0].label),
+                            QString::fromUtf8("Qualitäten"));
   for (const auto& q : kQualities)
-    quality_->addItem(QString::fromUtf8(q.label), q.id);
-  connect(quality_, QOverload<int>::of(&QComboBox::currentIndexChanged),
-          this, [this](int) { refresh(); });
-  col->addWidget(quality_);
+    if (q.id != -1)
+      quality_->addCheckItem(QString::fromUtf8(q.label), q.id);
+
+  for (CheckCombo* c : {slot_, expansion_, armor_, quality_}) {
+    c->setFont(typo::font(typo::Body));
+    connect(c, &CheckCombo::selectionChanged, this, [this]() { searchDelay_->start(); });
+    col->addWidget(c);
+  }
 
   standalone_ = new QCheckBox(QString::fromUtf8("Nur Item, ohne Figur"));
   standalone_->setFont(typo::font(typo::Body));
@@ -308,21 +318,23 @@ void ItemBrowser::refreshItems()
   QStringList where;
   where << "Item.InventoryType != 0" << "ItemSparse.Display_Lang <> ''";
 
-  const QString types = slot_->currentData().toString();
+  // Within one list the ticks are alternatives, and the lists narrow each other: head or
+  // shoulders, and epic. A list without ticks does not restrict at all.
+  const QString types = sqlList(slot_->checkedData());
   if (!types.isEmpty())
     where << QString("Item.InventoryType IN (%1)").arg(types);
 
-  const int exp = expansion_->currentData().toInt();
-  if (exp != -99)
-    where << QString("ItemSparse.ExpansionID = %1").arg(exp);
+  const QString exps = sqlList(expansion_->checkedData());
+  if (!exps.isEmpty())
+    where << QString("ItemSparse.ExpansionID IN (%1)").arg(exps);
 
-  const int qual = quality_->currentData().toInt();
-  if (qual != -1)
-    where << QString("ItemSparse.OverallQualityID = %1").arg(qual);
+  const QString quals = sqlList(quality_->checkedData());
+  if (!quals.isEmpty())
+    where << QString("ItemSparse.OverallQualityID IN (%1)").arg(quals);
 
-  const int armor = armor_->currentData().toInt();
-  if (armor != -99)
-    where << QString("Item.ClassID = 4 AND Item.SubclassID = %1").arg(armor);
+  const QString armors = sqlList(armor_->checkedData());
+  if (!armors.isEmpty())
+    where << QString("Item.ClassID = 4 AND Item.SubclassID IN (%1)").arg(armors);
 
   // A search that is only digits is meant as an item id -- that is how someone pastes
   // an id out of a link or a log. The name match stays in the OR so a numeric NAME
@@ -349,9 +361,10 @@ void ItemBrowser::refreshItems()
     QString(" ORDER BY ItemSparse.Display_Lang LIMIT %1").arg(kMaxRows));
 
   // Without a slot filter the list used to be one alphabetical run in which a helmet
-  // sat between two pairs of boots. Group it under slot headings instead; with a slot
-  // already chosen the heading would say the same thing on every row, so it is left off.
-  const bool group = types.isEmpty();
+  // sat between two pairs of boots. Group it under slot headings instead -- also when
+  // several slots are ticked. With exactly one the heading would say the same thing on
+  // every row, so it is left off.
+  const bool group = slot_->checkedData().size() != 1;
   std::map<int, std::vector<const std::vector<QString>*>> bySlot;   // slotRank -> rows
 
   if (r.valid) {

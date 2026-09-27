@@ -11,6 +11,7 @@
 //
 // Everything here takes its colours and measures from Theme.h and nothing else.
 
+#include <QComboBox>
 #include <QLabel>
 #include <QLineEdit>
 #include <QStringList>
@@ -18,7 +19,6 @@
 #include <QVector>
 #include <QWidget>
 
-class QComboBox;
 class QHBoxLayout;
 class QTimer;
 class QButtonGroup;
@@ -128,6 +128,60 @@ protected:
 private:
   QTimer* debounce_ = nullptr;
   QAction* clear_ = nullptr;
+};
+
+// --- CheckCombo -------------------------------------------------------------------------------
+// A drop-down in which several entries can be ticked at once: "Kopf" and "Schulter", "Episch"
+// and "Legendär". Nothing ticked means no restriction, and the closed box then reads like the
+// single-choice combo it replaces ("Alle Slots"). The first row of the list is that same entry
+// and clears every tick.
+//
+// Underneath it is a QComboBox, so it keeps the combo's look from the one stylesheet, its
+// popup and its keyboard handling. Two things differ: a click on a row ticks it and leaves the
+// list open for the next one, and the closed box shows what is ticked -- one or two names, or
+// a count once the names would not fit ("3 Slots").
+class CheckCombo : public QComboBox
+{
+  Q_OBJECT
+public:
+  // allText: the box's text while nothing is ticked, and the label of the clearing row.
+  // plural: the noun for the count ("Slots", "Qualitäten").
+  CheckCombo(const QString& allText, const QString& plural, QWidget* parent = nullptr);
+
+  void addCheckItem(const QString& text, const QVariant& data);
+
+  // Check items are counted from 0; the clearing row is not one of them.
+  int checkCount() const;
+  bool isChecked(int item) const;
+  void setChecked(int item, bool on);
+  void clearChecks();
+
+  bool anyChecked() const;
+  QVariantList checkedData() const;
+  QStringList checkedTexts() const;
+
+  // What the closed box says. Public for the tests.
+  QString summary() const;
+
+  // What a click on a row of the open list does: row 0 clears, any other row toggles.
+  // Returns whether the list should stay open. Public for the tests.
+  bool activateRow(int row);
+
+  void showPopup() override;
+
+signals:
+  // Every change of the ticks, however it was made.
+  void selectionChanged();
+
+protected:
+  void paintEvent(QPaintEvent* e) override;
+  void wheelEvent(QWheelEvent* e) override;
+  bool eventFilter(QObject* obj, QEvent* e) override;
+
+private:
+  void ticksChanged();
+  QString allText_;
+  QString plural_;
 };
 
 // --- PropertyRow ------------------------------------------------------------------------------
