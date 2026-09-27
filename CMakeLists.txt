@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(WoWModelViewerQt VERSION 1.1.0)
+project(WoWModelViewerQt VERSION 1.5.0)
 
 # The version the running application reports -- window title, About box, trace and log.
 # Without it a bug report cannot say which build it came from. Five other places carry the
@@ -12,8 +12,9 @@ project(WoWModelViewerQt VERSION 1.1.0)
 #   installer/THIRD-PARTY-NOTICES.txt the "Stand" line
 # 1.0.0 is the public numbering: releases before it (1.5.0-1.8.0) were the early-access
 # line that only existed on this machine and in the repo history. The public count
-# starts where the public does.
-set(WMV_QT_VERSION "1.1.0")
+# starts where the public does. After 1.1.0 it jumped to 1.5.0 with the online mode;
+# that 1.5.0 is a public release, not the early-access build of the same number.
+set(WMV_QT_VERSION "1.5.0")
 
 # The product name, in one place. It reached five files last time it changed.
 set(WMV_APP_NAME "ModelViewer: Midnight")
@@ -115,6 +116,12 @@ add_executable(WoWModelViewer-Qt WIN32
   TimelinePanel.h
   FileTreeModel.cpp
   FileTreeModel.h
+  GameSource.cpp
+  GameSource.h
+  LoadingSplash.cpp
+  LoadingSplash.h
+  SourceDialog.cpp
+  SourceDialog.h
   MVLinkCode.cpp
   WowheadDressingRoom.cpp
   WowheadDressingRoom.h

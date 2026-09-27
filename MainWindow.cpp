@@ -340,6 +340,29 @@ void MainWindow::setBuildLabel(const QString& text)
     buildLabel_->setText(text);
 }
 
+void MainWindow::setDataSource(const QString& label, const QString& tooltip, bool degraded)
+{
+  if (buildLabel_)
+    buildLabel_->setText(label);
+  if (sourceStatus_)
+    sourceStatus_->setToolTip(tooltip);
+  if (!sourceDot_)
+    return;
+  // Painted, not styled: the sheet colours text, and a QLabel with neither text nor pixmap --
+  // which is what this dot was since the design system replaced the pill's stylesheet --
+  // draws nothing at all. main() kept promising "its green dot" in a comment meanwhile.
+  const int d = sourceDot_->width();
+  QPixmap pm(d, d);
+  pm.fill(Qt::transparent);
+  QPainter p(&pm);
+  p.setRenderHint(QPainter::Antialiasing, true);
+  p.setPen(Qt::NoPen);
+  p.setBrush(QColor(degraded ? tok::warn : tok::ok));
+  p.drawEllipse(QRectF(0.5, 0.5, d - 1.0, d - 1.0));
+  p.end();
+  sourceDot_->setPixmap(pm);
+}
+
 void MainWindow::setPathLabel(const QString& text)
 {
   // One place, not two. The same string used to be written into the tool bar AND the status
@@ -434,14 +457,15 @@ QWidget* MainWindow::buildTitleBar()
     auto* sr = new QHBoxLayout(status);
     sr->setContentsMargins(0, 0, 0, 0);
     sr->setSpacing(met::sp(met::Snug) + 2);
-    auto* dot = new QLabel;
-    dot->setFixedSize(ui::px(6), ui::px(6));
-    sr->addWidget(dot);
+    sourceDot_ = new QLabel;
+    sourceDot_->setFixedSize(ui::px(6), ui::px(6));
+    sr->addWidget(sourceDot_, 0, Qt::AlignVCenter);
     buildLabel_ = new QLabel("CASC");
     buildLabel_->setFont(typo::font(typo::Mono));
     buildLabel_->setProperty("role", "mono");
     sr->addWidget(buildLabel_);
     status->setToolTip(QString::fromUtf8("Spielarchiv eingebunden"));
+    sourceStatus_ = status;
     row->addWidget(status);
   }
   row->addSpacing(met::sp(met::Pad));

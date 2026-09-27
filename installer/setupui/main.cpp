@@ -439,7 +439,7 @@ struct Options
   QString innerExe;      // the Inno setup to run silently; empty = simulate
   int totalFiles = 1300;
   int sizeMb = 450;
-  QString version = "1.1.0";
+  QString version = "1.5.0";
   QString shotsDir;      // autopilot: step through, grab each page as PNG, quit
 };
 

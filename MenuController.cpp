@@ -29,6 +29,7 @@
 #include <QMenu>
 #include <QMenuBar>
 #include <QMessageBox>
+#include <QPushButton>
 #include <QSettings>
 #include <QSignalBlocker>
 #include <QXmlStreamReader>
@@ -39,6 +40,7 @@
 #include "GLHost.h"
 #include "MainWindow.h"
 #include "MVLinkCode.h"
+#include "SourceDialog.h"
 #include "WowheadDressingRoom.h"
 
 #include "CharDetails.h"
@@ -58,8 +60,7 @@
 
 namespace {
 // Same file main() uses -- one ini for the front-end's own settings.
-const char* kSettingsFile = "userSettings/qt-frontend.ini";
-const char* kFolderKey    = "game/installFolder";
+const char* kSettingsFile = gamesource::kSettingsFile;
 
 // The importers reach into the game database and the plugin's network response, and
 // when the result renders wrong there is nothing on screen that says WHY. Log what was
@@ -152,8 +153,9 @@ void MenuController::build()
   needsModel_.push_back(
     add(file, tr("Screenshot speichern …"), "F12", &MenuController::takeScreenshot));
   file->addSeparator();
-  add(file, tr("WoW-Installationsordner wechseln …"), QString(),
-      &MenuController::changeGameFolder);
+  // Was "WoW-Installationsordner wechseln". The data can come from Blizzard's CDN now, so the
+  // entry names what it chooses, not one of the two answers.
+  add(file, tr("Spieldaten-Quelle …"), QString(), &MenuController::changeGameSource);
   file->addSeparator();
   QAction* quit = file->addAction(tr("Beenden"));
   quit->setShortcut(QKeySequence("Ctrl+Q"));
@@ -382,37 +384,47 @@ void MenuController::takeScreenshot()
   win_->setPathLabel(tr("Screenshot gespeichert: %1").arg(QDir::toNativeSeparators(path)));
 }
 
-void MenuController::changeGameFolder()
+void MenuController::changeGameSource()
 {
-  QSettings settings(QString::fromLatin1(kSettingsFile), QSettings::IniFormat);
-  const QString current = settings.value(QString::fromLatin1(kFolderKey)).toString();
-
-  const QString picked = QFileDialog::getExistingDirectory(
-    win_, tr("WoW-Installationsordner wählen"), current, QFileDialog::ShowDirsOnly);
-  if (picked.isEmpty())
+  // Starts from what is mounted, not from the ini: a run started with a folder or --online on
+  // the command line shows that, and the ini is only written when something is chosen.
+  SourceDialog dlg(SourceDialog::Switch, source_, source_.kind == GameSource::Online, win_);
+  if (dlg.exec() != QDialog::Accepted)
+    return;
+  const GameSource next = dlg.chosen();
+  gamesource::save(next);
+  trace("game data source saved: " + gamesource::describe(next));
+  if (gamesource::sameSource(next, source_))
     return;
 
-  // Same test main() uses before Game::init: CASCFolder reads <install>/.build.info.
-  if (!QFile::exists(picked + "/.build.info")) {
-    QMessageBox::warning(
-      win_, tr("Keine WoW-Installation"),
-      tr("In\n\n%1\n\nliegt keine .build.info. Bitte den Ordner wählen, in dem WoW "
-         "installiert ist -- nicht den Data-Unterordner.")
-        .arg(QDir::toNativeSeparators(picked)));
-    return;
-  }
+  // CASC is mounted once, before the window exists, and Game::init takes ownership of the
+  // folder -- there is no second attempt in this process. So the choice is saved and takes
+  // effect on a start, and the user decides whether that start is now.
+  QMessageBox box(QMessageBox::Question, tr("Spieldaten-Quelle"),
+                  tr("Gespeichert. Die Spieldaten werden nur beim Programmstart eingebunden — "
+                     "die neue Quelle gilt ab dem nächsten Start."),
+                  QMessageBox::NoButton, win_);
+  if (next.kind == GameSource::Online && gamesource::completedBuild(next.cacheDir).isEmpty())
+    box.setInformativeText(tr("Der erste Online-Start lädt einmalig rund %1.")
+                             .arg(gamesource::formatBytes(gamesource::kFirstStartBytes)));
+  QPushButton* now = box.addButton(tr("Jetzt neu starten"), QMessageBox::AcceptRole);
+  box.addButton(tr("Später"), QMessageBox::RejectRole);
+  box.setDefaultButton(now);
+  box.exec();
+  if (box.clickedButton() == now)
+    emit restartRequested();
+}
 
-  QDir().mkpath("userSettings");
-  settings.setValue(QString::fromLatin1(kFolderKey), picked);
-  settings.sync();
+QString MenuController::wowInstallFolder() const
+{
+  if (source_.kind == GameSource::Local)
+    return source_.folder;
+  return gamesource::installFolder();
+}
 
-  // CASC is mounted once, before the window exists, and Game::init takes ownership of
-  // the folder -- there is no second attempt in this process. Be honest about that
-  // instead of pretending the switch took effect.
-  QMessageBox::information(
-    win_, tr("Ordner gespeichert"),
-    tr("Der Ordner ist gespeichert. Er wird beim nächsten Start verwendet -- die "
-       "Spieldaten werden nur einmal beim Programmstart geladen."));
+void MenuController::setWoWInstallFolder(const QString& folder)
+{
+  gamesource::setInstallFolder(folder);
 }
 
 // --- Ansicht -----------------------------------------------------------------
@@ -1366,17 +1378,22 @@ void MenuController::importMVLinkDialog()
   // Try the file first without asking: if the addon has been used at all, this is the
   // whole interaction. Only when nothing is there does the dialog appear -- pasting a
   // code should not be the price of admission for people who have it set up.
-  const QString fileErr = importMVLinkFromGame(QString(), false);
-  if (fileErr.isEmpty()) {
-    win_->setPathLabel(tr("Aussehen aus WoW übernommen (Stand: letztes /reload)."));
-    return;
+  //
+  // Without a WoW folder (online, no installation) there is no file to try, and a paragraph
+  // explaining that would only stand between the user and the paste field.
+  QString prompt = tr("Code aus dem Addon einfügen (im Spiel: /mvlink):");
+  if (!wowInstallFolder().isEmpty()) {
+    const QString fileErr = importMVLinkFromGame(QString(), false);
+    if (fileErr.isEmpty()) {
+      win_->setPathLabel(tr("Aussehen aus WoW übernommen (Stand: letztes /reload)."));
+      return;
+    }
+    prompt = fileErr + "\n\n" + prompt;
   }
 
   bool ok = false;
   const QString code = QInputDialog::getText(
-    win_, tr("Aussehen aus WoW"),
-    tr("%1\n\nCode aus dem Addon einfügen (im Spiel: /mvlink):").arg(fileErr),
-    QLineEdit::Normal, QString(), &ok);
+    win_, tr("Aussehen aus WoW"), prompt, QLineEdit::Normal, QString(), &ok);
   if (!ok || code.trimmed().isEmpty())
     return;
 
@@ -1444,8 +1461,10 @@ QString MenuController::importMVLinkCode(const QString& code, bool interactive)
 
 QString MenuController::installMVLinkAddon(QString* destOut)
 {
-  QSettings settings(QString::fromLatin1(kSettingsFile), QSettings::IniFormat);
-  const QString wow = settings.value("game/installFolder").toString();
+  const QString wow = wowInstallFolder();
+  if (wow.isEmpty())
+    return tr("Das Addon läuft im Spiel und gehört deshalb in eine WoW-Installation — auf "
+              "diesem Rechner ist keine bekannt.");
 
   QString error;
   const QString dest = mvlink_install_addon(wow, &error);
@@ -1460,8 +1479,11 @@ QString MenuController::importMVLinkFromGame(const QString& outfitName, bool int
 {
   // The install folder the application already knows -- asking again would be a second
   // place to get it wrong.
-  QSettings settings(QString::fromLatin1(kSettingsFile), QSettings::IniFormat);
-  const QString wow = settings.value("game/installFolder").toString();
+  const QString wow = wowInstallFolder();
+  if (wow.isEmpty())
+    return tr("Die Ablage des Addons liegt in einer WoW-Installation, und auf diesem Rechner "
+              "ist keine bekannt. Im Spiel /mvlink öffnen und den Code kopieren — "
+              "ModelViewer übernimmt ihn aus der Zwischenablage.");
 
   const std::vector<QString> paths = mvlink_saved_variable_paths(wow);
   if (paths.empty()) {

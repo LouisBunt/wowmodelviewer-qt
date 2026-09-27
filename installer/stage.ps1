@@ -144,8 +144,10 @@ if ($OpenSslDir -and (Test-Path (Join-Path $OpenSslDir "libssl-1_1-x64.dll"))) {
     Stage (Join-Path $OpenSslDir $f) $f
   }
 } else {
-  Write-Warning ("OpenSSL not staged -- no libssl-1_1-x64.dll found. The packaged build " +
-                 "will not be able to import from the armory or Wowhead. Pass -OpenSslDir.")
+  # A hard stop now: the online mode asks Blizzard's version service over HTTPS on every start,
+  # and without these two DLLs a machine without WoW cannot start the program at all.
+  throw ("OpenSSL not staged -- no libssl-1_1-x64.dll found. Without it the online mode " +
+         "cannot start, and armory and Wowhead imports fail. Pass -OpenSslDir.")
 }
 
 # --- game data definitions ---------------------------------------------------

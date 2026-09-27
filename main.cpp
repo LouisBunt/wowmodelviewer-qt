@@ -2,29 +2,38 @@
 // wx front-end does, then hands the mounted game data to MainWindow.
 //
 //   WoWModelViewer-Qt.exe [<wow-install-folder>] [<fileDataId>] [options]
+//   WoWModelViewer-Qt.exe [<fileDataId>] --online [<region>] [options]
 //
 // Example:
 //   WoWModelViewer-Qt.exe "C:\Program Files (x86)\World of Warcraft" 1000001
+//   WoWModelViewer-Qt.exe 1000001 --online eu --locale enUS
 //
-// Both arguments are optional: the install folder is remembered between runs, and
-// the user is asked for it when it cannot be found.
+// Both arguments are optional: the data source -- an install folder, or Blizzard's CDN with a
+// local cache -- is remembered between runs, and the user is asked when there is none.
+
+#include <atomic>
+#include <cstdlib>
+#include <memory>
 
 #include <QApplication>
 #include <QDateTime>
+#include <QElapsedTimer>
 #include <QPalette>
 #include <QRegularExpression>
 #include <QScreen>
 #include <QStyleFactory>
 #include <QDir>
 #include <QFile>
-#include <QFileDialog>
 #include <QFontDatabase>
 #include <QImage>
 #include <QLabel>
+#include <QNetworkProxyFactory>
 #include <QPainter>
+#include <QProcess>
+#include <QPushButton>
 #include <QSettings>
-#include <QSplashScreen>
 #include <QTextStream>
+#include <QThread>
 #include <QTimer>
 #include <QIcon>
 #include <QInputDialog>
@@ -37,6 +46,8 @@
 #include <QVBoxLayout>
 
 #include "GLHost.h"
+#include "GameSource.h"
+#include "LoadingSplash.h"
 #include "MidnightStyle.h"
 #include "Theme.h"
 #include "BlenderAddonInstaller.h"
@@ -47,6 +58,7 @@
 #include "MVLinkCode.h"
 #include "NpcBrowser.h"
 #include "MenuController.h"
+#include "SourceDialog.h"
 #include "TimelinePanel.h"
 #include "MainWindow.h"
 
@@ -80,105 +92,93 @@ static void trace(const QString& stage)
   }
 }
 
-// --- locating the WoW installation ------------------------------------------
+// --- where the game data comes from ------------------------------------------
 //
-// The wx front-end asks through ClientChoiceDialog. This is the smaller equivalent:
-// remember the folder, and ask only when we cannot find one.
-
-// A separate file from the wx front-end's Config.ini on purpose. That one is written
-// by wx's own config machinery; rewriting it through QSettings would reformat keys
-// this build does not own.
-static const char* kSettingsFile = "userSettings/qt-frontend.ini";
-static const char* kFolderKey    = "game/installFolder";
+// The wx front-end asks through ClientChoiceDialog. This is the smaller equivalent: remember
+// the source, and ask only when there is none. The source is a WoW installation or -- for
+// people without one -- Blizzard's CDN with a cache folder in between (GameSource.h).
+//
+// The settings live in their own file, userSettings/qt-frontend.ini, on purpose: the wx
+// front-end's Config.ini is written by wx's own config machinery, and rewriting it through
+// QSettings would reformat keys this build does not own.
 
 static const char* kDefaultFolder = "C:/Program Files (x86)/World of Warcraft";
 
-// CASCFolder appends "Data" to whatever it is given and then reads
-// "<install>/.build.info". Testing for that file is the cheapest way to tell a real
-// installation from a wrong folder, and it has to happen BEFORE Game::init(): that
-// call takes ownership of the WoWFolder, so there is no second attempt to be had.
-static bool looksLikeWoWInstall(const QString& folder)
+// The arguments after the program name. From QCoreApplication rather than argv: on Windows it
+// reads the wide command line, so a folder or a --cache path outside the ANSI code page
+// arrives intact instead of with question marks.
+static QStringList argList()
 {
-  return !folder.isEmpty() && QFile::exists(folder + "/.build.info");
+  return QCoreApplication::arguments().mid(1);
 }
 
-// Empty return means the user gave up.
-static QString askForWoWFolder(const QString& tried)
+// True when the run is driven by a script (--shot / --export and friends). A modal dialog
+// there would block forever instead of failing, so those runs report to the trace and exit.
+static bool g_scripted = false;
+
+// The source this run uses -- for the error texts, which differ between a folder and the CDN.
+static GameSource g_source;
+
+// Set by "Jetzt neu starten" (menu) and by the start-up error box: main() starts a fresh
+// process once this one has shut down, because CASC is mounted once per process.
+static bool g_restart = false;
+
+// Where this run's game data comes from. In order: the command line (a folder, or --online),
+// the settings, a WoW installation at the default path, and finally the first-start dialog.
+// kind == None means there is none: the dialog was closed, or a scripted run found nothing.
+//
+// A folder on the command line is taken as given and never second-guessed with a dialog:
+// --shot and --export are used from scripts, and a modal dialog there would hang the run
+// instead of failing it.
+static GameSource resolveGameSource(LoadingSplash* splash, const gamesource::Arguments& args)
 {
-  QString start = tried;
-  for (;;) {
-    const QString picked = QFileDialog::getExistingDirectory(
-      nullptr,
-      QString::fromUtf8("WoW-Installationsordner wählen"),
-      start,
-      QFileDialog::ShowDirsOnly);
-
-    if (picked.isEmpty())
-      return QString();          // cancelled
-
-    if (looksLikeWoWInstall(picked))
-      return picked;
-
-    // Naming the file we looked for beats "invalid folder": it tells the user both
-    // what is wrong and that the Data subfolder is not what we want.
-    if (QMessageBox::warning(
-          nullptr,
-          QString::fromUtf8("Keine WoW-Installation"),
-          QString::fromUtf8("In\n\n%1\n\nliegt keine .build.info. Bitte den Ordner "
-                            "wählen, in dem WoW installiert ist -- nicht den "
-                            "Data-Unterordner.").arg(QDir::toNativeSeparators(picked)),
-          QMessageBox::Retry | QMessageBox::Cancel,
-          QMessageBox::Retry) == QMessageBox::Cancel)
-      return QString();
-
-    start = picked;
+  GameSource src = gamesource::applyArguments(gamesource::load(), args);
+  if (src.kind != GameSource::None) {
+    trace("game data source: " + gamesource::describe(src));
+    return src;
   }
+
+  // Nothing remembered, or the remembered folder is gone. The default path first, silently:
+  // someone who has WoW where Battle.net puts it never sees a question -- exactly as before.
+  const QString folder = QString::fromLatin1(kDefaultFolder);
+  if (gamesource::looksLikeWoWInstall(folder)) {
+    src.kind = GameSource::Local;
+    src.folder = folder;
+    gamesource::save(src);
+    trace("game folder at the default path, remembered: " + folder);
+    return src;
+  }
+
+  if (g_scripted) {
+    trace("no game data source, and a scripted run asks no questions -- pass a folder or --online");
+    return GameSource();
+  }
+
+  // The splash would sit on top of the dialog; it comes back once there is an answer.
+  trace("no installation found -- asking where the game data should come from");
+  splash->hide();
+  SourceDialog dlg(SourceDialog::FirstRun, src, false);
+  const bool answered = dlg.exec() == QDialog::Accepted;
+  splash->show();
+  if (!answered)
+    return GameSource();
+  src = dlg.chosen();
+  gamesource::save(src);
+  trace("game data source chosen: " + gamesource::describe(src));
+  return src;
 }
 
-// The two positional arguments -- install folder, then FileDataID -- are the ones
-// before the first --flag. Both are optional, so "--shot out.png" must not be read
-// as a folder and a model id.
-static QStringList positionalArgs(int argc, char** argv)
+// The source dialog from an error box: the way out of a start that cannot work -- the wrong
+// folder, or the online mode on a machine without internet -- without editing the ini.
+// True when a new source was saved; the caller restarts.
+static bool offerSourceChange()
 {
-  QStringList out;
-  for (int i = 1; i < argc; ++i) {
-    const QString a = QString::fromLocal8Bit(argv[i]);
-    if (a.startsWith("--"))
-      break;
-    out << a;
-  }
-  return out;
-}
-
-static QString resolveGameFolder(int argc, char** argv)
-{
-  // An explicit folder on the command line is taken as given and never second-guessed
-  // with a dialog: --shot and --export are used from scripts, and a modal dialog there
-  // would hang the run instead of failing it.
-  const QStringList positional = positionalArgs(argc, argv);
-  if (!positional.isEmpty())
-    return positional.first();
-
-  QSettings settings(QString::fromLatin1(kSettingsFile), QSettings::IniFormat);
-  const QString remembered = settings.value(QString::fromLatin1(kFolderKey)).toString();
-  if (looksLikeWoWInstall(remembered)) {
-    trace("game folder from settings: " + remembered);
-    return remembered;
-  }
-
-  QString folder = QString::fromLatin1(kDefaultFolder);
-  if (!looksLikeWoWInstall(folder)) {
-    trace("no installation at the default path -- asking");
-    folder = askForWoWFolder(remembered.isEmpty() ? QString() : remembered);
-    if (folder.isEmpty())
-      return QString();          // caller exits
-  }
-
-  QDir().mkpath("userSettings");
-  settings.setValue(QString::fromLatin1(kFolderKey), folder);
-  settings.sync();
-  trace("game folder remembered: " + folder);
-  return folder;
+  SourceDialog dlg(SourceDialog::Switch, g_source, false);
+  if (dlg.exec() != QDialog::Accepted)
+    return false;
+  gamesource::save(dlg.chosen());
+  trace("game data source changed after a failed start: " + gamesource::describe(dlg.chosen()));
+  return true;
 }
 
 // The application's whole look, installed in one place and in one order.
@@ -211,41 +211,16 @@ static void applyTheme(QApplication& app, double scale, bool scripted)
 // The first start builds the database from DB2 (~20 s) and even a warm start reads a
 // ~148 MB listfile -- all of it before the window exists. Without this the user
 // launches the app and nothing at all appears. A splash with stage messages is the
-// honest fix here; threading is not: GAMEDIRECTORY/GAMEDATABASE are unlocked globals
-// and the GL context belongs to the UI thread.
-static QSplashScreen* makeSplash()
-{
-  // The branded poster, compiled in via the Qt resource system so the exe stays
-  // self-contained. The drawn fallback only exists so a build without resources
-  // still shows SOMETHING rather than nothing.
-  QPixmap pm(":/splash.png");
-  if (pm.isNull()) {
-    pm = QPixmap(420, 160);
-    pm.fill(QColor(tok::bgRaised));
-    QPainter p(&pm);
-    p.setPen(QColor(tok::lineBorder));
-    p.drawRect(0, 0, pm.width() - 1, pm.height() - 1);
-    p.setPen(QColor(tok::accent));
-    QFont f = typo::font(typo::Display);
-    f.setLetterSpacing(QFont::AbsoluteSpacing, 2.0);
-    p.setFont(f);
-    p.drawText(QRect(0, 40, pm.width(), 30), Qt::AlignCenter, "MODEL VIEWER");
-    p.end();
-  }
-  return new QSplashScreen(pm);
-}
-
-static void splashStage(QSplashScreen* splash, QApplication& app, const QString& text)
+// honest fix here; threading the whole start is not: GAMEDIRECTORY/GAMEDATABASE are unlocked
+// globals and the GL context belongs to the UI thread. The one exception is the online open
+// (mountOnline below), which runs alone while this thread only draws the splash.
+static void splashStage(LoadingSplash* splash, QApplication& app, const QString& text)
 {
   if (!splash)
     return;
-  splash->showMessage(text, Qt::AlignBottom | Qt::AlignHCenter, QColor(tok::fgSoft));
+  splash->setStage(text);
   app.processEvents();
 }
-
-// True when the run is driven by a script (--shot / --export and friends). A modal dialog
-// there would block forever instead of failing, so those runs report to the trace and exit.
-static bool g_scripted = false;
 
 // Startup failures the user has to be TOLD about. They all mean the same thing in practice
 // -- the folder is not a usable WoW installation -- and picking the wrong folder is the
@@ -254,7 +229,7 @@ static bool g_scripted = false;
 // This used to write into a QLabel that was never parented, laid out or shown, so the app
 // put up an empty window for three seconds and quit without a word. A message box costs one
 // dialog and turns a dead end into an instruction.
-static int fatalStart(QSplashScreen* splash, QWidget* win, const QString& what,
+static int fatalStart(LoadingSplash* splash, QWidget* win, const QString& what,
                       const QString& detail)
 {
   if (splash)
@@ -268,24 +243,171 @@ static int fatalStart(QSplashScreen* splash, QWidget* win, const QString& what,
   }
 
   QMessageBox box(QMessageBox::Critical, QString(WMV_APP_NAME), what, QMessageBox::Ok);
-  box.setInformativeText(
-      // NOT "_retail_": that folder holds no .build.info, which is exactly the file
-      // looksLikeWoWInstall() tests for -- naming it here would have sent the user
-      // straight back into the rejection they just got.
-      QObject::tr("Erwartet wird der Ordner der WoW-Installation, in dem die Datei "
-                  ".build.info liegt — das ist \"World of Warcraft\" selbst, nicht der "
-                  "Unterordner \"_retail_\" und nicht \"Data\".\n\n"
-                  "Der zuletzt gewählte Ordner ist in userSettings\\qt-frontend.ini "
-                  "gespeichert; nach dem Löschen dieser Zeile fragt das Programm beim "
-                  "nächsten Start erneut."));
+  if (g_source.kind == GameSource::Online) {
+    box.setInformativeText(
+        QObject::tr("Im Online-Modus kommen die Spieldaten von Blizzards Download-Servern "
+                    "(Region %1) und werden unter\n%2\nzwischengespeichert. Ohne Internet "
+                    "startet nur ein Stand, der schon einmal vollständig geladen wurde. "
+                    "Einzelne Spieldateien kommen über HTTP auf Port 80 und ohne Proxy: ein "
+                    "Netz, das Port 80 sperrt oder nur über einen Proxy ins Internet lässt, "
+                    "verhindert den Download ebenfalls.")
+          .arg(gamesource::regionLabel(g_source.region))
+          .arg(QDir::toNativeSeparators(g_source.cacheDir)));
+  } else {
+    box.setInformativeText(
+        // NOT "_retail_": that folder holds no .build.info, which is exactly the file
+        // looksLikeWoWInstall() tests for -- naming it here would have sent the user
+        // straight back into the rejection they just got.
+        QObject::tr("Erwartet wird der Ordner der WoW-Installation, in dem die Datei "
+                    ".build.info liegt — das ist \"World of Warcraft\" selbst, nicht der "
+                    "Unterordner \"_retail_\" und nicht \"Data\".\n\n"
+                    "Ohne WoW-Installation lassen sich die Spieldaten auch online laden: "
+                    "»Spieldaten-Quelle ändern …«."));
+  }
   if (!detail.isEmpty())
     box.setDetailedText(detail);
+  // The way out, in the box itself. Before, a wrong choice on the first start came back on
+  // every start after it, and the only fix was deleting a line from an ini file.
+  QPushButton* change = box.addButton(QObject::tr("Spieldaten-Quelle ändern …"),
+                                      QMessageBox::ActionRole);
   box.exec();
 
   if (win)
     win->close();
+  if (box.clickedButton() == change && offerSourceChange()) {
+    trace("restarting for the new game data source");
+    QProcess::startDetached(QCoreApplication::applicationFilePath(), QStringList());
+    return 0;
+  }
   return 1;
 }
+
+// The online open, off the UI thread.
+//
+// A cold start moves some 350 MB before the storage is open. The engine's prefetch reports it
+// byte by byte, but then CascLib fetches the root table (~50 MB) in one request without a single
+// progress report. On this thread the splash would freeze for that long, and Windows greys out a
+// window that stops answering after five seconds. So setConfig() -- and only setConfig() -- runs
+// on a worker: Game::init(), which asks the version service with Qt networking, has already run
+// here; the window does not exist yet; and nothing on this thread touches GAMEDIRECTORY until
+// the worker is done. The engine calls the progress callback on the worker, so the callback
+// only stores a number and the splash timer here draws it.
+//
+// The bands, as the engine reports them (CASCFolder::openOnlineStorage): up to 0.70 the prefetch
+// of the archive indexes and the encoding table, by bytes; up to 0.90 CascLib's open, which reads
+// those back and downloads the root table; the rest the enumeration of every file. On a warm
+// cache the prefetch has nothing to fetch and the bar starts at 0.70.
+static const float kPrefetchEnd = 0.70f;
+static const float kOpenEnd = 0.90f;
+
+static QString onlineStage(float f, bool download)
+{
+  if (!download)
+    return QString::fromUtf8("Online-Cache wird geöffnet …");
+  if (f < kPrefetchEnd)
+    return QString::fromUtf8("Archiv-Verzeichnisse und Dateitabelle werden geladen …");
+  if (f < kOpenEnd)
+    return QString::fromUtf8("Dateiverzeichnis wird geladen …");
+  return QString::fromUtf8("Vorhandene Dateien werden erfasst …");
+}
+
+static bool mountOnline(LoadingSplash* splash, wow::WoWFolder* folder,
+                        const core::GameConfig& config, bool* cancelled)
+{
+  // A download is ahead when this build has never been opened completely: the first online
+  // start, the first one after a WoW patch, the first one after "Leeren". Only then is there a
+  // size to announce.
+  const QString last = gamesource::completedBuild(g_source.cacheDir);
+  bool download = last != config.version && !g_source.offline;
+  QString expect;
+  if (download)
+    expect = last.isEmpty()
+      ? QString::fromUtf8("einmalig rund %1").arg(gamesource::formatBytes(gamesource::kFirstStartBytes))
+      : QString::fromUtf8("neue WoW-Version, rund %1").arg(gamesource::formatBytes(gamesource::kPatchBytes));
+  trace(QString("online open: build %1, last complete %2%3")
+          .arg(config.version).arg(last.isEmpty() ? QString("none") : last)
+          .arg(download ? " -- downloading" : ""));
+
+  // Shared, not a local captured by reference: WoWFolder hands CASCFolder its own copy of the
+  // callback, and that copy outlives this function.
+  auto progress = std::make_shared<std::atomic<float>>(0.0f);
+  GAMEDIRECTORY.setLoadProgressCallback([progress](float f) { progress->store(f); });
+  bool offerCancel = download;
+  splash->setCancellable(offerCancel);
+  splash->setProgress(0.0);
+
+  QElapsedTimer clock;
+  clock.start();
+  QElapsedTimer sinceCancel;
+  int tracedDecile = -1;
+  *cancelled = false;
+  const bool ok = gamesource::runWhileResponsive(
+    [&config]() { return GAMEDIRECTORY.setConfig(config); },
+    [&]() {
+      const float f = progress->load();
+      if (splash->cancelRequested() && !*cancelled) {
+        *cancelled = true;
+        folder->cancelOnlineOpen();
+        sinceCancel.start();
+        trace("online open: cancel requested");
+      }
+      // The prefetch reports only while bytes arrive. Below its end, the cache lacks files of a
+      // build it had opened before -- deleted by hand, or found damaged and fetched again. Then
+      // it is a download after all, only without a size to announce.
+      if (!download && f > 0.0f && f < kPrefetchEnd) {
+        download = true;
+        trace("online open: the cache is missing files of this build -- downloading");
+      }
+      // "Abbrechen" only while there is a download to stop. From the enumeration on,
+      // everything has arrived, and a cancel would only throw the finished open away.
+      if (!*cancelled && offerCancel != (download && f < kOpenEnd)) {
+        offerCancel = !offerCancel;
+        splash->setCancellable(offerCancel);
+      }
+      // The engine stops at its next progress report: within a fraction of a second while it
+      // prefetches, but CascLib reports only between its steps -- nothing while the root table
+      // arrives -- and a connection that went silent can hold it for a while. Ten seconds after
+      // the click, the process ends the hard way -- safe for the cache, because the prefetch and
+      // CascLib both write every file under a temporary name and give it its real name only once
+      // it is complete.
+      if (*cancelled && sinceCancel.elapsed() > 10000) {
+        trace("online open did not stop within 10 s of the cancel -- exiting");
+        std::_Exit(0);
+      }
+      const qint64 s = clock.elapsed() / 1000;
+      splash->setProgress(f);
+      splash->setStage(onlineStage(f, download));
+      splash->setDetail(QString::fromUtf8("%1 % · %2:%3%4")
+                          .arg(int(f * 100)).arg(s / 60).arg(s % 60, 2, 10, QChar('0'))
+                          .arg(expect.isEmpty() ? QString() : QString::fromUtf8(" · ") + expect));
+      // Scripted runs have only the trace to show that a long download is alive.
+      if (int(f * 10) != tracedDecile) {
+        tracedDecile = int(f * 10);
+        trace(QString("online open %1 % after %2 s").arg(tracedDecile * 10).arg(s));
+      }
+    });
+
+  // The listfile pass reports nowhere, as before.
+  GAMEDIRECTORY.setLoadProgressCallback(std::function<void(float)>());
+  splash->setCancellable(false);
+  splash->setProgress(-1.0);
+  splash->setDetail(QString());
+  if (ok)
+    *cancelled = false;          // finished anyway -- a late click does not throw that away
+  return ok;
+}
+
+// A wait cursor for as long as a scope runs, when `on`. Online, the first view of a model
+// fetches its files on the UI thread -- a character is around a hundred requests, seconds on
+// an ordinary line -- and the window cannot repaint meanwhile; the cursor still changes.
+struct BusyCursor
+{
+  explicit BusyCursor(bool on) : on_(on) { if (on_) QApplication::setOverrideCursor(Qt::WaitCursor); }
+  ~BusyCursor() { if (on_) QApplication::restoreOverrideCursor(); }
+  BusyCursor(const BusyCursor&) = delete;
+  BusyCursor& operator=(const BusyCursor&) = delete;
+  const bool on_;
+};
 
 // Stamp a freshly built model as a character, or as not one. Both flags have to be set
 // before it renders: charModelDetails.isChar sends WoWModel::calcBones down the character
@@ -330,13 +452,21 @@ int main(int argc, char** argv)
   QDir().mkpath("userSettings");
   LOGGER.addChild(new WMVLog::LogOutputFile("userSettings/log.txt"));
 
+  // Every HTTPS request the program makes has to follow the Windows proxy settings, or a
+  // network that only lets a proxy out fails all of them: the online mode's version tables,
+  // start files and key list (all inside the engine), and the Wowhead and armory imports. Qt
+  // does that by default only when it was configured with -system-proxies; this makes it hold
+  // for any build of Qt. Set before any of them runs. The online mode's single files do not go
+  // through Qt -- CascLib fetches them over plain HTTP on port 80, with no proxy at all.
+  QNetworkProxyFactory::setUseSystemConfiguration(true);
+
   // The armory importer talks to a proxy that queries Blizzard's API server-side. Its
   // address is compiled into the plugin, and the runtime override existed only in the wx
   // front-end -- so when that proxy was down, a user here had no way to point anywhere
   // else and the plugin's own error text referred to a settings dialog that does not
   // exist. Same key and same file the wx build uses, so the two agree.
   {
-    QSettings settings(QString::fromLatin1(kSettingsFile), QSettings::IniFormat);
+    QSettings settings(QString::fromLatin1(gamesource::kSettingsFile), QSettings::IniFormat);
     const QString proxy = settings.value("Armory/ProxyURL", "").toString();
     if (!proxy.isEmpty()) {
       GLOBALSETTINGS.setArmoryProxyURL(proxy.toStdString());
@@ -384,16 +514,41 @@ int main(int argc, char** argv)
   app.setWindowIcon(QIcon(":/appicon.png"));
   trace("QApplication constructed");
 
-  QSplashScreen* splash = makeSplash();
+  LoadingSplash* splash = LoadingSplash::create();
   splash->show();
   splashStage(splash, app, QString::fromUtf8("Spieldaten werden geöffnet …"));
 
-  const QString dataFolder = resolveGameFolder(argc, argv);
-  if (dataFolder.isEmpty()) {
-    trace("no game folder chosen -- exiting");
-    return 0;
+  const gamesource::Arguments args = gamesource::parseArguments(argList());
+  for (const QString& note : args.notes)
+    trace("command line: " + note);
+
+  // A "Leeren" from the last online session, when CascLib still held the files. Done before
+  // anything can open the folder again, whichever source this start uses. A few tries: after
+  // "Jetzt neu starten" the previous process may still be letting go of its files. What is
+  // not gone stays scheduled -- a half-deleted cache heals itself (everything in it is
+  // named by its hash and fetched again on demand), a forgotten "Leeren" does not.
+  {
+    const QString pending = gamesource::pendingClear();
+    if (!pending.isEmpty()) {
+      QString err;
+      bool cleared = false;
+      for (int attempt = 0; attempt < 4 && !cleared; ++attempt) {
+        if (attempt > 0)
+          QThread::msleep(500);
+        cleared = gamesource::clearCache(pending, &err);
+      }
+      trace(cleared ? "online cache cleared: " + pending : "online cache NOT cleared: " + err);
+      if (cleared)
+        gamesource::setPendingClear(QString());
+    }
   }
-  const QStringList positional = positionalArgs(argc, argv);
+
+  GameSource src = resolveGameSource(splash, args);
+  if (src.kind == GameSource::None) {
+    trace("no game data source -- exiting");
+    return g_scripted ? 1 : 0;
+  }
+  g_source = src;
   // Nothing is loaded unless an id was asked for. Starting on a fixed model meant every
   // launch began by throwing away someone else's orc: the first act was always to find
   // the browser and replace it. An empty viewport with a pointer to the tree is the
@@ -402,28 +557,75 @@ int main(int argc, char** argv)
   // This is NOT the same id as MenuController's kMannequinFileId. That one is the figure
   // an item gets put on when the browser is used without a character loaded, and it stays
   // -- a piece of armour needs someone to wear it.
-  const bool modelRequested = positional.size() > 1;
-  const uint fileId = modelRequested ? positional.at(1).toUInt() : 0u;
+  const bool modelRequested = args.modelId != 0u;
+  const uint fileId = args.modelId;
 
   auto* win = new MainWindow;
   GLHost* host = win->canvas();
 
   // --- game init: identical to what modelviewer.cpp does, minus the wx wrapping
-  // CASCFolder builds the build-info path as "<folder>\..\.build.info", so the
-  // folder handed to WoWFolder has to be the client's Data directory, not the
-  // install root. Passing the root silently yields zero configs.
-  QString cascFolder = QDir::fromNativeSeparators(dataFolder);
-  while (cascFolder.endsWith('/'))
-    cascFolder.chop(1);
-  if (!cascFolder.endsWith("/Data", Qt::CaseInsensitive))
-    cascFolder += "/Data";
+  const bool online = src.kind == GameSource::Online;
+  QString cascFolder;
+  if (online) {
+    // The cache has to exist and be writable before the engine is pointed at it, and it must
+    // not sit inside a WoW installation (prepareCache says why). Checked here rather than
+    // left to the engine, whose error would only say "path not found".
+    QString err;
+    if (!gamesource::prepareCache(src.cacheDir, &err))
+      return fatalStart(splash, win, QObject::tr("Der Online-Cache ist nicht nutzbar."), err);
+    cascFolder = QDir::toNativeSeparators(src.cacheDir);
+
+    // Several hundred MB on the first start: better said before than discovered halfway.
+    const qint64 free = gamesource::freeBytes(src.cacheDir);
+    if (gamesource::completedBuild(src.cacheDir).isEmpty() && free >= 0
+        && free < gamesource::kComfortBytes) {
+      trace(QString("online cache: only %1 free").arg(gamesource::formatBytes((quint64)free)));
+      if (!g_scripted) {
+        splash->hide();
+        const auto answer = QMessageBox::warning(
+          nullptr, QString(WMV_APP_NAME),
+          QObject::tr("Auf dem Laufwerk des Online-Caches sind nur noch %1 frei. Der erste "
+                      "Start lädt rund %2.\n\n%3")
+            .arg(gamesource::formatBytes((quint64)free),
+                 gamesource::formatBytes(gamesource::kFirstStartBytes), cascFolder),
+          QMessageBox::Ignore | QMessageBox::Cancel, QMessageBox::Cancel);
+        splash->show();
+        if (answer != QMessageBox::Ignore)
+          return 0;
+      }
+    }
+  } else {
+    // CASCFolder builds the build-info path as "<folder>\..\.build.info", so the
+    // folder handed to WoWFolder has to be the client's Data directory, not the
+    // install root. Passing the root silently yields zero configs.
+    cascFolder = QDir::fromNativeSeparators(src.folder);
+    while (cascFolder.endsWith('/'))
+      cascFolder.chop(1);
+    if (!cascFolder.endsWith("/Data", Qt::CaseInsensitive))
+      cascFolder += "/Data";
+  }
   trace("CASC folder = " + cascFolder);
 
   trace("before WoWFolder construction");
   auto* folder = new wow::WoWFolder(QDir::toNativeSeparators(cascFolder));
+  if (online) {
+    // Before Game::init(): that is where the engine asks Blizzard's version service for the
+    // current build and refreshes the key list (HTTPS, about a second; some 20 s when the network
+    // swallows packets, after which the cached build is used).
+    folder->setOnline(QString::fromLatin1(gamesource::kProduct), src.region, src.locale);
+    splashStage(splash, app, QString::fromUtf8("Aktuelle WoW-Version wird bei Blizzard erfragt …"));
+  }
   trace("WoWFolder constructed; before Game::init");
   core::Game::instance().init(folder, new wow::WoWDatabase());
   trace("Game::init returned");
+  if (online) {
+    // No fresh build information: this start serves the cache as it is. Kept in the source,
+    // because the title bar, the error texts and a failed model load all word it differently.
+    src.offline = !folder->onlineRefreshed();
+    g_source = src;
+    trace(src.offline ? "online: version service unreachable -- offline, serving the cache"
+                      : "online: build information refreshed");
+  }
   if (!core::Game::instance().initDone()) {
     return fatalStart(splash, win,
                       QObject::tr("Die Spieldaten konnten nicht geöffnet werden."),
@@ -437,6 +639,20 @@ int main(int argc, char** argv)
   std::vector<core::GameConfig> configs = GAMEDIRECTORY.configsFound();
   trace(QString("configsFound returned %1 entries").arg(configs.size()));
   if (configs.empty()) {
+    if (online) {
+      // Nearly always a first online start without a connection. With fresh tables and still
+      // no build, the tables themselves were unusable.
+      const QString detail = QString("%1\n%2").arg(CASCFolder::errorText(GAMEDIRECTORY.lastError()))
+                                              .arg(cascFolder);
+      return fatalStart(splash, win,
+                        src.offline
+                          ? QObject::tr("Keine Verbindung zu Blizzards Servern — und im Cache "
+                                        "liegt noch kein Spielstand. Der erste Online-Start "
+                                        "braucht Internet.")
+                          : QObject::tr("Blizzards Versionsdienst hat keinen lesbaren Spielstand "
+                                        "geliefert."),
+                        detail);
+    }
     return fatalStart(splash, win,
                       QObject::tr("In diesem Ordner wurde keine WoW-Installation gefunden."),
                       cascFolder);
@@ -464,13 +680,39 @@ int main(int argc, char** argv)
   trace(QString("chosen config: %1 / %2 / %3")
           .arg(config.locale).arg(config.product).arg(config.version));
 
-  splashStage(splash, app, QString::fromUtf8("Spielarchiv wird eingebunden …"));
   trace("before setConfig (mounts CASC)");
-  if (!GAMEDIRECTORY.setConfig(config)) {
-    return fatalStart(splash, win,
-                      QObject::tr("Das Spielarchiv konnte nicht eingebunden werden. "
-                                  "Läuft WoW oder der Battle.net-Updater gerade?"),
-                      QString("setConfig error %1\n%2").arg(GAMEDIRECTORY.lastError()).arg(cascFolder));
+  if (online) {
+    bool cancelled = false;
+    if (!mountOnline(splash, folder, config, &cancelled)) {
+      if (cancelled) {
+        // Asked for, so no error box. What arrived stays in the cache; the next start
+        // continues from there.
+        trace("online open cancelled by the user -- exiting");
+        splash->close();
+        return 0;
+      }
+      const QString detail = QString("setConfig error %1 (%2)\n%3")
+                               .arg(GAMEDIRECTORY.lastError())
+                               .arg(CASCFolder::errorText(GAMEDIRECTORY.lastError()))
+                               .arg(cascFolder);
+      return fatalStart(splash, win,
+                        src.offline
+                          ? QObject::tr("Offline, und der Cache ist unvollständig: der letzte "
+                                        "Download wurde nicht fertig. Mit Internet geht es "
+                                        "beim nächsten Start dort weiter, wo er aufgehört hat.")
+                          : QObject::tr("Die Spieldaten ließen sich nicht von Blizzards "
+                                        "Download-Servern laden."),
+                        detail);
+    }
+    gamesource::setCompletedBuild(src.cacheDir, config.version);
+  } else {
+    splashStage(splash, app, QString::fromUtf8("Spielarchiv wird eingebunden …"));
+    if (!GAMEDIRECTORY.setConfig(config)) {
+      return fatalStart(splash, win,
+                        QObject::tr("Das Spielarchiv konnte nicht eingebunden werden. "
+                                    "Läuft WoW oder der Battle.net-Updater gerade?"),
+                        QString("setConfig error %1\n%2").arg(GAMEDIRECTORY.lastError()).arg(cascFolder));
+    }
   }
   trace("setConfig returned OK");
 
@@ -693,7 +935,35 @@ int main(int argc, char** argv)
   // which reads like a date, means nothing to anyone using this, and was the noisiest thing
   // in the title bar. The pill itself stays: its green dot is the only place the window says
   // "game data is mounted".
-  win->setBuildLabel(QString("CASC · %1").arg(config.version.section('.', 0, 2)));
+  //
+  // The label names the source too: "CASC" for an installation, "CDN" for the online mode, and
+  // "offline" with an amber dot when the CDN could not be asked -- the one state in which
+  // models can fail to load for a reason that is not in the model.
+  {
+    const QString shortVersion = config.version.section('.', 0, 2);
+    if (online) {
+      const QString where = QString::fromUtf8("Region %1, Sprache %2. Cache: %3")
+                              .arg(gamesource::regionLabel(src.region),
+                                   gamesource::localeLabel(src.locale), cascFolder);
+      win->setDataSource(
+        QString("CDN · %1%2").arg(shortVersion).arg(src.offline ? QString(" · offline") : QString()),
+        src.offline
+          ? QString::fromUtf8("Offline: Blizzards Server waren beim Start nicht erreichbar. "
+                              "Benutzt wird der zwischengespeicherte Stand %1 — was schon "
+                              "einmal geladen wurde, geht; alles andere erst wieder mit "
+                              "Internet.\n%2").arg(config.version, where)
+          : QString::fromUtf8("Online von Blizzards Download-Servern, Stand %1.\n%2")
+              .arg(config.version, where),
+        src.offline);
+      if (src.offline)
+        win->setStatus(QString::fromUtf8("Offline — nur bereits Geladenes"));
+    } else {
+      win->setDataSource(QString("CASC · %1").arg(shortVersion),
+                         QString::fromUtf8("Spielarchiv eingebunden: %1")
+                           .arg(QDir::toNativeSeparators(src.folder)),
+                         false);
+    }
+  }
   win->setPathLabel(file ? file->fullname()
                          : QString::fromUtf8("Kein Modell geladen — links im Baum eines wählen"));
 
@@ -738,10 +1008,11 @@ int main(int argc, char** argv)
   // The same for the game side of MVLink. Install and quit, exit code carries the outcome.
   for (int i = 1; i < argc; ++i) {
     if (QString(argv[i]) == "--install-mvlink-addon") {
-      // dataFolder, not the settings key: it is the folder this run actually resolved,
-      // command line included, so the flag installs where this run is looking.
+      // The folder this run resolved, command line included, so the flag installs where
+      // this run is looking. Online there is none; then the remembered WoW folder, if any.
       QString err;
-      const QString dest = mvlink_install_addon(dataFolder, &err);
+      const QString wowFolder = online ? gamesource::installFolder() : src.folder;
+      const QString dest = mvlink_install_addon(wowFolder, &err);
       trace(dest.isEmpty() ? QString("mvlink addon install FAILED: %1").arg(err)
                            : QString("mvlink addon installed into %1").arg(dest));
       return dest.isEmpty() ? 1 : 0;
@@ -767,15 +1038,23 @@ int main(int argc, char** argv)
   // The one place a model becomes THE model. Everything that wants to show something
   // -- the browser tree, the menu's character/NPC/armory imports -- routes through
   // here, so the inspector panels can never be left pointing at the previous model.
-  auto showModel = [win, host](GameFile* picked) {
+  auto showModel = [win, host, src](GameFile* picked) {
     if (!picked)
       return;
+    const BusyCursor busy(src.kind == GameSource::Online);
     auto* m = new WoWModel(picked, true);
 
     const bool isCharacter = markAsCharacter(m);
 
     host->setModel(m);
     win->setPathLabel(picked->fullname());
+    // Online, a file in the tree is a file the CDN has -- not one that is on this disk. When
+    // it cannot be fetched the model comes back empty, and an empty viewport under a path
+    // that looks fine is the least helpful thing to show.
+    if (!m->ok && src.kind == GameSource::Online)
+      win->setPathLabel(src.offline
+        ? QObject::tr("Offline: %1 ist noch nicht im Cache.").arg(picked->fullname())
+        : QObject::tr("%1 ließ sich nicht von Blizzards Servern laden.").arg(picked->fullname()));
     // Character models need their CharDetails set up before they render complete;
     // creatures and props resolve raceID == -1 and are left alone.
     win->characterPanel()->setModel(isCharacter ? m : nullptr);
@@ -828,6 +1107,13 @@ int main(int argc, char** argv)
   // implementation.
   auto* menus = new MenuController(win, host, exporters, win);
   QObject::connect(menus, &MenuController::loadFileRequested, menus, showModel);
+  menus->setGameSource(src);
+  // "Jetzt neu starten" after a source change: close the window, let this process wind down
+  // normally, then start the next one (below, after app.exec()).
+  QObject::connect(menus, &MenuController::restartRequested, win, [win]() {
+    g_restart = true;
+    win->close();
+  });
   menus->build();
 
   // The character tab delegates every button to the menu controller, so it can only be
@@ -1339,5 +1625,10 @@ int main(int argc, char** argv)
     qApp->quit();
   });
 
-  return app.exec();
+  const int rc = app.exec();
+  if (g_restart) {
+    trace("restarting for the new game data source");
+    QProcess::startDetached(QCoreApplication::applicationFilePath(), QStringList());
+  }
+  return rc;
 }

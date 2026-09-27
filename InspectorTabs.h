@@ -14,6 +14,7 @@ class QComboBox;
 class QLabel;
 class QLineEdit;
 class QListWidget;
+class QPushButton;
 class QSpinBox;
 class QVBoxLayout;
 
@@ -38,6 +39,10 @@ private:
   void importMVLink();          // code from the in-game addon
   void importMVLinkFromGame();  // ... or straight out of its SavedVariables
   void installMVLinkAddon();    // put the bundled addon into the game's AddOns folder
+  // The two MVLink routes that need a WoW folder, worded for whether there is one. Online
+  // without an installation the addon still has a use -- codes from someone else -- but
+  // "Ablage lesen" has nothing to read and "installieren" has to ask where first.
+  void refreshMVLinkState();
   void saveLook();              // the look library: current character under a name ...
   void loadSelectedLook();      // ... back with one click ...
   void deleteSelectedLook();    // ... and gone again, with a confirmation
@@ -54,6 +59,9 @@ private:
   ExportController* exporters_ = nullptr;
   GLHost* canvas_ = nullptr;
   QLineEdit* mvlinkCode_ = nullptr;
+  QPushButton* mvFileBtn_ = nullptr;
+  QPushButton* mvInstallBtn_ = nullptr;
+  QLabel* mvInstallHint_ = nullptr;
   QLineEdit* lookName_ = nullptr;
   QListWidget* lookList_ = nullptr;
   QLineEdit* armoryUrl_ = nullptr;
