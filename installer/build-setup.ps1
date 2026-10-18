@@ -7,8 +7,8 @@
 #   .\installer\build-setup.ps1
 #   .\installer\build-setup.ps1 -SkipStage        # payload unchanged, UI/installer work
 #
-# Prerequisites: the application build (build\Release) and the upstream tree, as for
-# stage.ps1; CMake + MSVC for the UI; Inno Setup 6.
+# Prerequisites: the engine build (engine\build-x64) and the application build
+# (build\Release), as for stage.ps1; CMake + MSVC for the UI; Inno Setup 6.
 
 [CmdletBinding()]
 param(

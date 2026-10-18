@@ -5,6 +5,13 @@ Dieses Programm selbst steht unter der GNU General Public License, Version 3
 (siehe LICENSE.txt). Daneben liefert das Paket Bibliotheken und Daten Dritter
 aus. Dieser Text nennt sie, ihre Herkunft und ihre Bedingungen.
 
+Die Engine — die Modell-, Render- und Datenschicht in core.dll, wow.dll und den
+Plugins — stammt aus WoW Model Viewer (Copyright (C) WoW Model Viewer
+Community, ebenfalls GPLv3, https://github.com/wowmodelviewer/wowmodelviewer)
+und ist für dieses Programm verändert und erweitert. Von welchem Stand sie
+übernommen wurde und was sich seitdem geändert hat, steht im Quellcode unter
+engine/README.md.
+
 Stand: Version 1.5.0
 
 
@@ -67,10 +74,10 @@ Copyright (C) Ladislav Zezula. Verwendet unter der MIT-Lizenz.
 Lesen die Spielarchive von World of Warcraft (CASC). Fest in wow.dll
 eingebunden, keine eigenen Dateien im Paket. CascLib ist für den Online-Modus
 verändert (Bereichsabfragen, geprüfte Downloads, Zeitlimits); die Änderungen
-stehen Datei für Datei in upstream/ThirdParty/casclib/LOCAL-CHANGES.md.
+stehen Datei für Datei in engine/ThirdParty/casclib/LOCAL-CHANGES.md.
 
-Lizenztexte: upstream/ThirdParty/stormlib/LICENSE
-             upstream/ThirdParty/casclib/LICENSE
+Lizenztexte: engine/ThirdParty/stormlib/LICENSE
+             engine/ThirdParty/casclib/LICENSE
 
 
 5. GLEW und GLM
@@ -135,17 +142,10 @@ von Blizzard weder unterstützt noch geprüft.
 
 10. Quellcode (Angebot nach GPLv3 Abschnitt 6)
 ------------------------------------------------------------------
-Der vollständige Quellcode dieses Programms ist öffentlich verfügbar:
+Der vollständige Quellcode dieses Programms ist öffentlich verfügbar, die
+Oberfläche und die Engine (core.dll, wow.dll, Plugins) in einem Repository:
 
-  Oberfläche (dieses Programm):
     https://github.com/LouisBunt/wowmodelviewer-qt
-
-  Modell-, Render- und Datenschicht (core.dll, wow.dll, Plugins), als
-  Untermodul des obigen Repositorys eingebunden:
-    https://github.com/LouisBunt/wowmodelviewer   (Zweig: qt-frontend)
-
-  Ursprungsprojekt, von dem dieser Fork abstammt:
-    https://github.com/wowmodelviewer/wowmodelviewer
 
 Wer den Quellcode auf einem Datenträger möchte, wende sich an die im
 Repository genannte Kontaktadresse.

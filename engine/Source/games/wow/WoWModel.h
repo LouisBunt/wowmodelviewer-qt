@@ -1,0 +1,350 @@
+#ifndef _WOWMODEL_H
+#define _WOWMODEL_H
+
+// C++ files
+#include <map>
+#include <set>
+#include <vector>
+//#include <stdlib.h>
+//#include <crtdbg.h>
+
+// Our files
+
+#include "animated.h"
+#include "AnimManager.h"
+#include "Bone.h"
+#include "CASCChunks.h"
+#include "CharDetails.h"
+#include "CharTexture.h"
+#include "displayable.h"
+#include "Model.h"
+#include "ModelAttachment.h"
+#include "ModelCamera.h"
+#include "ModelColor.h"
+#include "ModelEvent.h"
+#include "modelheaders.h"
+#include "ModelLight.h"
+#include "ModelTransparency.h"
+#include "particle.h"
+#include "TabardDetails.h"
+#include "TextureAnim.h"
+#include "TextureManager.h"
+#include "wow_enums.h"
+#include "WoWItem.h"
+
+#include "metaclasses/Container.h"
+
+#include "glm/glm.hpp"
+
+class CASCFile;
+class GameFile;
+class ModelRenderPass;
+
+class QXmlStreamWriter;
+class QXmlStreamReader;
+
+#ifdef _WIN32
+#    ifdef BUILDING_WOW_DLL
+#        define _WOWMODEL_API_ __declspec(dllexport)
+#    else
+#        define _WOWMODEL_API_ __declspec(dllimport)
+#    endif
+#else
+#    define _WOWMODEL_API_
+#endif
+
+// Per-model texture-table size AND the merge-stride for merged models. This must be
+// >= the largest header.nTextures of any model loaded: modern M2s (War Within and
+// later, e.g. some void/cosmic creatures) declare more than the old limit of 32, and
+// writing textures[I]/specialTextures[I] past the array corrupted the heap (intermittent
+// 0xC0000374 crashes). The texture loop in initCommon also clamps to this as a safety net.
+#define TEXTURE_MAX 128
+
+class _WOWMODEL_API_ WoWModel : public ManagedItem, public Displayable, public Model, public Container<WoWItem>
+{
+  // VBO Data
+  GLuint vbuf, nbuf, tbuf;
+  size_t vbufsize;
+
+  // Non VBO Data
+  GLuint dlist;
+  bool forceAnim;
+
+  // ===============================
+  // Texture data
+  // ===============================
+  std::vector<GLuint> textures;
+  std::vector<int> specialTextures;
+  std::vector<GLuint> replaceTextures;
+
+  // Owned GL texture holding the composited eye (TextureType 19): the coloured iris and the
+  // Eyesight glow are separate customization textures that target the same replaceTextures
+  // slot, so they are layered into this one texture instead of overwriting each other.
+  // Recreated each refresh, freed here and in ~WoWModel.
+  GLuint eyeCompositeTex_ = 0;
+
+  inline void drawModel();
+  void initCommon();
+  bool isAnimated();
+  void initAnimated();
+  void initStatic();
+  void initRaceInfos();
+
+
+  void animate(ssize_t anim);
+  void calcBones(ssize_t anim, size_t time);
+
+  void lightsOn(GLuint lbase);
+  void lightsOff(GLuint lbase);
+
+  std::vector<uint16> boundTris;
+  std::vector<glm::vec3> bounds;
+
+  void refreshMerging();
+  void applyItemFocus();
+  int itemFocusSlot_ = -1;
+  std::set<WoWModel *> mergedModels;
+
+
+  // Cache of previously-merged-then-unmerged models, keyed by FileDataID. Re-merging a
+  // model from here reuses the parsed M2 + GPU buffers instead of re-reading the file
+  // from CASC, so toggling a customization/equipment piece off and on again is cheap.
+  // Owned here; bounded (see poolMergedModel) and freed in ~WoWModel.
+  std::map<uint, WoWModel *> mergedModelCache;
+
+  // raw values read from file (useful for merging)
+  std::vector<ModelVertex> rawVertices;
+  std::vector<uint32> rawIndices;
+  std::vector<ModelRenderPass *> rawPasses;
+  std::vector<ModelGeosetHD *> rawGeosets;
+  std::vector<uint32> skinFileIDs;
+    
+  void restoreRawGeosets();
+  static bool sortPasses(ModelRenderPass* mrp1, ModelRenderPass* mrp2);
+  
+  std::vector<uint32> globalSequences;
+  std::vector<ParticleSystem> particleSystems;
+  std::vector<RibbonEmitter> ribbons;
+  std::vector<TextureAnim> texAnims;
+  std::vector<ModelColor> colors;
+  std::vector<ModelTransparency> transparency;
+  std::vector<ModelLight> lights;
+  std::vector<ModelEvent> events;
+
+  bool animGeometry, animBones;
+
+  std::vector<AFID> readAFIDSFromFile(GameFile * f);
+  void readAnimsFromFile(GameFile * f, std::vector<AFID> & afids, modelAnimData & data, uint32 nAnimations, uint32 ofsAnimation, uint32 nAnimationLookup, uint32 ofsAnimationLookup);
+  std::vector<TXID> readTXIDSFromFile(GameFile * f);
+
+public:
+  // Read-only access for the FBX exporter (component/raw mode) to the UV-animation and transparency
+  // tracks -- otherwise private (only ModelRenderPass is friended). Inline, non-virtual -> the class
+  // layout is unchanged, so adding these needs no wow.dll ABI bump.
+  const std::vector<TextureAnim> & getTexAnims() const { return texAnims; }
+  const std::vector<ModelTransparency> & getTransparency() const { return transparency; }
+
+  bool model24500; // flag for build 24500 model changes to anim chunking and other things
+
+  GameFile * gamefile;
+
+  std::vector<uint> replacableParticleColorIDs;
+  bool replaceParticleColors;
+  
+  int mergedModelType; // 1 for customization models (e.g. body parts) / -1 for gear (armour sections)
+  
+  uint nbLights() const
+  {
+    return lights.size();
+  }
+
+  // Start, Mid and End colours, for cases where the model's particle colours are
+  // overridden by values from ParticleColor.dbc, indexed from CreatureDisplayInfo:
+  typedef std::vector<glm::vec4> particleColorSet;
+
+  // The particle will get its replacement colour set from 0, 1 or 2,
+  // depending on whether its ParticleColorIndex is set to 11, 12 or 13:
+  std::vector<particleColorSet> particleColorReplacements;
+  // Raw Data
+  std::vector<ModelVertex> origVertices;
+
+  typedef int GeosetNum;
+
+  glm::vec3 *normals;
+  glm::vec2 *texCoords;
+  glm::vec3 *vertices;
+  std::vector<uint32> indices;
+  // --
+
+  WoWModel(GameFile * file, bool forceAnim = false);
+  ~WoWModel();
+
+  std::vector<ModelCamera> cam;
+  std::string modelname;
+  std::string lodname;
+
+  std::vector<ModelRenderPass *> passes;
+  std::vector<ModelGeosetHD *> geosets;
+  // Where each merged model's geosets ended up in this model's geosets vector:
+  // {first index, count}. Merged geometry ("collections" pieces -- many helms and
+  // belts are merged rather than attached) is indistinguishable from body geometry
+  // once combined, so a caller that wants to show ONE piece on its own has no way to
+  // tell them apart. Rebuilt by refreshMerging(), which is the only place that knows.
+  std::map<WoWModel *, std::pair<uint, uint>> mergedGeosetRanges;
+
+  // Item view: show ONLY the equipment piece in this CharSlots index, -1 for the whole
+  // character. Applied at the END of refresh() rather than by the caller, because
+  // refresh() recomputes every geoset's visibility from the equipment -- a caller that
+  // hid things beforehand had its work undone by the next refresh, whichever of the
+  // many callers triggered it.
+  void setItemFocus(int slot);
+  int itemFocus() const { return itemFocusSlot_; }
+
+  // World-space bounds of what is actually DRAWN right now -- merged geosets that are
+  // still displayed plus every visible attached item, each moved to its bone. Needed
+  // because the camera otherwise frames the full character mesh, which in the item
+  // view is invisible: the piece then sits tiny in the middle of an empty viewport.
+  // Returns false when nothing is visible.
+  bool visibleBounds(glm::vec3 & outMin, glm::vec3 & outMax);
+
+
+  // ===============================
+  // Toggles
+  bool showBones;
+  bool showBounds;
+  bool showWireframe;
+  bool showParticles;
+  bool showModel;
+  bool showTexture;
+  float alpha_;
+  float scale_;
+
+  // Position and rotation vector
+  glm::vec3 pos_;
+  glm::vec3 rot_;
+
+  //
+  bool ok;
+  bool ind;
+  bool hasCamera;
+  bool hasParticles;
+  bool isWMO;
+  bool isMount;
+  bool animated;
+
+  // Misc values
+  float rad;
+  float trans;
+
+  // -------------------------------
+
+  // ===============================
+  // Bone & Animation data
+  // ===============================
+  std::vector<ModelAnimation> anims;
+  std::vector<int16> animLookups;
+  AnimManager *animManager;
+  std::vector<Bone> bones;
+
+  size_t currentAnim;
+  bool animcalc;
+  size_t anim, animtime;
+
+  void reset()
+  {
+    animcalc = false;
+  }
+
+  void update(int dt);
+
+  // -------------------------------
+
+  CharTexture tex;
+  // -------------------------------
+
+  // ===============================
+  // 
+
+  // ===============================
+  // Rendering Routines
+  // ===============================
+  void drawBones();
+  void drawBoundingVolume();
+  void drawParticles();
+  void draw();
+  // -------------------------------
+
+  void updateEmitters(float dt);
+  void setLOD(int index);
+
+  void setupAtt(int id);
+  void setupAtt2(int id);
+
+  std::vector<ModelAttachment> atts;
+  static const size_t ATT_MAX = 60;
+  int16 attLookup[ATT_MAX];
+  int16 keyBoneLookup[BONE_MAX];
+
+  ModelType modelType;
+  CharModelDetails charModelDetails;
+  CharDetails cd;
+  RaceInfos infos;
+  TabardDetails td;
+  ModelHeader header;
+  std::set<GeosetNum> creatureGeosetData;
+  uint creatureGeosetDataID;
+  bool bSheathe;
+  bool mirrored_;
+
+  friend class ModelRenderPass;
+
+  WoWItem * getItem(CharSlots slot);
+  int getItemId(CharSlots slot);
+  // True if m is one of the models attached for the equipped head item (a helm mesh). Lets the
+  // UI re-run refresh() when a helm's Render is toggled, since the helm's geoset auto-hide
+  // (hiding hair/ears under the helm) must follow whether the helm is actually drawn.
+  bool isEquippedHeadModel(WoWModel * m);
+  bool isWearingARobe();
+
+  void updateTextureList(GameFile * tex, int special);
+  void displayHeader(ModelHeader & a_header);
+  bool canSetTextureFromFile(int texnum);
+
+  std::map<int, std::wstring> getAnimsMap();
+
+  void save(QXmlStreamWriter &);
+  void load(QString &);
+
+  static QString getCGGroupName(CharGeosets cg);
+
+  // @TODO use geoset id instead of geoset index in vector
+  void showGeoset(uint geosetindex, bool value);  
+  void hideAllGeosets();
+  bool isGeosetDisplayed(uint geosetindex);
+  void setGeosetGroupDisplay(CharGeosets group, int val);
+  void setGeosetDisplayById(int geosetId, bool display); // toggle the exact geoset id(s); never id 0
+  void setCreatureGeosetData(std::set<GeosetNum> cgd);
+
+  WoWModel* mergeModel(QString & name, int type = 1, bool noRefresh = false);
+  WoWModel* mergeModel(uint fileID, int type = 1, bool noRefresh = false);
+  WoWModel* mergeModel(WoWModel * model, int type = 1, bool noRefresh = false);
+  void unmergeModel(QString & name, bool noRefresh = false);
+  void unmergeModel(uint fileID, bool noRefresh = false);
+  void unmergeModel(WoWModel * model, bool noRefresh = false);
+  WoWModel* getMergedModel(uint fileID);
+  // Store an unmerged model in mergedModelCache (instead of deleting it) for cheap re-merge.
+  void poolMergedModel(WoWModel * model);
+
+  void refresh();
+  
+  QString getNameForTex(uint16 tex);
+  GLuint getGLTexture(uint16 tex) const;
+  void dumpTextureStatus();
+
+  friend _WOWMODEL_API_ std::ostream& operator<<(std::ostream& out, const WoWModel& m);
+
+  friend class ModelRenderPass; // to allow access to rendering elements (texAnims, etc.)
+};
+
+
+#endif

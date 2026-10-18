@@ -1,11 +1,11 @@
 # Standalone-configurable on purpose: the main project refuses to configure without
-# the upstream build tree (its import libraries are checked with FATAL_ERROR), but the
+# the engine build tree (its import libraries are checked with FATAL_ERROR), but the
 # decoder test needs none of that -- just Qt5Core, the decoder source and the
 # header-only wow_enums.h. So CI or a fresh checkout can run
 #
 #   cmake -S tests -B build-tests && cmake --build build-tests && ctest --test-dir build-tests
 #
-# without game data, without the FBX SDK, without a compiled upstream.
+# without game data, without the FBX SDK, without a compiled engine.
 cmake_minimum_required(VERSION 3.16)
 project(WMVTests)
 
@@ -25,7 +25,7 @@ add_executable(whtest
 
 target_include_directories(whtest PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/..
-  ${CMAKE_CURRENT_SOURCE_DIR}/../upstream/Source/games/wow)
+  ${CMAKE_CURRENT_SOURCE_DIR}/../engine/Source/games/wow)
 
 target_link_libraries(whtest Qt5::Core)
 
@@ -33,16 +33,16 @@ enable_testing()
 add_test(NAME wowhead_corpus
          COMMAND whtest ${CMAKE_CURRENT_SOURCE_DIR}/corpus/corpus1.json)
 
-# The STL exporter's geometry half, compiled straight from the upstream plugin source: pure
+# The STL exporter's geometry half, compiled straight from the engine's plugin source: pure
 # C++ and glm, no Qt, no game data. Proves the height in the file, the plate placement, the
 # winding under a mirror and the binary format before any real export is run.
-set(STL_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../upstream/Source/plugins/exporters/stl)
+set(STL_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../engine/Source/plugins/exporters/stl)
 add_executable(stltest
   stltest/main.cpp
   ${STL_DIR}/PrintMesh.cpp)
 target_include_directories(stltest PRIVATE
   ${STL_DIR}
-  ${CMAKE_CURRENT_SOURCE_DIR}/../upstream/ThirdParty)
+  ${CMAKE_CURRENT_SOURCE_DIR}/../engine/ThirdParty)
 add_test(NAME stl_geometry COMMAND stltest)
 
 # The data-source layer: settings, command line, cache folder, the worker that keeps the splash

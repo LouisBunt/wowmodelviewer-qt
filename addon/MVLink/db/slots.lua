@@ -3,7 +3,7 @@
 -- SPDX-License-Identifier: GPL-3.0-or-later
 --
 -- WoW inventory slot -> ModelViewer CharSlots. Copied from
--- upstream/Source/games/wow/wow_enums.h, where the enum order is NOT the order the
+-- engine/Source/games/wow/wow_enums.h, where the enum order is NOT the order the
 -- equipment list shows -- CS_BOOTS comes third, not seventh. Guessing from the panel
 -- would put boots where the belt belongs, so this is transcribed, not derived.
 --

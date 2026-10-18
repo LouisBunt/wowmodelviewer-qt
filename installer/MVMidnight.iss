@@ -37,7 +37,6 @@
 #define MyAppExeName "WoWModelViewer-Qt.exe"
 #define MyAppURL "https://github.com/LouisBunt/wowmodelviewer-qt"
 #define Stage "stage"
-#define IconsDir "..\upstream\bin_support\Icons"
 
 [Setup]
 ; Own AppId. This used to reuse the one belonging to WoW Model Viewer Midnight, so the

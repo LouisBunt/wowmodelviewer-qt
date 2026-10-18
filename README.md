@@ -1,8 +1,9 @@
 # ModelViewer: Midnight
 
-A Qt front-end for [WoW Model Viewer](https://github.com/wowmodelviewer/wowmodelviewer),
-replacing the wxWidgets one. The model, render and data layers are reused rather than
-rewritten: `core.dll` and `wow.dll` are the upstream libraries, and the GUI on top is new.
+A model viewer for World of Warcraft, on Qt. It began as a new interface for
+[WoW Model Viewer](https://github.com/wowmodelviewer/wowmodelviewer): the model, render and
+data layer — `core.dll`, `wow.dll` and the plugins — comes from there and lives on in
+[`engine/`](engine/README.md); the interface on top is new.
 
 Released publicly at **1.0.0** and now at **1.5.0**, which added the online mode. The
 early-access builds numbered 1.5–1.8 came before 1.0.0 and are a separate line. The
@@ -45,25 +46,12 @@ and [MIGRATION.md](MIGRATION.md) for why the port is shaped the way it is.
 - Armory and NPC import, character save/load in the wx `.chr` format, light control,
   animation timeline, headless flags for scripted checks.
 
-### Engine changes carried in the submodule
+### The engine
 
-"Reuse the engine unchanged" was true at 1.5.0 and is no longer. These live in
-`upstream/` and have to be carried across upstream merges:
-
-| Where | Change |
-|---|---|
-| `WoWModel::initAnimated` | a variant skeleton's own animations were discarded in favour of the base skeleton's, so the upright orc behaved exactly like the model it varies |
-| `WoWModel::setItemFocus` / `applyItemFocus` / `visibleBounds` / `mergedGeosetRanges` | the item view — hiding everything but one worn piece, and reporting what is left for the camera |
-| `WoWItem::mergedModel()` | accessor the item view needs to tell merged geometry from attached models |
-| `FBXHeaders::createMesh`, `FBXExporter` | vertex remapping, so an export writes only the vertices a visible pass uses instead of every vertex in the model |
-| `FBXExporter` sidecar | bone names, attachments, animation metadata, UV-scroll tracks |
-| `CASCFolder::initOnline` / `setConfig` / `errorText`, `WoWFolder::setOnline` | online mode: `versions` and `cdns` come from Blizzard's version service over HTTPS and stay in the cache, so a start without network opens the cached build; the region's CDN hosts get four Blizzard fallbacks; the storage opens from the cache with `CascOpenStorageEx` and never touches port 1119 |
-| `onlineRefreshed` / `cancelOnlineOpen` / progress callback in `CASCFolder`, `WoWFolder` | the front-end can tell an offline start from a fresh one, show the whole online open as one progress bar, and cancel a first download from the splash |
-| `CASCFolder::addExtraEncryptionKeys` | online, wowdev's TACT key list is refreshed over HTTPS (a conditional request, cached for offline starts) and added to the shipped `extraEncryptionKeys.csv` |
-| `CDNPrefetch` (new) | before the open, the build and CDN configs, the 1,401 archive indexes and the encoding table are fetched over parallel HTTPS, verified and written into CascLib's cache layout, instead of one after another over a single connection |
-| `ThirdParty/casclib` | one patch set on the vendored snapshot of upstream 9fb2d38: an archived file is fetched with an HTTP range request instead of its whole archive, every download is verified before it enters the cache and written under a temporary name, sockets time out, online opens skip the download manifest — file by file in `ThirdParty/casclib/LOCAL-CHANGES.md` |
-| `GameDatabase::initFromXML` | the database cache is keyed by build **and** data language (`build\|locale\|schemaN`), so a change of the online language rebuilds it |
-| `Source/games/wow/CMakeLists.txt` | `wow.dll` builds `CDNPrefetch.cpp` and links `Qt5::Network` |
+`engine/` holds the model, render and data layer: `core.dll`, `wow.dll` and the five plugins.
+It is WoW Model Viewer's, brought into this repository and developed here since. Its own
+[README](engine/README.md) says from which state, what was left out and what has changed —
+the online mode, the item view, the STL export and the FBX sidecar among it.
 
 ### The interface
 
@@ -80,18 +68,16 @@ Qt 5.13's `AA_EnableHighDpiScaling` is deliberately not used — it rounds the d
 a whole number, and `GLHost` reads its back buffer with `glReadPixels` over `width()/height()`,
 which at a ratio above 1 captures a quarter of the frame. `--ui-scale` pins it for screenshots.
 
-## Why this exists
+## History
 
-The measurement that started it: of the four modules in the upstream tree, three
-(`core`, `games/wow`, `plugins`) contain zero wxWidgets includes. All 19,700 lines of
-toolkit code sit in the executable alone. A Qt front-end can therefore reuse the
-entire engine unchanged — which is what makes the rewrite realistic rather than a
-multi-year rewrite of everything.
+The measurement that started it: of the four modules in WoW Model Viewer, three (`core`,
+`games/wow`, `plugins`) contain zero wxWidgets includes. All 19,700 lines of toolkit code sat
+in the executable alone. A Qt interface could therefore keep the entire engine — which is
+what made the rewrite realistic rather than a multi-year rewrite of everything.
 
-This is a fork. Upstream stays on wxWidgets, so GUI fixes there have to be carried over
-by hand. Fixes in `core`/`wow` mostly still merge normally — the exceptions are the
-engine changes listed above, which touch `core`, `games/wow`, the vendored CascLib and the
-FBX plugin and have to be re-applied if upstream ever rewrites those files.
+Until 1.5.0 the engine was a fork of WoW Model Viewer, included as a submodule. Since then it
+is part of this repository and developed with it. WoW Model Viewer is no longer tracked; a fix
+from there is ported by hand when it is worth having.
 
 ## Building
 
@@ -99,45 +85,51 @@ Requirements:
 
 - Visual Studio 2022 Build Tools (MSVC 14.4x, x64)
 - Qt 5.13.2, `msvc2017_64`
-- vcpkg with the `x64-windows-static-md` triplet (provides GLEW)
-- Autodesk FBX SDK 2020.3.9 — only needed to package `libfbxsdk.dll`
+- vcpkg with `glew:x64-windows-static-md`, `libjpeg-turbo:x64-windows` and
+  `libpng:x64-windows`
+- Autodesk FBX SDK 2020.3.9, copied to `engine/ThirdParty/fbx_x64` (`include/`, and `lib/`
+  with `libfbxsdk.lib` and `libfbxsdk.dll`) — the FBX exporter links it
 
-The upstream tree is a submodule, and its build products (`core.lib`, `wow.lib`,
-`core.dll`, `wow.dll`, the four plugin DLLs) are what this project links against:
+Everything else is in the repository. The engine is built first, on its own; its build
+products (`core.lib`, `wow.lib`, `core.dll`, `wow.dll`, the five plugin DLLs) are what the
+application links against and ships:
 
 ```
-git clone --recurse-submodules https://github.com/LouisBunt/wowmodelviewer-qt.git
+git clone https://github.com/LouisBunt/wowmodelviewer-qt.git
 cd wowmodelviewer-qt
 
-# Build the upstream tree first -- it produces build-x64\ with the import libraries.
-cd upstream && Configure.bat && Build.bat && cd ..
+cmake -S engine -B engine/build-x64 -G "Visual Studio 17 2022" -A x64
+cmake --build engine/build-x64 --config Release
 
 cmake -S . -B build -G "Visual Studio 17 2022" -A x64
 cmake --build build --config Release
 ```
 
-Four paths are configurable, and all four are checked at configure time so a wrong one
-fails with a named cause instead of a wall of compile errors later:
-
-| Variable | Default | What it needs to point at |
-|---|---|---|
-| `WMV_SRC` | `./upstream` | the WMV source tree (the submodule) |
-| `WMV_BUILD` | `$WMV_SRC/build-x64` | its build output, holding `core.lib` and `wow.lib` |
-| `QT_LOCATION` | `C:/Qt/Qt5.13.2/5.13.2/msvc2017_64` | a Qt 5.13 installation for MSVC x64 |
-| `VCPKG_STATIC` | `$VCPKG_ROOT/installed/x64-windows-static-md` | a vcpkg triplet with GLEW |
+Both builds look for Qt at `C:/Qt/Qt5.13.2/5.13.2/msvc2017_64` and for vcpkg under the
+`VCPKG_ROOT` environment variable, so setting that once is usually enough. Otherwise:
 
 ```
-cmake -S . -B build -DWMV_SRC=<tree> -DWMV_BUILD=<tree>/build-x64 ^
+cmake -S engine -B engine/build-x64 -G "Visual Studio 17 2022" -A x64 ^
+      -DQT_LOCATION=<qt>/5.13.2/msvc2017_64 -DWMV_VCPKG_ROOT=<vcpkg>
+cmake -S . -B build -G "Visual Studio 17 2022" -A x64 ^
       -DQT_LOCATION=<qt>/5.13.2/msvc2017_64 ^
       -DVCPKG_STATIC=<vcpkg>/installed/x64-windows-static-md
 ```
 
-`VCPKG_STATIC` defaults from the `VCPKG_ROOT` environment variable, so setting that once
-is usually enough:
+The application's four paths are all checked at configure time, so a wrong one fails with a
+named cause instead of a wall of compile errors later:
 
-```
-vcpkg install glew:x64-windows-static-md
-```
+| Variable | Default | What it needs to point at |
+|---|---|---|
+| `WMV_SRC` | `./engine` | the engine source tree |
+| `WMV_BUILD` | `$WMV_SRC/build-x64` | its build output, holding `core.lib` and `wow.lib` |
+| `QT_LOCATION` | `C:/Qt/Qt5.13.2/5.13.2/msvc2017_64` | a Qt 5.13 installation for MSVC x64 |
+| `VCPKG_STATIC` | `$VCPKG_ROOT/installed/x64-windows-static-md` | a vcpkg triplet with GLEW |
+
+The package also needs `listfile.csv`, the community listfile (about 150 MB, not in the
+repository): `installer/stage.ps1` takes it from `engine/bin_support/wow/listfile.csv`, or
+from `-Listfile <path>`. The current one is
+<https://github.com/wowdev/wow-listfile/releases/latest/download/community-listfile.csv>.
 
 ## Running from the build tree
 
@@ -181,8 +173,8 @@ would hang the run. That includes a scripted run with no data source at all (no 
 ## Packaging
 
 `stage.ps1` assembles the payload, copying every file from whatever produces it —
-build output, the Qt installation, the VC redist folder, the tracked `bin_support`
-tree. Nothing is hand-copied, and the shipped DLL list is the dependency closure
+build output, the Qt installation, the VC redist folder, the tracked
+`engine/bin_support` tree. Nothing is hand-copied, and the shipped DLL list is the dependency closure
 reported by `dumpbin`, not inherited from the wx package.
 
 The visible installer is not the Inno wizard: `installer/setupui` is a small Qt
@@ -210,8 +202,9 @@ A tag `v<version>` publishes that setup as the GitHub release, with
 The tag can be pushed, or made on github.com by publishing a new release with it (target
 `master`); the workflow then fills in that release.
 
-The setup carries the same `AppId` as WoW Model Viewer Midnight, so it upgrades that
-installation in place and removes its executable and wxWidgets DLLs.
+The setup has its own `AppId`, so it upgrades its own earlier versions in place and leaves
+any WoW Model Viewer installation alone. The files of one in the target folder are removed
+only when the user ticks the option for it.
 
 ## Reporting problems
 

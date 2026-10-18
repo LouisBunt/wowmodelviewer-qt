@@ -5,8 +5,9 @@
 > die Entscheidungen begründet, die die heutige Form erklären — nicht als Beschreibung
 > des aktuellen Standes. Was die Anwendung heute kann und was ihr fehlt, steht in
 > [installer/LIESMICH.txt](installer/LIESMICH.txt); die Eingriffe in die Engine, von denen
-> dieses Dokument noch annimmt, es werde keine geben, listet die
-> [README](README.md#engine-changes-carried-in-the-submodule).
+> dieses Dokument noch annimmt, es werde keine geben, listet
+> [engine/README.md](engine/README.md). Die Engine ist inzwischen kein Untermodul mehr,
+> sondern Teil dieses Repositorys (`engine/`).
 
 Basis: `wowmodelviewer/wowmodelviewer` @ `adb2cb1` (develop).
 

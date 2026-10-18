@@ -3,6 +3,13 @@ build/
 build-setupui/
 build-tests/
 
+# The engine's build output (and the install step's copy of it), plus what the build fetches
+# rather than the repository carries: Autodesk's FBX SDK and the community listfile (~150 MB).
+engine/build*/
+engine/bin/
+engine/ThirdParty/fbx_x64/
+engine/bin_support/wow/listfile.csv
+
 # Local build logs and traces. The phase history lives in the commit messages.
 build-log.txt
 phase*-trace.txt

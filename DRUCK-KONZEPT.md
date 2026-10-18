@@ -162,7 +162,7 @@ nur noch Bequemlichkeit. Klappt es nicht, wissen wir endlich *woran* — statt e
 **1–2 Tage. Der eigentliche Hebel.**
 
 Neuer Operator „Für 3D-Druck vorbereiten" in
-`upstream/blender_addon/io_import_wmv_fbx/__init__.py`, neben dem vorhandenen Import-Operator
+`engine/blender_addon/io_import_wmv_fbx/__init__.py`, neben dem vorhandenen Import-Operator
 und im selben Panel verlinkt. Er macht in einem Klick, was Stufe 0 von Hand macht:
 
 | Schritt | Wie |
@@ -180,7 +180,7 @@ und im selben Panel verlinkt. Er macht in einem Klick, was Stufe 0 von Hand mach
 
 ## 5. Stufe 2 — STL-Exporter-Plugin, nur wenn Stufe 1 nicht reicht
 
-**2–3 Tage.** Neues Plugin unter `upstream/Source/plugins/exporters/stl/` nach dem Muster von
+**2–3 Tage.** Neues Plugin unter `engine/Source/plugins/exporters/stl/` nach dem Muster von
 `obj/`: vier Pflichtmethoden aus `ExporterPlugin.h:73-77`, eine Zeile in
 `plugins/CMakeLists.txt`, eine Zeile in `installer/stage.ps1`. Danach erscheint das Format
 **vollautomatisch** in Combobox, Menü, Format-Dialog, About-Box und Kommandozeile —

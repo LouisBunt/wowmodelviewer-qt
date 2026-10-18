@@ -144,7 +144,7 @@ Rassen-IDs sind auf beiden Seiten dieselben (`ChrRaces.ID`), da braucht es keine
 
 ```lua
 -- db/slots.lua -- die einzige Wahrheit über die Slot-Zuordnung.
--- WoW-Inventarplatz -> MV-CharSlots. Aus upstream/Source/games/wow/wow_enums.h;
+-- WoW-Inventarplatz -> MV-CharSlots. Aus engine/Source/games/wow/wow_enums.h;
 -- die Reihenfolge dort ist NICHT die Anzeigereihenfolge, also abschreiben statt raten.
 MVLink.SLOT_MAP = {
   [1]  = 0,   -- Head      -> CS_HEAD

@@ -1,7 +1,7 @@
 # Assemble the release payload for ModelViewer: Midnight.
 #
 # Every file is copied from the place that produces it -- build output, the Qt
-# installation, the VC redist folder, the tracked bin_support tree -- so the payload
+# installation, the VC redist folder, the tracked engine\bin_support tree -- so the payload
 # can be rebuilt from scratch instead of being maintained by hand. The previous
 # release folders were hand-copied, which is how they ended up carrying wxWidgets
 # leftovers and a zero-byte database cache.
@@ -20,11 +20,11 @@ param(
   # parameter binding under Windows PowerShell 5.1.
   [string] $Root       = "",
   [string] $StageDir   = "",
-  # Which upstream build tree core.dll, wow.dll and the plugins come from. Named rather
-  # than hardcoded because a CMake cache records the absolute path it was created at: a
-  # tree configured on another machine cannot be reconfigured in place, so a working
-  # build often lives BESIDE the stale one instead of replacing it.
-  [string] $UpstreamBuild = "build-x64",
+  # Which engine build tree core.dll, wow.dll and the plugins come from, under engine\.
+  # Named rather than hardcoded because a CMake cache records the absolute path it was
+  # created at: a tree configured on another machine cannot be reconfigured in place, so a
+  # working build often lives BESIDE the stale one instead of replacing it.
+  [string] $EngineBuild = "build-x64",
   [string] $QtDir      = "C:/Qt/Qt5.13.2/5.13.2/msvc2017_64",
   [string] $FbxDir     = "C:/Program Files/Autodesk/FBX/FBX SDK/2020.3.9/lib/x64/release",
   [string] $VcRedist   = "C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/VC/Redist/MSVC/14.44.35112/x64/Microsoft.VC143.CRT",
@@ -46,9 +46,9 @@ if (-not $Root)     { $Root     = Split-Path $here -Parent }
 if (-not $StageDir) { $StageDir = Join-Path $here "stage" }
 
 $build    = Join-Path $Root "build\Release"
-$upstream = Join-Path $Root "upstream"
-$ubuild   = Join-Path $upstream "$UpstreamBuild\Source"
-$support  = Join-Path $upstream "bin_support"
+$engine   = Join-Path $Root "engine"
+$ebuild   = Join-Path $engine "$EngineBuild\Source"
+$support  = Join-Path $engine "bin_support"
 if (-not $Listfile) { $Listfile = Join-Path $support "wow\listfile.csv" }
 
 $copied = 0
@@ -57,7 +57,7 @@ function Stage {
   param([string] $From, [string] $RelTarget)
 
   if (-not (Test-Path $From)) {
-    throw "missing source: $From`n  (build the project and the upstream tree first, or point the matching -* parameter somewhere else)"
+    throw "missing source: $From`n  (build the engine and the project first, or point the matching -* parameter somewhere else)"
   }
   $to = Join-Path $StageDir $RelTarget
   $dir = Split-Path $to -Parent
@@ -95,8 +95,8 @@ Write-Host "staging into $StageDir"
 
 # --- the application ---------------------------------------------------------
 Stage (Join-Path $build "WoWModelViewer-Qt.exe") "WoWModelViewer-Qt.exe"
-Stage (Join-Path $ubuild "core\Release\core.dll")     "core.dll"
-Stage (Join-Path $ubuild "games\wow\Release\wow.dll") "wow.dll"
+Stage (Join-Path $ebuild "core\Release\core.dll")     "core.dll"
+Stage (Join-Path $ebuild "games\wow\Release\wow.dll") "wow.dll"
 
 # --- exporter and importer plugins -------------------------------------------
 # PLUGINMANAGER scans .\plugins relative to the working directory. Without these the
@@ -106,7 +106,7 @@ foreach ($p in @("exporters\fbx\Release\fbxexporter.dll",
                  "exporters\stl\Release\stlexporter.dll",
                  "importers\armory\Release\armory.dll",
                  "importers\wowhead\Release\wowhead.dll")) {
-  Stage (Join-Path $ubuild "plugins\$p") "plugins\$(Split-Path $p -Leaf)"
+  Stage (Join-Path $ebuild "plugins\$p") "plugins\$(Split-Path $p -Leaf)"
 }
 Stage (Join-Path $FbxDir "libfbxsdk.dll") "libfbxsdk.dll"   # fbxexporter.dll imports it
 
@@ -135,7 +135,7 @@ foreach ($f in @("msvcp140.dll", "msvcp140_1.dll", "msvcp140_2.dll",
 # Not optional any more: the armory, wowhead and NPC imports all make HTTPS requests.
 if (-not $OpenSslDir) {
   foreach ($cand in @("$Root/../vcpkg/installed/x64-windows/bin",
-                      "$Root/upstream/bin_support/openssl")) {
+                      "$Root/engine/bin_support/openssl")) {
     if (Test-Path (Join-Path $cand "libssl-1_1-x64.dll")) { $OpenSslDir = $cand; break }
   }
 }
@@ -151,7 +151,7 @@ if ($OpenSslDir -and (Test-Path (Join-Path $OpenSslDir "libssl-1_1-x64.dll"))) {
 }
 
 # --- game data definitions ---------------------------------------------------
-# database.xml and the CSVs come from the tracked bin_support tree, never from a
+# database.xml and the CSVs come from the tracked engine\bin_support tree, never from a
 # build-staging copy: a stale database.xml silently breaks races and customization.
 #
 # EVERY bundled version, not just the newest. The application derives the folder from the
@@ -178,7 +178,7 @@ if ($SkipListfile) {
 # --- Blender add-on ----------------------------------------------------------
 # Shipped next to the exe so the in-app installer button (BlenderAddonInstaller) has a
 # source to copy from. Without this the button only worked from a development checkout.
-StageTree (Join-Path $upstream "blender_addon\io_import_wmv_fbx") "blender_addon\io_import_wmv_fbx"
+StageTree (Join-Path $engine "blender_addon\io_import_wmv_fbx") "blender_addon\io_import_wmv_fbx"
 
 # --- WoW add-on (MVLink) -----------------------------------------------------
 # Same arrangement, same reason: the setup cannot place this, because the game folder is
