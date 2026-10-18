@@ -367,7 +367,7 @@ void MenuController::takeScreenshot()
   }
 
   const QString base = host_->model() ? QFileInfo(host_->model()->name()).baseName()
-                                      : QStringLiteral("modelviewer");
+                                      : QStringLiteral("mviewer");
   const QString suggested = QDir(rememberedDir("dirs/screenshot")).filePath(base + ".png");
 
   const QString path = QFileDialog::getSaveFileName(
@@ -1011,9 +1011,10 @@ namespace {
 
 const char* kLooksDir = "userSettings/looks";
 
-// The colon in "ModelViewer: Midnight" once broke the whole installer; user-typed look
-// names get the same respect. Everything Windows forbids in a file name becomes '_', and
-// the visible name is whatever the user typed -- only the file on disk is sanitized.
+// The colon in the old name, "ModelViewer: Midnight", once broke the whole installer;
+// user-typed look names get the same respect. Everything Windows forbids in a file name
+// becomes '_', and the visible name is whatever the user typed -- only the file on disk is
+// sanitized.
 QString lookFilePath(const QString& name)
 {
   QString safe = name.trimmed();
@@ -1232,7 +1233,7 @@ QString MenuController::applyCharInfos(CharInfos* result, bool interactive,
     const int badRace = (int)result->raceId;
     delete result;
     trace(QString("FAILED: no model registered for race %1 sex %2").arg(badRace).arg(sex));
-    return tr("Die Rasse dieses Charakters (ID %1) ist dem Model Viewer nicht bekannt.")
+    return tr("Die Rasse dieses Charakters (ID %1) ist MViewer nicht bekannt.")
              .arg(badRace);
   }
 
@@ -1483,7 +1484,7 @@ QString MenuController::importMVLinkFromGame(const QString& outfitName, bool int
   if (wow.isEmpty())
     return tr("Die Ablage des Addons liegt in einer WoW-Installation, und auf diesem Rechner "
               "ist keine bekannt. Im Spiel /mvlink öffnen und den Code kopieren — "
-              "ModelViewer übernimmt ihn aus der Zwischenablage.");
+              "MViewer übernimmt ihn aus der Zwischenablage.");
 
   const std::vector<QString> paths = mvlink_saved_variable_paths(wow);
   if (paths.empty()) {
@@ -1511,7 +1512,7 @@ QString MenuController::importMVLinkFromGame(const QString& outfitName, bool int
     QMessageBox::information(win_, tr("MVLink"),
       tr("Look übernommen — Stand vom %1.\n\nDie Datei schreibt WoW erst beim /reload oder "
          "Ausloggen. Aktueller geht es über das Addon-Fenster: /mvlink, Code kopieren — "
-         "ModelViewer übernimmt ihn sofort.").arg(written));
+         "MViewer übernimmt ihn sofort.").arg(written));
   }
   return QString();
 }
@@ -1546,7 +1547,7 @@ QString MenuController::importWowheadDressingRoom(const QString& rawUrl, bool in
       QMessageBox::information(
         win_, tr("Getrennte Schulterstücke"),
         tr("Dieser Look nutzt getrennte Schulterstücke. Angezeigt wird beidseitig das "
-           "linke Teil — getrennte Schultern kann der Model Viewer noch nicht "
+           "linke Teil — getrennte Schultern kann MViewer noch nicht "
            "darstellen."));
   }
 
@@ -1927,20 +1928,21 @@ void MenuController::about()
     for (const auto& f : exporters_->formats())
       formats << f.label;
 
+  // One arg() with all four, not a chain: chained, the version took the place of the name and
+  // the export formats that of the version.
   QMessageBox::about(
     win_, tr("Über %1").arg(WMV_APP_NAME),
     tr("<b>%1 %2</b><br>"
-       "Qt-Frontend für WoW Model Viewer.<br><br>"
-       "Modell-, Render- und Datenschicht (core.dll / wow.dll) stammen aus dem "
-       "Ursprungsprojekt und sind bis auf wenige gezielte Eingriffe unverändert; "
-       "die Oberfläche ist neu.<br><br>"
-       "Exportformate: %2<br><br>"
-       "Lizenz: GPLv3, geerbt von WoW Model Viewer. Hinweise zu mitgelieferten "
+       "Model-Viewer für World of Warcraft.<br><br>"
+       "Die Modell-, Render- und Datenschicht (core.dll / wow.dll) stammt aus "
+       "WoW Model Viewer und wird hier weiterentwickelt; die Oberfläche ist neu.<br><br>"
+       "Exportformate: %3<br><br>"
+       "Lizenz: GPLv3, wie bei WoW Model Viewer. Hinweise zu mitgelieferten "
        "Fremdkomponenten stehen in THIRD-PARTY-NOTICES.txt neben dem Programm.<br>"
        "World of Warcraft ist eine eingetragene Marke von Blizzard Entertainment; "
        "dieses Projekt steht in keiner Verbindung zu Blizzard.")
-      .arg(WMV_QT_VERSION)
-      .arg(formats.isEmpty() ? tr("keine geladen") : formats.join(", ")));
+      .arg(QStringLiteral(WMV_APP_NAME), QStringLiteral(WMV_QT_VERSION),
+           formats.isEmpty() ? tr("keine geladen") : formats.join(", ")));
 }
 
 // --- helpers -----------------------------------------------------------------

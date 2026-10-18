@@ -11,7 +11,7 @@ nicht von einer zweiten Instanz angegriffen worden. Vor Stufe 2 gehört das nach
 
 ## 1. Was wir bauen
 
-Du stellst deinen Charakter in ModelViewer zusammen — oder lädst ein einzelnes Schwert,
+Du stellst deinen Charakter in MViewer zusammen — oder lädst ein einzelnes Schwert,
 einen Helm, eine Schulter. Ein Knopf sagt, wie hoch die Figur werden soll. Heraus kommt
 eine Datei, die ein Slicer ohne Nachfrage annimmt und druckt.
 
@@ -273,8 +273,8 @@ meint FBX.
 Ohne Maus, mit vorhandenen Flags — sobald das Plugin existiert:
 
 ```
-WoWModelViewer-Qt.exe --item-solo 12345 --export STL,C:\out\schwert.stl
-WoWModelViewer-Qt.exe --mvlink MVM1:… --focus 3 --export STL,C:\out\schulter.stl
+MViewer.exe --item-solo 12345 --export STL,C:\out\schwert.stl
+MViewer.exe --mvlink MVM1:… --focus 3 --export STL,C:\out\schulter.stl
 ```
 
 **Der eigentliche Beweis ist keine Prüfsumme, sondern ein gedrucktes Teil.** Ein Slicer, der

@@ -59,7 +59,7 @@ LoadingSplash* LoadingSplash::create()
     QFont f = typo::font(typo::Display);
     f.setLetterSpacing(QFont::AbsoluteSpacing, 2.0);
     p.setFont(f);
-    p.drawText(QRect(0, 40, poster.width(), 30), Qt::AlignCenter, "MODEL VIEWER");
+    p.drawText(QRect(0, 40, poster.width(), 30), Qt::AlignCenter, "MVIEWER");
     p.end();
   }
 

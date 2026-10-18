@@ -1,6 +1,6 @@
 <?php
 /*
- * WoW Model Viewer - Armory import proxy (PHP)
+ * MViewer - Armory import proxy (PHP)
  * --------------------------------------------------------------------------
  * Drop-in for a shared/PHP host. Holds the Blizzard API credentials
  * server-side, performs the OAuth client_credentials grant + the WoW Profile

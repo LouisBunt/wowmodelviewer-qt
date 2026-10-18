@@ -47,7 +47,7 @@ bool mvlink_parse_code(const QString& code, MVLinkLook* out, QString* error)
     return fail(error, QObject::tr("Die Formatkennung \"%1\" ist unlesbar.").arg(parts.first()));
   if (version > kNewestKnownVersion)
     return fail(error, QObject::tr("Dieser Code stammt aus einer neueren Addon-Fassung "
-                                   "(Format v%1, lesbar bis v%2). Bitte ModelViewer "
+                                   "(Format v%1, lesbar bis v%2). Bitte MViewer "
                                    "aktualisieren.").arg(version).arg(kNewestKnownVersion));
 
   MVLinkLook look;
@@ -124,8 +124,8 @@ bool mvlink_read_saved_variables(const QString& path, const QString& outfitName,
     const auto m = rx.match(text);
     if (!m.hasMatch())
       return fail(error, QObject::tr("In der Datei steht kein aktueller Look. Im Spiel "
-                                     "einmal \"Für ModelViewer ablegen\" drücken und "
-                                     "danach /reload ausführen."));
+                                     "einmal /mvlink store eingeben und danach /reload "
+                                     "ausführen."));
     *codeOut = m.captured(1);
     return true;
   }

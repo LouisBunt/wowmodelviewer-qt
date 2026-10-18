@@ -1,14 +1,14 @@
 # The setup front-end: a small Qt program that IS the visible installer.
 #
-# Standalone on purpose -- it must build without the upstream tree, because packaging
-# happens on machines that only need Qt and MSVC. The real install work is done by the
-# Inno engine (MVMidnight.iss), which extracts this program, shows it instead of the
-# classic wizard, and is then re-run by it in silent mode. See MVMidnight.iss [Code].
+# Standalone on purpose -- it must build without the engine, because packaging happens
+# on machines that only need Qt and MSVC. The real install work is done by the Inno
+# engine (MViewer.iss), which extracts this program, shows it instead of the classic
+# wizard, and is then re-run by it in silent mode. See MViewer.iss [Code].
 #
 #   cmake -S installer/setupui -B build-setupui -G "Visual Studio 17 2022" -A x64
 #   cmake --build build-setupui --config Release
 cmake_minimum_required(VERSION 3.16)
-project(MVMidnightSetupUI VERSION 1.5.0)
+project(MViewerSetupUI VERSION 1.5.0)
 
 set(CMAKE_CXX_STANDARD 17)
 

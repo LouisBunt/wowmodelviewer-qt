@@ -1,10 +1,10 @@
 cmake_minimum_required(VERSION 3.16)
-project(WoWModelViewerQt VERSION 1.5.0)
+project(MViewer VERSION 1.5.0)
 
 # The version the running application reports -- window title, About box, trace and log.
 # Without it a bug report cannot say which build it came from. Five other places carry the
 # same number and none of them can read this one, so a release moves all six:
-#   installer/MVMidnight.iss          MyAppVersion, MyAppVersionNumeric
+#   installer/MViewer.iss             MyAppVersion, MyAppVersionNumeric
 #   installer/setupui/CMakeLists.txt  project(... VERSION)
 #   installer/setupui/main.cpp        Options::version, the fallback when /VERSION is absent
 #   installer/setupui/setupui.rc      VERSIONINFO -- what SmartScreen shows while the user
@@ -17,8 +17,8 @@ project(WoWModelViewerQt VERSION 1.5.0)
 set(WMV_QT_VERSION "1.5.0")
 
 # The product name, in one place. It reached five files last time it changed.
-set(WMV_APP_NAME "ModelViewer: Midnight")
-set(WMV_PROJECT_URL "https://github.com/LouisBunt/wowmodelviewer-qt")
+set(WMV_APP_NAME "MViewer")
+set(WMV_PROJECT_URL "https://github.com/LouisBunt/MViewer")
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_AUTOMOC ON)
@@ -91,7 +91,7 @@ endforeach()
 set(CMAKE_PREFIX_PATH ${QT_LOCATION}/lib/cmake)
 find_package(Qt5 5.13 COMPONENTS Core Gui Widgets Network Svg REQUIRED)
 
-add_executable(WoWModelViewer-Qt WIN32
+add_executable(MViewer WIN32
   main.cpp
   GLHost.cpp
   GLHost.h
@@ -127,8 +127,8 @@ add_executable(WoWModelViewer-Qt WIN32
   BlenderAddonInstaller.h
   Theme.cpp
   Theme.h
-  MidnightStyle.cpp
-  MidnightStyle.h
+  MViewerStyle.cpp
+  MViewerStyle.h
   UiKit.cpp
   UiKit.h
   # From the wx program's sources, which are otherwise gone; it was toolkit-free (glm only).
@@ -137,9 +137,9 @@ add_executable(WoWModelViewer-Qt WIN32
   resources/resources.qrc
   resources/appicon.rc)
 
-set_target_properties(WoWModelViewer-Qt PROPERTIES OUTPUT_NAME "WoWModelViewer-Qt")
+set_target_properties(MViewer PROPERTIES OUTPUT_NAME "MViewer")
 
-target_include_directories(WoWModelViewer-Qt PRIVATE
+target_include_directories(MViewer PRIVATE
   ${WMV_SRC}/Source/core
   ${WMV_SRC}/Source/games/wow
   ${WMV_SRC}/ThirdParty
@@ -147,13 +147,13 @@ target_include_directories(WoWModelViewer-Qt PRIVATE
 
 # GLEW is initialised inside wow.dll (games/wow/video.cpp); we only need the
 # headers plus the same static lib so the symbols resolve consistently.
-target_compile_definitions(WoWModelViewer-Qt PRIVATE
+target_compile_definitions(MViewer PRIVATE
   GLEW_STATIC
   WMV_QT_VERSION="${WMV_QT_VERSION}"
   WMV_APP_NAME="${WMV_APP_NAME}"
   WMV_PROJECT_URL="${WMV_PROJECT_URL}")
 
-target_link_libraries(WoWModelViewer-Qt
+target_link_libraries(MViewer
   Qt5::Core Qt5::Gui Qt5::Widgets Qt5::Network Qt5::Svg
   opengl32 glu32
   ${VCPKG_STATIC}/lib/libglew32.lib

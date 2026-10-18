@@ -23,6 +23,8 @@ phase*-trace.txt
 # Editor / OS noise
 *.bak
 .vs/
+__pycache__/
+*.pyc
 
 # Release artefacts. stage.ps1 rebuilds the payload, ISCC rebuilds the setup.
 # The wildcards matter: a previous release moved aside as dist-alt-<date> fell straight out

@@ -958,7 +958,7 @@ void FBXExporter::writeMaterialSidecar() const
   }
 
   QJsonObject root;
-  root["generator"] = "WoW Model Viewer Midnight";
+  root["generator"] = QString::fromStdWString(GLOBALSETTINGS.appName());
   root["version"] = v2 ? 2 : 1;
   if (v2)
     root["uv2_set"] = "UV2Map";

@@ -64,6 +64,9 @@ And with the move into this repository:
 |---|---|
 | `CMakeLists.txt`, `cmake/common.cmake`, `ThirdParty/CxImage`, `plugins/exporters/fbx` | x64 only; no wxWidgets, no 32-bit branches, no NSIS target; vcpkg is found from `VCPKG_ROOT` |
 | `Source/CMakeLists.txt` | `Source/wowmodelviewer` is no longer built |
+| `core/GlobalSettings`, the exporters | the application sets the name and version the exporters write into their files (FBX scene info and sidecar, OBJ and STL headers), which said "WoW Model Viewer Midnight 0.11.0" before |
+| `plugins/importers/armory` | the "no proxy" message names the setting the application reads, not the wx program's dialog |
+| `blender_addon` | shown as "MViewer FBX"; the module, its operators and the handshake folder keep their names, so an installed copy updates in place |
 
 ## Building
 

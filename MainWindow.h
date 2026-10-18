@@ -149,9 +149,8 @@ private:
   GLHost* canvas_ = nullptr;
   CharacterPanel* charPanel_ = nullptr;
   TimelinePanel* timeline_ = nullptr;
-  QLabel* brandLabel_ = nullptr;     // "MIDNIGHT" -- the ornamental half of the wordmark
-  QLabel* brandSub_ = nullptr;       // "ModelViewer" -- dropped first when the window narrows
-  QLabel* brandVersion_ = nullptr;   // the version -- dropped second
+  QLabel* brandLabel_ = nullptr;     // "MVIEWER" -- the ornamental part of the wordmark
+  QLabel* brandVersion_ = nullptr;   // the version beside it
   ElidedLabel* contextLabel_ = nullptr;  // what is loaded, once, in the title bar
   QLabel* buildLabel_ = nullptr;
   QLabel* sourceDot_ = nullptr;      // the indicator's dot, painted by setDataSource()

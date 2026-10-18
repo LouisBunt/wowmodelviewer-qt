@@ -15,7 +15,7 @@
 -- (C_TransmogOutfitInfo), a layer the old per-slot API cannot see. Reading it means:
 -- bring the outfit into view, read each slot, put the view back.
 --
--- The primary route to ModelViewer is the clipboard: the player copies the code and the
+-- The primary route to MViewer is the clipboard: the player copies the code and the
 -- application picks it up by itself. SavedVariables are still written, but WoW only
 -- flushes them on /reload or logout -- with the code that was loaded BEFORE the reload --
 -- so the file is a stale-by-design fallback and is treated as such.
@@ -41,7 +41,7 @@ local NO_TRANSMOG = (Constants and Constants.Transmog and Constants.Transmog.NoT
 local DISPLAY_HIDDEN = 3
 
 -- A sourceID (ItemModifiedAppearanceID) resolved to what the code carries. itemModID is
--- the same ItemAppearanceModifierID vocabulary ModelViewer resolves out of Wowhead bonus
+-- the same ItemAppearanceModifierID vocabulary MViewer resolves out of Wowhead bonus
 -- ids (0 normal, 1 heroic, 3 mythic, 4 LFR), so no translation happens anywhere.
 local function pieceFromSource(sourceID)
   if type(sourceID) ~= "number" or sourceID <= 0 or sourceID == NO_TRANSMOG then
@@ -55,7 +55,7 @@ local function pieceFromSource(sourceID)
     return nil
   end
   -- "Hidden helm"-style entries are real sources whose whole purpose is to show nothing.
-  -- Passing one on would equip an invisible item in ModelViewer.
+  -- Passing one on would equip an invisible item in MViewer.
   if info.isHideVisual then
     return nil
   end
@@ -285,7 +285,7 @@ end
 -- Encoding
 
 -- MVM1:R=<race>:S=<sex>:<mvSlot>=<itemID>.<modID>:...  Emitted in SLOT_ORDER so the same
--- look always yields the same string; the decoder in ModelViewer's MVLinkCode.cpp is the
+-- look always yields the same string; the decoder in MViewer's MVLinkCode.cpp is the
 -- other half of this contract.
 function MVLink:Encode(look)
   local out = { self.FORMAT, ("R=%d"):format(look.raceID), ("S=%d"):format(look.sex) }
@@ -349,7 +349,7 @@ end
 
 -- The file is the FALLBACK route, not the main one: WoW flushes it only on /reload or
 -- logout, and with the previously loaded code at that. The clipboard route exists because
--- of exactly this. Still written, so "Direkt aus WoW holen" in ModelViewer has something
+-- of exactly this. Still written, so "Direkt aus WoW holen" in MViewer has something
 -- to find -- with updatedAt beside it so the receiving side can say how old it is.
 function MVLink:Store()
   MVLinkDB = MVLinkDB or {}

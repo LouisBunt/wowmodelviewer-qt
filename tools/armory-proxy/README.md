@@ -1,6 +1,6 @@
-# WoW Model Viewer — Armory import proxy
+# MViewer — Armory import proxy
 
-The character importer in WMV never holds Blizzard API credentials. Instead it
+The character importer in MViewer never holds Blizzard API credentials. Instead it
 calls a tiny **proxy you host**, which keeps the secret server-side, performs the
 OAuth handshake, and returns the character's appearance JSON. Your end users
 register nothing and paste nothing.
@@ -28,9 +28,9 @@ URL-encoded).
 ## Step 1 — Register one Blizzard API client (once)
 
 1. Go to <https://develop.battle.net> and log in with your Battle.net account.
-2. **Create Client**. Any name (e.g. "WMV armory proxy"). No redirect URI needed.
+2. **Create Client**. Any name (e.g. "MViewer armory proxy"). No redirect URI needed.
 3. Copy the **Client ID** and **Client Secret**. These go on your server only —
-   never in the WMV repo or the shipped binary.
+   never in the MViewer repo or the shipped binary.
 
 ---
 
@@ -45,7 +45,7 @@ URL-encoded).
    ```
 2. From this folder, deploy the Worker (uses `cloudflare-worker.js`):
    ```
-   wrangler deploy cloudflare-worker.js --name wmv-armory
+   wrangler deploy cloudflare-worker.js --name mviewer-armory
    ```
 3. Set the credentials and an access key as **secrets** (encrypted, never in code):
    ```
@@ -58,7 +58,7 @@ URL-encoded).
    requests/minute per IP).
 5. Your proxy URL is (append the key if you set one):
    ```
-   https://wmv-armory.<your-subdomain>.workers.dev/?region=%s&realm=%s&character=%s&key=<ACCESS_KEY>
+   https://mviewer-armory.<your-subdomain>.workers.dev/?region=%s&realm=%s&character=%s&key=<ACCESS_KEY>
    ```
 
 ### Option B — PHP host (shared hosting)
@@ -84,17 +84,17 @@ You should get the appearance JSON (playable_race, gender, items, customizations
 
 ---
 
-## Step 3 — Bake the URL into WMV
+## Step 3 — Bake the URL into MViewer
 
-Open `Source/plugins/importers/armory/ArmoryImporter.cpp`, set:
+Open `engine/Source/plugins/importers/armory/ArmoryImporter.cpp`, set:
 
 ```cpp
 static const QString DEFAULT_ARMORY_PROXY_URL = "https://<your-proxy>/?region=%s&realm=%s&character=%s&key=<ACCESS_KEY>";
 ```
 
-Rebuild (`_build.bat`) and redeploy (`_run.bat`). Now every user's import "just
-works" with no setup. (Power users can override the URL at runtime in
-**Settings → General → Armory → Proxy URL** without rebuilding.)
+Rebuild the engine and package it (README, "Building"). Now every user's import "just
+works" with no setup. (Power users can override the URL without rebuilding: `ProxyURL=`
+under `[Armory]` in `userSettings\qt-frontend.ini` next to the program.)
 
 The proxy URL (including the access key) is **not** a true secret — it is embedded in
 the shipped binary. It exists to block trivial scraping and to let you rotate access;
@@ -105,7 +105,7 @@ your server.
 
 ## Repo hygiene
 
-- Commit `armory-proxy/.gitignore` **first** — it ignores `config.php`, `.dev.vars`,
+- Commit `tools/armory-proxy/.gitignore` **first** — it ignores `config.php`, `.dev.vars`,
   `wrangler.toml`, and `.wrangler/`.
 - Never `git add config.php` / `wrangler.toml` / `.dev.vars` explicitly (that bypasses
   ignore rules). Run `git status` before committing to confirm no secret is staged.

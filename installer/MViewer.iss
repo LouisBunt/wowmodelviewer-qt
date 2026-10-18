@@ -1,4 +1,4 @@
-﻿; ModelViewer: Midnight - Inno Setup installer script
+﻿; MViewer - Inno Setup installer script
 ; -----------------------------------------------------------------------------
 ; Per-user installer, no admin required. The application writes its config, log and
 ; database cache next to its own executable, so it must live somewhere the user can
@@ -11,16 +11,16 @@
 ; being duplicated and drifting here.
 ;
 ;   powershell -ExecutionPolicy Bypass -File installer\stage.ps1
-;   "%LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe" installer\MVMidnight.iss
+;   "%LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe" installer\MViewer.iss
 ;
-; Output: installer\dist\MV-Midnight-Setup-<version>.exe
+; Output: installer\dist\MViewer-Setup-<version>.exe
 
-#define MyAppName "ModelViewer: Midnight"
-; The same name WITHOUT the colon, for everywhere a path is built from it. Windows forbids
-; \ / : * ? " < > | in folder and file names, so the colon made Setup reject the Start-menu
-; group and both shortcut files -- the installation could not be completed at all. AppName
-; keeps the colon; that one is only ever displayed.
-#define MyAppNameFs "ModelViewer Midnight"
+#define MyAppName "MViewer"
+; The name for everywhere a path is built from it. It used to differ from MyAppName: the old
+; name, "ModelViewer: Midnight", had a colon, which Windows forbids in folder and file names,
+; and Setup rejected the Start-menu group and both shortcut files. "MViewer" is safe in both
+; roles; the two stay separate so a future name with such a character cannot repeat that.
+#define MyAppNameFs "MViewer"
 #define MyAppVersion "1.5.0"
 #define MyAppVersionNumeric "1.5.0.0"
 
@@ -34,8 +34,8 @@
   #define StageMB "450"
 #endif
 #define MyAppPublisher "Skogdesign"
-#define MyAppExeName "WoWModelViewer-Qt.exe"
-#define MyAppURL "https://github.com/LouisBunt/wowmodelviewer-qt"
+#define MyAppExeName "MViewer.exe"
+#define MyAppURL "https://github.com/LouisBunt/MViewer"
 #define Stage "stage"
 
 [Setup]
@@ -57,12 +57,17 @@ AppSupportURL={#MyAppURL}/issues
 AppUpdatesURL={#MyAppURL}/releases
 VersionInfoVersion={#MyAppVersionNumeric}
 VersionInfoProductVersion={#MyAppVersionNumeric}
-DefaultDirName={autopf}\ModelViewer Midnight
+DefaultDirName={autopf}\{#MyAppNameFs}
 DefaultGroupName={#MyAppNameFs}
+; Not the group an earlier version recorded: that is "ModelViewer Midnight", from before the
+; rename, and its shortcuts are removed in [InstallDelete]. The installation folder, on the
+; other hand, IS reused (UsePreviousAppDir, the default) -- the settings, looks and the online
+; cache live next to the program.
+UsePreviousGroup=no
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 OutputDir=dist
-OutputBaseFilename=MV-Midnight-Setup-{#MyAppVersion}
+OutputBaseFilename=MViewer-Setup-{#MyAppVersion}
 SetupIconFile=..\resources\appicon.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
 ; GPLv3 -- shown during setup and installed alongside the binary.
@@ -108,6 +113,14 @@ Type: files; Name: "{app}\wxmsw32u_*.dll"; Tasks: cleanwx
 Type: files; Name: "{app}\jpeg62.dll"; Tasks: cleanwx
 Type: files; Name: "{app}\libpng16.dll"; Tasks: cleanwx
 Type: files; Name: "{app}\UpdateManager.exe"; Tasks: cleanwx
+; Up to 1.1 the program was called "ModelViewer: Midnight" and its executable
+; WoWModelViewer-Qt.exe. Both are this setup's own earlier files, so an upgrade removes them
+; rather than leaving a second, outdated program and its shortcuts behind.
+Type: files; Name: "{app}\WoWModelViewer-Qt.exe"
+Type: files; Name: "{autoprograms}\ModelViewer Midnight\ModelViewer Midnight.lnk"
+Type: files; Name: "{autoprograms}\ModelViewer Midnight\ModelViewer Midnight deinstallieren.lnk"
+Type: dirifempty; Name: "{autoprograms}\ModelViewer Midnight"
+Type: files; Name: "{autodesktop}\ModelViewer Midnight.lnk"
 ; The database cache is keyed by WoW build and schema version, not by application
 ; version. Drop it on upgrade so a changed schema cannot be served from a cache the
 ; previous build wrote.

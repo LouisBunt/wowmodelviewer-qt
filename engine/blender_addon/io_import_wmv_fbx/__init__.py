@@ -1,12 +1,12 @@
 # ----------------------------------------------------------------------------
-# WoW Model Viewer: Midnight -- Blender FBX importer add-on.
+# MViewer -- Blender FBX importer add-on.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-# Part of better Model Viewer, distributed under the GNU General Public License
+# Part of MViewer, distributed under the GNU General Public License
 # version 3 or later -- the same licence Blender add-ons require anyway.
-# Source: https://github.com/LouisBunt/wowmodelviewer-qt
+# Source: https://github.com/LouisBunt/MViewer
 #
-# Imports an FBX exported by WoW Model Viewer: Midnight and rebuilds every
+# Imports an FBX exported by MViewer and rebuilds every
 # material's node graph from the ".wmvmat.json" sidecar the exporter writes,
 # so the imported model matches the WMV viewport exactly:
 #
@@ -26,12 +26,12 @@
 # ----------------------------------------------------------------------------
 
 bl_info = {
-    "name": "WoW Model Viewer FBX (.fbx)",
-    "author": "WoW Model Viewer: Midnight",
-    "version": (1, 3, 0),
+    "name": "MViewer FBX (.fbx)",
+    "author": "MViewer",
+    "version": (1, 3, 1),
     "blender": (3, 0, 0),
-    "location": "File > Import > WoW Model Viewer FBX (.fbx); 3D View > Sidebar > WMV",
-    "description": "Import WMV-exported FBX with viewport-identical materials, "
+    "location": "File > Import > MViewer FBX (.fbx); 3D View > Sidebar > MViewer",
+    "description": "Import FBX exported by MViewer with viewport-identical materials, "
                    "and prepare it for 3D printing",
     "category": "Import-Export",
 }
@@ -448,10 +448,10 @@ def import_wmv_fbx(filepath, separate_materials=True, hide_effect_planes=False,
 
 
 class IMPORT_SCENE_OT_wmv_fbx(bpy.types.Operator, ImportHelper):
-    """Import a WoW Model Viewer FBX with viewport-identical materials"""
+    """Import an MViewer FBX with viewport-identical materials"""
 
     bl_idname = "import_scene.wmv_fbx"
-    bl_label = "Import WMV FBX"
+    bl_label = "Import MViewer FBX"
     bl_options = {"REGISTER", "UNDO"}
 
     filename_ext = ".fbx"
@@ -471,7 +471,7 @@ class IMPORT_SCENE_OT_wmv_fbx(bpy.types.Operator, ImportHelper):
 
     build_materials: BoolProperty(
         name="Materialien automatisch aufbauen",
-        description="Baut die Shader-Nodes so, dass der Import wie im Model Viewer aussieht "
+        description="Baut die Shader-Nodes so, dass der Import wie in MViewer aussieht "
                     "(Glühen als Emission, Alpha-Modi, Backface Culling). Abschalten, um "
                     "Blenders Standard-Materialien zu behalten und eigene Shader zu bauen",
         default=True,
@@ -485,7 +485,7 @@ class IMPORT_SCENE_OT_wmv_fbx(bpy.types.Operator, ImportHelper):
             self.report(
                 {"WARNING"},
                 "No .wmvmat.json sidecar next to the FBX -- imported without "
-                "WoW render-state properties. Re-export from WoW Model Viewer to get it.",
+                "WoW render-state properties. Re-export from MViewer to get it.",
             )
         else:
             self.report(
@@ -497,14 +497,16 @@ class IMPORT_SCENE_OT_wmv_fbx(bpy.types.Operator, ImportHelper):
 
 def _menu_entry(self, context):
     self.layout.operator(IMPORT_SCENE_OT_wmv_fbx.bl_idname,
-                         text="WoW Model Viewer FBX (.fbx)")
+                         text="MViewer FBX (.fbx)")
 
 
 def _last_export_path():
-    """The handshake file WoW Model Viewer writes after every FBX export.
+    """The handshake file MViewer writes after every FBX export.
 
     The path is the whole contract -- no IPC; the app hardcodes the same location
-    (ExportController.cpp, lastExportFilePath()). One 'FBX:<absolute path>' line."""
+    (ExportController.cpp, lastExportFilePath()). One 'FBX:<absolute path>' line.
+    The folder keeps the program's old name, so an older copy of either side still
+    finds the other."""
     base = os.environ.get("LOCALAPPDATA") or os.path.expanduser("~")
     return os.path.join(base, "WMVMidnight", "last_export.txt")
 
@@ -525,10 +527,10 @@ def _read_last_export():
 
 
 class WMV_OT_import_last_export(bpy.types.Operator):
-    """Import the FBX WoW Model Viewer exported last (one click, no file dialog)"""
+    """Import the FBX MViewer exported last (one click, no file dialog)"""
 
     bl_idname = "wmv.import_last_export"
-    bl_label = "Letzten WMV-Export importieren"
+    bl_label = "Letzten MViewer-Export importieren"
     bl_options = {"REGISTER", "UNDO"}
 
     def execute(self, context):
@@ -536,7 +538,7 @@ class WMV_OT_import_last_export(bpy.types.Operator):
         if path is None:
             self.report(
                 {"ERROR"},
-                "Kein Export gefunden. Erst im Model Viewer \"Als FBX exportieren\" "
+                "Kein Export gefunden. Erst in MViewer \"Als FBX exportieren\" "
                 "klicken, dann hier importieren.",
             )
             return {"CANCELLED"}
@@ -551,12 +553,12 @@ class WMV_OT_import_last_export(bpy.types.Operator):
 
 
 class WMV_PT_sidebar(bpy.types.Panel):
-    """The one-click landing spot: 3D View sidebar (N key), tab 'WMV'."""
+    """The one-click landing spot: 3D View sidebar (N key), tab 'MViewer'."""
 
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
-    bl_category = "WMV"
-    bl_label = "WoW Model Viewer"
+    bl_category = "MViewer"
+    bl_label = "MViewer"
 
     def draw(self, context):
         col = self.layout.column()
@@ -1038,7 +1040,7 @@ def _print_report(measurements, profile):
     notes = []
     if any(not m["has_stamp"] for m in live):
         notes.append(
-            "Mindestens ein Objekt hat keine WMV-Materialstempel -- ohne "
+            "Mindestens ein Objekt hat keine MViewer-Materialstempel -- ohne "
             ".wmvmat.json neben der FBX sind Effektflaechen nicht erkennbar.")
     if not roles.get("geschlossen"):
         notes.append(
@@ -1060,7 +1062,7 @@ def _print_report(measurements, profile):
     # separate, unwelded shells. That seam is real geometry, not damage -- said
     # here so a later manifold check is not mistaken for a broken export.
     notes.append(
-        "Handgelenk, Knoechel und Halsansatz sind im WMV-Export offene Naehte "
+        "Handgelenk, Knoechel und Halsansatz sind im MViewer-Export offene Naehte "
         "(getrennte Geosets). Offene Kanten dort sind normal, kein Schaden.")
 
     lines += ["", "-" * 64, "", "HINWEISE"]
@@ -1185,7 +1187,7 @@ class WMV_OT_print_check(bpy.types.Operator):
         if not measurements:
             self.report({"ERROR"},
                         "Keine Mesh-Objekte in der Szene. Erst einen "
-                        "WMV-Export importieren.")
+                        "MViewer-Export importieren.")
             return {"CANCELLED"}
 
         lines, roles = _print_report(measurements, _print_profile(scene))
@@ -1372,9 +1374,9 @@ class WMV_OT_print_strip(bpy.types.Operator):
 
         if stamped == 0:
             self.report({"ERROR"},
-                        "Keine WMV-Materialstempel gefunden. Ohne .wmvmat.json "
+                        "Keine MViewer-Materialstempel gefunden. Ohne .wmvmat.json "
                         "neben der FBX sind Effektflaechen nicht erkennbar -- "
-                        "neu aus dem Model Viewer exportieren.")
+                        "neu aus MViewer exportieren.")
             return {"CANCELLED"}
 
         # By name, not by reference: removing invalidates the other pointers.

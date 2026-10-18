@@ -86,10 +86,11 @@ bool ArmoryImporter::acceptURL(QString url) const
 // credentials; it calls a small self-hosted proxy, which performs the OAuth
 // client_credentials grant + appearance fetch server-side and returns the JSON.
 // printf-style template: 1st %s = region, 2nd = realm slug, 3rd = character name
-// (lower-cased). Points at this project's own self-hosted Cloudflare Worker proxy;
-// override at runtime in Settings > General. The &key= is a public rate-limit gate
-// (it ships in the binary by design) -- the Blizzard client secret lives only on the
-// proxy server, never here. See armory-proxy/README.md.
+// (lower-cased). Points at the Cloudflare Worker run for WoW Model Viewer, which this
+// engine came from; override at runtime with ProxyURL under [Armory] in
+// userSettings/qt-frontend.ini. The &key= is a public rate-limit gate (it ships in the
+// binary by design) -- the Blizzard client secret lives only on the proxy server, never
+// here. See tools/armory-proxy/README.md.
 static const QString DEFAULT_ARMORY_PROXY_URL = "https://wmv-armory.wmwarmory.workers.dev/?region=%s&realm=%s&character=%s&key=X5qtjCWegxwQfk40PS8EGcnNdD3Y";
 
 // Substitute the first three "%s" placeholders in the proxy template, in order
@@ -222,8 +223,9 @@ CharInfos * ArmoryImporter::importChar(QString url) const
     // Map the gather status to an actionable message for the user.
     if (readStatus == 4)
       result->errorMessage = "No Armory proxy is configured.\n\n"
-                             "This build has no built-in proxy URL. Set one in Settings > General "
-                             "(Armory Proxy URL), or rebuild with a default proxy. See armory-proxy/README.md.";
+                             "This build has no built-in proxy URL. Set one as ProxyURL under [Armory] "
+                             "in userSettings\\qt-frontend.ini, or rebuild with a default proxy. "
+                             "See tools/armory-proxy/README.md.";
     else if (readStatus == 6)
       result->errorMessage = "Could not read the character link.\n\n"
                              "Use a link like https://worldofwarcraft.blizzard.com/en-gb/character/eu/realm/name";

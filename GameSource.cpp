@@ -29,7 +29,10 @@ const char* kCacheKey  = "online/cacheDir";      // empty = defaultCacheDir()
 const char* kClearKey  = "online/clearOnNextStart";   // the cache folder to delete first thing
 
 // Named after what it is for, and readable by whoever finds the folder in Explorer.
-const char* kMarkerFile = "MODELVIEWER-CACHE.txt";
+const char* kMarkerFile = "MVIEWER-CACHE.txt";
+// The same marker from before the rename to MViewer. The test builds of 1.5.0 wrote it, and a
+// cache they filled is still ours.
+const char* kOldMarkerFile = "MODELVIEWER-CACHE.txt";
 
 QString key(const char* k) { return QString::fromLatin1(k); }
 
@@ -375,7 +378,7 @@ bool prepareCache(const QString& dir, QString* error)
     return false;
   }
   f.write(QString::fromUtf8(
-    "Online-Cache von ModelViewer: Midnight -- Spieldateien von Blizzards Download-Servern.\n"
+    "Online-Cache von MViewer -- Spieldateien von Blizzards Download-Servern.\n"
     "Darf gelöscht werden; fehlende Dateien werden beim nächsten Online-Start neu geladen.\n")
             .toUtf8());
   return true;
@@ -383,7 +386,9 @@ bool prepareCache(const QString& dir, QString* error)
 
 bool isOurCache(const QString& dir)
 {
-  return QFile::exists(QDir(dir).filePath(QString::fromLatin1(kMarkerFile)));
+  const QDir d(dir);
+  return QFile::exists(d.filePath(QString::fromLatin1(kMarkerFile)))
+         || QFile::exists(d.filePath(QString::fromLatin1(kOldMarkerFile)));
 }
 
 QString cacheDirProblem(const QString& dir)
@@ -412,7 +417,7 @@ QString cacheDirFor(const QString& picked)
   const QDir d(picked);
   if (isOurCache(picked) || d.isEmpty(QDir::AllEntries | QDir::NoDotAndDotDot | QDir::Hidden))
     return QDir::cleanPath(picked);
-  return QDir::cleanPath(d.filePath(QStringLiteral("ModelViewer-Cache")));
+  return QDir::cleanPath(d.filePath(QStringLiteral("MViewer-Cache")));
 }
 
 QString completedBuild(const QString& dir)
@@ -441,7 +446,7 @@ bool clearCache(const QString& dir, QString* error)
     return false;
   }
   if (!QDir(dir).removeRecursively()) {
-    *error = QObject::tr("Der Cache ließ sich nicht vollständig löschen. Läuft ModelViewer "
+    *error = QObject::tr("Der Cache ließ sich nicht vollständig löschen. Läuft MViewer "
                          "noch ein zweites Mal?\n%1").arg(QDir::toNativeSeparators(dir));
     return false;
   }

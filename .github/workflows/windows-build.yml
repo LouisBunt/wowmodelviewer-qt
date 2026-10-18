@@ -1,7 +1,7 @@
 # Builds the Windows setup on a GitHub-hosted runner, the way installer/build-setup.ps1 builds it
 # on a developer machine: the engine (engine/) first, then the application, then the payload and
-# the Inno package. The finished MV-Midnight-Setup-<version>.exe is attached to the run as the
-# artifact "MV-Midnight-Setup". A tag v<version> also publishes it as a GitHub release, whether
+# the Inno package. The finished MViewer-Setup-<version>.exe is attached to the run as the
+# artifact "MViewer-Setup". A tag v<version> also publishes it as a GitHub release, whether
 # the tag was pushed or made on github.com together with a new release.
 #
 # What the repository does not carry is fetched here:
@@ -173,8 +173,8 @@ jobs:
       - name: Upload the setup
         uses: actions/upload-artifact@v4
         with:
-          name: MV-Midnight-Setup
-          path: installer/dist/MV-Midnight-Setup-*.exe
+          name: MViewer-Setup
+          path: installer/dist/MViewer-Setup-*.exe
           if-no-files-found: error
           # Already LZMA-compressed by Inno; zipping it again only costs time.
           compression-level: 0
@@ -201,7 +201,7 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
-          name: MV-Midnight-Setup
+          name: MViewer-Setup
           path: dist
 
       - name: Create the GitHub release
@@ -210,7 +210,7 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           version="${GITHUB_REF_NAME#v}"
-          setup="dist/MV-Midnight-Setup-$version.exe"
+          setup="dist/MViewer-Setup-$version.exe"
           notes="installer/RELEASE-$version.md"
           [ -f "$setup" ] || { echo "no $setup -- does the tag match MyAppVersion?"; exit 1; }
           [ -f "$notes" ] || { echo "no $notes"; exit 1; }
@@ -225,7 +225,7 @@ jobs:
             echo "    $(basename "$setup")  ($size MB)"
             echo "    SHA-256  $hash"
           } > "$RUNNER_TEMP/notes.md"
-          title="ModelViewer: Midnight $version"
+          title="MViewer $version"
           if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
             # Made by hand on github.com -- the only way to create a tag there is to publish a
             # release with it. It gets the same setup, title and notes as a pushed tag would.

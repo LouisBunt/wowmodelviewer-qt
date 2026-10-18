@@ -1,6 +1,7 @@
-# ModelViewer: Midnight
+# MViewer
 
-A model viewer for World of Warcraft, on Qt. It began as a new interface for
+**Model-Viewer für World of Warcraft** — a model viewer for World of Warcraft, on Qt. Up to
+1.1 it was called *ModelViewer: Midnight*. It began as a new interface for
 [WoW Model Viewer](https://github.com/wowmodelviewer/wowmodelviewer): the model, render and
 data layer — `core.dll`, `wow.dll` and the plugins — comes from there and lives on in
 [`engine/`](engine/README.md); the interface on top is new.
@@ -56,7 +57,7 @@ the online mode, the item view, the STL export and the FBX sidecar among it.
 ### The interface
 
 `Theme.h/.cpp` is the design system: colour tokens by role, a 4px measure scale, a pixel type
-scale and the one application stylesheet. `MidnightStyle` (a `QProxyStyle` over Fusion) supplies
+scale and the one application stylesheet. `MViewerStyle` (a `QProxyStyle` over Fusion) supplies
 what a stylesheet cannot reach — tree chevrons, pixel metrics, and the focus ring, which is shown
 only for a widget the keyboard reached. `UiKit.h/.cpp` holds the parts the panels are built from:
 `ElidedLabel` (shortens instead of clipping, tooltip only when something is hidden),
@@ -95,8 +96,8 @@ products (`core.lib`, `wow.lib`, `core.dll`, `wow.dll`, the five plugin DLLs) ar
 application links against and ships:
 
 ```
-git clone https://github.com/LouisBunt/wowmodelviewer-qt.git
-cd wowmodelviewer-qt
+git clone https://github.com/LouisBunt/MViewer.git
+cd MViewer
 
 cmake -S engine -B engine/build-x64 -G "Visual Studio 17 2022" -A x64
 cmake --build engine/build-x64 --config Release
@@ -146,7 +147,7 @@ remembered in `userSettings\qt-frontend.ini` and asked for once if there is none
 numeric first argument is the model id, with the folder taken from the settings:
 
 ```
-build\Release\WoWModelViewer-Qt.exe "C:\Program Files (x86)\World of Warcraft" 917116
+build\Release\MViewer.exe "C:\Program Files (x86)\World of Warcraft" 917116
 ```
 
 Useful for checking things without touching the mouse:
@@ -188,7 +189,7 @@ front-end, package:
 powershell -ExecutionPolicy Bypass -File installer\build-setup.ps1
 ```
 
-(`stage.ps1` + `ISCC installer\MVMidnight.iss` still work on their own; the driver
+(`stage.ps1` + `ISCC installer\MViewer.iss` still work on their own; the driver
 script also measures the payload so the front-end's progress bar divides by the real
 file count. `/VERYSILENT /DIR=... /MERGETASKS=...` bypasses the front-end entirely
 and behaves like any Inno setup.)
@@ -196,7 +197,7 @@ and behaves like any Inno setup.)
 GitHub Actions runs the same build on a Windows runner for every push to `master` and
 every pull request (`.github/workflows/windows-build.yml`): it fetches Qt, the vcpkg
 packages, the FBX SDK and the listfile, builds the engine, the application and the setup,
-runs the tests, and attaches `MV-Midnight-Setup-<version>.exe` to the run as an artifact.
+runs the tests, and attaches `MViewer-Setup-<version>.exe` to the run as an artifact.
 A tag `v<version>` publishes that setup as the GitHub release, with
 `installer/RELEASE-<version>.md` as its notes and the file's size and SHA-256 underneath.
 The tag can be pushed, or made on github.com by publishing a new release with it (target
@@ -204,11 +205,17 @@ The tag can be pushed, or made on github.com by publishing a new release with it
 
 The setup has its own `AppId`, so it upgrades its own earlier versions in place and leaves
 any WoW Model Viewer installation alone. The files of one in the target folder are removed
-only when the user ticks the option for it.
+only when the user ticks the option for it. An upgrade from *ModelViewer: Midnight* (1.0,
+1.1) keeps that installation's folder, and with it the settings, looks and caches; the old
+`WoWModelViewer-Qt.exe` and its shortcuts are removed in `[InstallDelete]`.
+
+The MV mark and the splash in `resources/` are stand-ins drawn by `tools/make-logo.py`.
+[resources/LOGO.md](resources/LOGO.md) says which files make up the logo and how to swap
+them for a designed one.
 
 ## Reporting problems
 
-<https://github.com/LouisBunt/wowmodelviewer-qt/issues> — please attach
+<https://github.com/LouisBunt/MViewer/issues> — please attach
 `userSettings\log.txt` (engine, archive and exporter messages) and
 `userSettings\qt-frontend-trace.txt` (startup and imports, step by step). If the
 application does not start at all, `userSettings\qt-frontend-error.txt` holds the reason.

@@ -1,5 +1,5 @@
-#ifndef MIDNIGHTSTYLE_H
-#define MIDNIGHTSTYLE_H
+#ifndef MVIEWERSTYLE_H
+#define MVIEWERSTYLE_H
 
 #include <QProxyStyle>
 
@@ -14,11 +14,11 @@
 // gives every clicked button focus as well, and a ring that appears on click reads as a stuck
 // selection. The application filter sets the dynamic property "kbfocus" on tab-focus, and the
 // stylesheet paints the ring; this class installs the filter.
-class MidnightStyle : public QProxyStyle
+class MViewerStyle : public QProxyStyle
 {
   Q_OBJECT
 public:
-  explicit MidnightStyle(QStyle* base);
+  explicit MViewerStyle(QStyle* base);
 
   void drawPrimitive(PrimitiveElement pe, const QStyleOption* opt, QPainter* p,
                      const QWidget* w = nullptr) const override;
@@ -29,4 +29,4 @@ public:
   void polish(QWidget* w) override;
 };
 
-#endif  // MIDNIGHTSTYLE_H
+#endif  // MVIEWERSTYLE_H

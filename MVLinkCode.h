@@ -14,7 +14,7 @@
 // into a plausible but wrong character. This format is readable, order-independent, and
 // carries a version so an unknown one is refused rather than guessed at.
 //
-// The slots are already ModelViewer's own CharSlots values: the addon maps WoW's
+// The slots are already MViewer's own CharSlots values: the addon maps WoW's
 // inventory slots on its side, using the table in addon/MVLink/db/slots.lua. That table
 // and this decoder are the two halves of one contract -- change one, change the other.
 struct MVLinkLook

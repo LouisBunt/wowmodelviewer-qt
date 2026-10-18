@@ -1,18 +1,22 @@
-ModelViewer: Midnight 1.5
-=========================
+MViewer 1.5
+===========
 
 Was das ist
 -----------
-Ein neues Frontend fuer WoW Model Viewer auf Qt statt wxWidgets. Die Modell-,
-Render- und Datenschicht ist im Kern dieselbe wie im Original: core.dll und
-wow.dll werden weiterbenutzt. Umgebaut ist im Wesentlichen die Oberflaeche --
-dazu einige gezielte Eingriffe in wow.dll und den FBX-Exporter, die unten bei
-"Neu" genannt sind, sowie die Engine-Teile des Online-Modus (siehe "Ohne
-WoW-Installation").
+MViewer ist ein Model-Viewer fuer World of Warcraft. Bis Version 1.1 hiess er
+"ModelViewer: Midnight".
 
-Diese Version ersetzt die wxWidgets-Ausgabe (WoW Model Viewer Midnight). Beim
-Einrichten werden deren Programmdateien entfernt; die Spieldaten-Hilfsdateien
-bleiben erhalten.
+Die Modell-, Render- und Datenschicht (core.dll und wow.dll) stammt aus
+WoW Model Viewer und wird hier weiterentwickelt; die Oberflaeche ist neu, auf Qt
+statt wxWidgets. Die Eingriffe in die Engine stehen unten bei "Neu" und unter
+"Ohne WoW-Installation".
+
+Ein Update ueber "ModelViewer: Midnight" 1.0 oder 1.1 behaelt den Ordner mit
+Looks, Einstellungen und Vorschaubildern; nur das alte Programm und seine
+Verknuepfungen werden durch MViewer ersetzt. Eine wxWidgets-Ausgabe (WoW Model
+Viewer Midnight) im selben Ordner bleibt unangetastet, ausser beim Einrichten ist
+"Dateien einer vorhandenen WoW-Model-Viewer-Installation im Zielordner entfernen"
+angehakt; ihre Spieldaten-Hilfsdateien bleiben auch dann erhalten.
 
 Die beschriebenen Funktionen sind geprueft und tun, was hier steht. Einzelne
 Bereiche der alten Oberflaeche sind noch nicht portiert; was fehlt, steht
@@ -57,10 +61,10 @@ Battle.net-Installation ist das der Ordner "World of Warcraft" selbst, nicht
 
 Beides laesst sich auch mitgeben, etwa fuer Skripte:
 
-    WoWModelViewer-Qt.exe "<WoW-Ordner>" [FileDataID] [Optionen]
-    WoWModelViewer-Qt.exe [FileDataID] --online [Region] [Optionen]
-    WoWModelViewer-Qt.exe "D:\World of Warcraft" 917116
-    WoWModelViewer-Qt.exe 917116 --online eu --locale deDE
+    MViewer.exe "<WoW-Ordner>" [FileDataID] [Optionen]
+    MViewer.exe [FileDataID] --online [Region] [Optionen]
+    MViewer.exe "D:\World of Warcraft" 917116
+    MViewer.exe 917116 --online eu --locale deDE
 
 Der zweite Parameter ist das Modell, das beim Start geladen wird; steht die
 FileDataID allein vorn, kommt der Ordner aus den Einstellungen. Ohne sie startet
@@ -287,7 +291,7 @@ Nach Blender
 ------------
 Im Reiter "Blender" installiert ein Knopf das mitgelieferte Import-Add-on in die
 gefundene Blender-Installation. Danach in Blender unter
-Bearbeiten > Einstellungen > Add-ons "WoW Model Viewer FBX" einschalten.
+Bearbeiten > Einstellungen > Add-ons "MViewer FBX" einschalten.
 
 Exportiert wird als FBX. Neben der FBX-Datei legt der Exporter eine Datei
 ".wmvmat.json" ab; das Add-on liest sie und baut daraus die Materialien
@@ -324,7 +328,7 @@ OpenVDB mitbringt.
 
 Auf der Befehlszeile:
 
-    WoWModelViewer-Qt.exe 917116 --print-height 180 --export STL,C:\figur.stl
+    MViewer.exe 917116 --print-height 180 --export STL,C:\figur.stl
 
 
 Neu in 1.6 und 1.7
@@ -387,6 +391,9 @@ Neu in 1.1: die Oberflaeche
 
 Neu in 1.5: ohne WoW-Installation
 ---------------------------------
+- Neuer Name: Aus "ModelViewer: Midnight" wird MViewer, mit eigenem Symbol. Programm,
+  Setup, Startmenue-Eintrag und die beiden Add-ons heissen jetzt so; der Quellcode
+  liegt vollstaendig in einem Repository (siehe "Lizenz und Quellcode").
 - Online-Modus: Die Spieldaten koennen von Blizzards oeffentlichen Download-Servern
   kommen statt aus einer WoW-Installation; siehe "Ohne WoW-Installation" weiter oben.
   Er laeuft nur, wenn du ihn waehlst, und startet danach auch ohne Internet mit dem,
@@ -500,7 +507,7 @@ Wenn etwas nicht geht
 ---------------------
 Bitte melden unter
 
-    https://github.com/LouisBunt/wowmodelviewer-qt/issues
+    https://github.com/LouisBunt/MViewer/issues
 
 Hilfreich sind: was gemacht wurde, was passiert ist, die WoW-Version, und die
 beiden Dateien aus dem Unterordner userSettings des Programmordners:
@@ -521,9 +528,9 @@ Zum Untersuchen von Skelettproblemen:
 Lizenz und Quellcode
 --------------------
 GNU General Public License Version 3. Der vollstaendige Text liegt als
-LICENSE.txt bei.
+LICENSE.txt bei. Die Engine stammt aus WoW Model Viewer, ebenfalls GPLv3.
 
-    https://github.com/LouisBunt/wowmodelviewer-qt
+    https://github.com/LouisBunt/MViewer
 
 Das Paket enthaelt Bibliotheken und Daten Dritter -- Autodesks FBX SDK, Qt,
 OpenSSL, die Dateiliste und die TACT-Schluessel. Herkunft und Bedingungen stehen

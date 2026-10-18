@@ -395,7 +395,7 @@ bool STLExporter::exportModel(Model * m, std::wstring target)
 
   if (!sheets.isEmpty())
     lines << W(L"⚠ Ohne Dicke: %1 — solche Flächen druckt der Slicer nicht. "
-               L"Vor dem Druck in Blender verdicken (WMV-Addon, „Für 3D-Druck“).")
+               L"Vor dem Druck in Blender verdicken (Add-on „MViewer FBX“, „3D-Druck“).")
                .arg(sheets.join(", "));
 
   if (counters.effectPasses > 0)

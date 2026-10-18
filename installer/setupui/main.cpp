@@ -7,8 +7,8 @@
 // upgrades -- registry entries, the uninstaller, stale-file deletion -- stays in the
 // battle-tested engine; everything the user sees is here.
 //
-// The design is the mock-up "ModelViewer Midnight Setup.html", which in turn lifted
-// every colour verbatim from Theme.h. Including Theme.h closes the circle: the setup
+// The design is the mock-up "ModelViewer Midnight Setup.html" (the program's name before
+// MViewer), which in turn lifted every colour verbatim from Theme.h. Including Theme.h closes the circle: the setup
 // is provably in the application's palette, not in a copy of it.
 //
 // Command line (all optional, with development fallbacks):
@@ -129,7 +129,7 @@ public:
     row->setContentsMargins(12, 0, 4, 0);
     row->setSpacing(8);
     row->addWidget(mk(QString::fromUtf8("◆"), "Segoe UI Symbol", 8, tok::accent));
-    row->addWidget(mk(QString::fromUtf8("ModelViewer: Midnight — Setup"),
+    row->addWidget(mk(QString::fromUtf8("MViewer — Setup"),
                       "Segoe UI", 8, tok::fgMuted, false, 0.3));
     row->addStretch(1);
 
@@ -231,7 +231,7 @@ public:
     markRow->setSpacing(7);
     markRow->addWidget(mk(QString::fromUtf8("◆"), "Segoe UI Symbol", 9, tok::accent), 0,
                        Qt::AlignBaseline);
-    markRow->addWidget(mk("MODELVIEWER", "Georgia", 14, tok::brandWordmark, true, 1.3), 0,
+    markRow->addWidget(mk("MVIEWER", "Georgia", 14, tok::brandWordmark, true, 1.3), 0,
                        Qt::AlignBaseline);
     markRow->addStretch(1);
     col->addLayout(markRow);
@@ -243,10 +243,14 @@ public:
       r->addStretch(1);
       return r;
     };
-    auto* mid = mk("MIDNIGHT", "Georgia", 10, tok::fgMuted, false, 3.0);
-    auto* midRow = indent(mid);
-    midRow->setContentsMargins(19, 3, 0, 0);
-    col->addLayout(midRow);
+    // The tagline wraps rather than clips: the column is narrower than the line in some fonts.
+    auto* tagline = mk(QString::fromUtf8("Model-Viewer für World of Warcraft"), "Segoe UI", 8,
+                       tok::fgMuted);
+    tagline->setWordWrap(true);
+    auto* tagRow = new QHBoxLayout;
+    tagRow->setContentsMargins(19, 4, 0, 0);
+    tagRow->addWidget(tagline, 1);
+    col->addLayout(tagRow);
     auto* ver = mk("Version " + version, "Consolas", 7, tok::fgMuted);
     auto* verRow = indent(ver);
     verRow->setContentsMargins(19, 10, 0, 0);
@@ -457,7 +461,7 @@ public:
     dir_ = existingDir_.isEmpty()
              ? QDir::toNativeSeparators(
                  QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation)
-                   .replace("/AppData/Roaming", "/AppData/Local") + "/Programs/ModelViewer Midnight")
+                   .replace("/AppData/Roaming", "/AppData/Local") + "/Programs/MViewer")
              : existingDir_;
 
     auto* col = new QVBoxLayout(this);
@@ -575,12 +579,12 @@ private:
     auto* l = pageLayout(page);
     l->addWidget(kicker("Willkommen"));
     l->addSpacing(7);
-    l->addWidget(pageTitle("ModelViewer: Midnight installieren"));
+    l->addWidget(pageTitle("MViewer installieren"));
     l->addSpacing(8);
     l->addWidget(bodyText(QString::fromUtf8(
-      "Dieses Setup installiert das Qt-Frontend samt Engine, das MVLink-Addon für "
+      "Dieses Setup installiert MViewer samt Engine, das MVLink-Addon für "
       "World of Warcraft und das Blender-Add-on für den FBX-Import mit "
-      ".wmvmat.json-Sidecar. Schließe eine laufende ModelViewer-Instanz, bevor du "
+      ".wmvmat.json-Sidecar. Schließe MViewer, falls es läuft, bevor du "
       "fortfährst.")));
 
     l->addSpacing(16);
@@ -588,7 +592,7 @@ private:
     auto* cc = new QVBoxLayout(c);
     cc->setContentsMargins(14, 4, 14, 4);
     cc->setSpacing(0);
-    addCardRow(cc, "ModelViewer: Midnight " + opt_.version, "Programm, Engine, Spieldaten",
+    addCardRow(cc, "MViewer " + opt_.version, "Programm, Engine, Spieldaten",
                QString::number(opt_.sizeMb) + " MB", false);
     addCardRow(cc, "MVLink", "WoW-Addon, Installation aus dem Programm", "< 1 MB", false);
     addCardRow(cc, "Blender-Add-on", "io_import_wmv_fbx", "< 1 MB", true);
@@ -675,8 +679,10 @@ private:
         QString::fromUtf8("Installationsort wählen"), dir_);
       if (!d.isEmpty()) {
         dir_ = QDir::toNativeSeparators(d);
-        if (!dir_.endsWith("ModelViewer Midnight", Qt::CaseInsensitive))
-          dir_ = dir_ + "\\ModelViewer Midnight";
+        // An installation from before the rename keeps its folder; no MViewer inside it.
+        if (!dir_.endsWith("MViewer", Qt::CaseInsensitive)
+            && !dir_.endsWith("ModelViewer Midnight", Qt::CaseInsensitive))
+          dir_ = dir_ + "\\MViewer";
         pathField_->setText(dir_);
         pathField_->setCursorPosition(0);
         updateDisk();
@@ -742,7 +748,7 @@ private:
     CheckRow* startmenu = nullptr;
     addRow(startmenu, QString::fromUtf8("Startmenü-Eintrag anlegen"), true, true,
            QString::fromUtf8("Startmenü"));
-    addRow(desktop_, QString::fromUtf8("Desktop-Verknüpfung anlegen"), false, false,
+    addRow(desktop_, QString::fromUtf8("Desktop-Verknüpfung anlegen"), hadDesktopIcon_, false,
            "Desktop");
     addRow(cleanwx_, QString::fromUtf8(
              "Dateien einer vorhandenen WoW-Model-Viewer-Installation im Zielordner "
@@ -818,9 +824,9 @@ private:
     l->addWidget(finishTitle_);
     l->addSpacing(8);
     l->addWidget(bodyText(QString::fromUtf8(
-      "ModelViewer: Midnight ist eingerichtet. Beim ersten Start fragt das Programm nach "
-      "deinem World-of-Warcraft-Ordner und baut den Datenbank-Cache auf; das dauert einen "
-      "Moment.")));
+      "MViewer ist eingerichtet. Beim ersten Start sucht das Programm deine "
+      "WoW-Installation oder fragt, ob es die Spieldaten online laden soll, und baut den "
+      "Datenbank-Cache auf; das dauert einen Moment.")));
 
     l->addSpacing(16);
     auto* c = card();
@@ -830,7 +836,7 @@ private:
     l->addWidget(c);
 
     l->addSpacing(16);
-    launch_ = new CheckRow("ModelViewer: Midnight jetzt starten", true);
+    launch_ = new CheckRow("MViewer jetzt starten", true);
     l->addWidget(launch_);
     l->addSpacing(11);
     readme_ = new CheckRow("LIESMICH mit den Neuerungen dieser Version anzeigen", false);
@@ -981,6 +987,13 @@ private:
     while (existingDir_.endsWith('\\'))
       existingDir_.chop(1);
     existingVersion_ = reg.value("DisplayVersion").toString();
+
+    // Keep a desktop shortcut the user already had. Up to 1.1 it was "ModelViewer
+    // Midnight.lnk", which the setup now removes ([InstallDelete]); without this an upgrade
+    // would quietly take it away, because the desktop option starts unticked.
+    const QString desk = QStandardPaths::writableLocation(QStandardPaths::DesktopLocation);
+    hadDesktopIcon_ = QFileInfo::exists(desk + "/MViewer.lnk")
+                      || QFileInfo::exists(desk + "/ModelViewer Midnight.lnk");
   }
 
   void updateDisk()
@@ -1024,7 +1037,7 @@ private:
     elapsed_.start();
     refresh();
 
-    logPath_ = QDir::tempPath() + "/mv-midnight-setup.log";
+    logPath_ = QDir::tempPath() + "/mviewer-setup.log";
     QFile::remove(logPath_);
     logPos_ = 0;
     filesSeen_ = 0;
@@ -1034,7 +1047,7 @@ private:
       appendLog("+0,0s", "Simulation — kein --inner übergeben", tok::accentText);
       simTimer_ = new QTimer(this);
       QObject::connect(simTimer_, &QTimer::timeout, [this] {
-        static const char* files[] = { "core.dll", "wow.dll", "WoWModelViewer-Qt.exe",
+        static const char* files[] = { "core.dll", "wow.dll", "MViewer.exe",
                                        "Qt5Core.dll", "listfile.csv", "games\\wow\\database.xml" };
         if (simStep_ < 60) {
           setProgressFile(QString::fromUtf8(files[simStep_ % 6]));
@@ -1187,7 +1200,7 @@ private:
     if (readme_ && readme_->isChecked())
       QDesktopServices::openUrl(QUrl::fromLocalFile(dir_ + "/LIESMICH.txt"));
     if (launch_ && launch_->isChecked())
-      QProcess::startDetached(dir_ + "/WoWModelViewer-Qt.exe", {}, dir_);
+      QProcess::startDetached(dir_ + "/MViewer.exe", {}, dir_);
     close();
   }
 
@@ -1202,6 +1215,7 @@ private:
   QString dir_;
   QString existingDir_;
   QString existingVersion_;
+  bool hadDesktopIcon_ = false;
 
   Sidebar* sidebar_ = nullptr;
   QStackedWidget* pages_ = nullptr;

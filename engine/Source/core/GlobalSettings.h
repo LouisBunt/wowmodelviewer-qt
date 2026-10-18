@@ -86,6 +86,17 @@ namespace core
 
       bool isBeta() { return m_isBetaVersion; }
 
+      // The application's name and version, which the exporters write into their files (the
+      // FBX scene info and sidecar, the OBJ and STL headers). The application sets both at
+      // start; the defaults are only what the engine reports on its own.
+      void setAppName(const std::wstring & name) { m_appName = name; }
+      void setAppVersion(int major, int minor, int rev)
+      {
+        m_versionMajorNumber = major;
+        m_versionMinorNumber = minor;
+        m_versionRevNumber = rev;
+      }
+
       // Optional runtime override for the armory importer's proxy URL. The client
       // holds NO Blizzard credentials; it calls a self-hosted proxy that does the
       // OAuth + appearance fetch server-side. Normally the proxy URL is baked into

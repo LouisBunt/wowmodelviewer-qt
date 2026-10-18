@@ -1,5 +1,5 @@
-ModelViewer: Midnight — Hinweise zu mitgelieferten Fremdkomponenten
-==================================================================
+MViewer — Hinweise zu mitgelieferten Fremdkomponenten
+=====================================================
 
 Dieses Programm selbst steht unter der GNU General Public License, Version 3
 (siehe LICENSE.txt). Daneben liefert das Paket Bibliotheken und Daten Dritter
@@ -145,7 +145,7 @@ von Blizzard weder unterstützt noch geprüft.
 Der vollständige Quellcode dieses Programms ist öffentlich verfügbar, die
 Oberfläche und die Engine (core.dll, wow.dll, Plugins) in einem Repository:
 
-    https://github.com/LouisBunt/wowmodelviewer-qt
+    https://github.com/LouisBunt/MViewer
 
 Wer den Quellcode auf einem Datenträger möchte, wende sich an die im
 Repository genannte Kontaktadresse.

@@ -13,10 +13,11 @@
 #include "WoWModel.h"
 
 namespace {
-// Where the Blender add-on's "Letzten WMV-Export importieren" button looks. The path
+// Where the Blender add-on's "Letzten MViewer-Export importieren" button looks. The path
 // is the whole contract -- no IPC, both sides just hardcode it (add-on counterpart:
 // blender_addon/io_import_wmv_fbx/__init__.py, _last_export_path()). wow.export has
-// shipped this exact mechanism for years.
+// shipped this exact mechanism for years. The folder keeps the program's old name on purpose:
+// an add-on installed into Blender before the rename looks there and nowhere else.
 QString lastExportFilePath()
 {
   QString base = qEnvironmentVariable("LOCALAPPDATA");

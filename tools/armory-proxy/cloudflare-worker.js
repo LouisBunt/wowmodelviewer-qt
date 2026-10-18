@@ -1,5 +1,5 @@
 /*
- * WoW Model Viewer - Armory import proxy (Cloudflare Worker)
+ * MViewer - Armory import proxy (Cloudflare Worker)
  * --------------------------------------------------------------------------
  * Holds the Blizzard API credentials SERVER-SIDE so the desktop client never
  * ships a secret. It performs the OAuth client_credentials grant and the WoW

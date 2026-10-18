@@ -1,4 +1,4 @@
-#include "MidnightStyle.h"
+#include "MViewerStyle.h"
 
 #include <QAbstractItemView>
 #include <QApplication>
@@ -48,11 +48,11 @@ protected:
 
 }  // namespace
 
-MidnightStyle::MidnightStyle(QStyle* base) : QProxyStyle(base)
+MViewerStyle::MViewerStyle(QStyle* base) : QProxyStyle(base)
 {
 }
 
-void MidnightStyle::polish(QWidget* w)
+void MViewerStyle::polish(QWidget* w)
 {
   QProxyStyle::polish(w);
   if (!w)
@@ -65,8 +65,8 @@ void MidnightStyle::polish(QWidget* w)
   }
 }
 
-void MidnightStyle::drawPrimitive(PrimitiveElement pe, const QStyleOption* opt, QPainter* p,
-                                  const QWidget* w) const
+void MViewerStyle::drawPrimitive(PrimitiveElement pe, const QStyleOption* opt, QPainter* p,
+                                 const QWidget* w) const
 {
   if (pe == PE_IndicatorBranch) {
     // The tree's disclosure marker. Fusion draws a small filled triangle in the palette's mid
@@ -116,7 +116,7 @@ void MidnightStyle::drawPrimitive(PrimitiveElement pe, const QStyleOption* opt, 
   QProxyStyle::drawPrimitive(pe, opt, p, w);
 }
 
-int MidnightStyle::pixelMetric(PixelMetric pm, const QStyleOption* opt, const QWidget* w) const
+int MViewerStyle::pixelMetric(PixelMetric pm, const QStyleOption* opt, const QWidget* w) const
 {
   switch (pm) {
     case PM_ScrollBarExtent:        return ui::px(10);
@@ -141,8 +141,8 @@ int MidnightStyle::pixelMetric(PixelMetric pm, const QStyleOption* opt, const QW
   }
 }
 
-int MidnightStyle::styleHint(StyleHint sh, const QStyleOption* opt, const QWidget* w,
-                             QStyleHintReturn* ret) const
+int MViewerStyle::styleHint(StyleHint sh, const QStyleOption* opt, const QWidget* w,
+                            QStyleHintReturn* ret) const
 {
   switch (sh) {
     // A list, not a native drop-down: the popup is styled by the sheet and has to be a plain

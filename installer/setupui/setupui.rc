@@ -12,11 +12,11 @@ BEGIN
     BLOCK "040704b0"
     BEGIN
       VALUE "CompanyName",      "Skogdesign"
-      VALUE "FileDescription",  "ModelViewer: Midnight Setup"
+      VALUE "FileDescription",  "MViewer Setup"
       VALUE "FileVersion",      "1.5.0.0"
-      VALUE "ProductName",      "ModelViewer: Midnight"
+      VALUE "ProductName",      "MViewer"
       VALUE "ProductVersion",   "1.5.0"
-      VALUE "LegalCopyright",   "GPLv3 - https://github.com/LouisBunt/wowmodelviewer-qt"
+      VALUE "LegalCopyright",   "GPLv3 - https://github.com/LouisBunt/MViewer"
     END
   END
   BLOCK "VarFileInfo"

@@ -1,4 +1,4 @@
-# Assemble the release payload for ModelViewer: Midnight.
+# Assemble the release payload for MViewer.
 #
 # Every file is copied from the place that produces it -- build output, the Qt
 # installation, the VC redist folder, the tracked engine\bin_support tree -- so the payload
@@ -94,7 +94,7 @@ New-Item -ItemType Directory -Path $StageDir -Force | Out-Null
 Write-Host "staging into $StageDir"
 
 # --- the application ---------------------------------------------------------
-Stage (Join-Path $build "WoWModelViewer-Qt.exe") "WoWModelViewer-Qt.exe"
+Stage (Join-Path $build "MViewer.exe") "MViewer.exe"
 Stage (Join-Path $ebuild "core\Release\core.dll")     "core.dll"
 Stage (Join-Path $ebuild "games\wow\Release\wow.dll") "wow.dll"
 
@@ -184,7 +184,7 @@ StageTree (Join-Path $engine "blender_addon\io_import_wmv_fbx") "blender_addon\i
 # Same arrangement, same reason: the setup cannot place this, because the game folder is
 # not known until the application asks for it. It travels next to the exe and the button in
 # the Import & Export tab copies it into <WoW>\_retail_\Interface\AddOns. Without this the
-# package shipped the ModelViewer half of MVLink and none of the game half.
+# package shipped the MViewer half of MVLink and none of the game half.
 StageTree (Join-Path $Root "addon\MVLink") "addon\MVLink" -Recurse
 
 # --- documentation -----------------------------------------------------------

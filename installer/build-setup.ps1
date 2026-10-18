@@ -63,10 +63,10 @@ $stageMb = [int][math]::Round(($files | Measure-Object Length -Sum).Sum / 1MB)
 Write-Host ("payload: {0} files, {1} MB" -f $totalFiles, $stageMb)
 
 if (-not (Test-Path $Iscc)) { throw "Inno Setup 6 not found at $Iscc -- pass -Iscc" }
-& $Iscc "/DTotalFiles=$totalFiles" "/DStageMB=$stageMb" (Join-Path $here "MVMidnight.iss")
+& $Iscc "/DTotalFiles=$totalFiles" "/DStageMB=$stageMb" (Join-Path $here "MViewer.iss")
 if ($LASTEXITCODE -ne 0) { throw "ISCC failed" }
 
-$out = Get-ChildItem (Join-Path $here "dist") -Filter "MV-Midnight-Setup-*.exe" |
+$out = Get-ChildItem (Join-Path $here "dist") -Filter "MViewer-Setup-*.exe" |
        Sort-Object LastWriteTime | Select-Object -Last 1
 Write-Host ""
 Write-Host ("setup: {0} ({1:N1} MB)" -f $out.FullName, ($out.Length / 1MB))
