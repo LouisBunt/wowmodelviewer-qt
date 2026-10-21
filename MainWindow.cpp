@@ -384,34 +384,26 @@ QWidget* MainWindow::buildTitleBar()
   row->setContentsMargins(met::sp(met::Edge), 0, 0, 0);
   row->setSpacing(met::sp(met::Pad));
 
-  // The wordmark. Three labels, not one string, because they have to give way in order.
+  // The wordmark: the MV mark, the name, the version. Separate labels, not one string, so the
+  // version can be plain text beside the ornamental name.
   //
-  // What was here: the whole product name, uppercased, in the game's ornamental serif at the
-  // same optical size as the menu -- 21 wide glyphs whose sizeHint became the layout's hard
+  // What was here first: the whole product name, uppercased, in the game's ornamental serif at
+  // the same optical size as the menu -- 21 wide glyphs whose sizeHint became the layout's hard
   // minimum, so the title could only crowd the menu bar or clip. It could not shorten, because
-  // a QLabel has no elide mode.
-  //
-  // Now only "MIDNIGHT" is ornamental. Eight characters, never elided, always the same width.
-  // "ModelViewer" and the version are ordinary text that drop out as the window narrows: the
-  // name of the product survives at any size, which is the opposite of what happened before.
+  // a QLabel has no elide mode. "MVIEWER" is seven characters, never elided, always the same
+  // width.
   auto* brand = new QHBoxLayout;
   brand->setSpacing(met::sp(met::Gap));
   {
     auto* mark = new QLabel;
-    mark->setPixmap(Theme::icon("layers", QColor(tok::accentText))
-                      .pixmap(ui::px(16), ui::px(16)));
+    mark->setPixmap(Theme::appIcon().pixmap(ui::px(18), ui::px(18)));
     mark->setFixedSize(ui::px(18), ui::px(18));
     mark->setAlignment(Qt::AlignCenter);
     brand->addWidget(mark);
   }
-  brandLabel_ = new QLabel(QStringLiteral("MIDNIGHT"));
+  brandLabel_ = new QLabel(QStringLiteral("MVIEWER"));
   brandLabel_->setFont(typo::font(typo::Wordmark));
   brand->addWidget(brandLabel_);
-
-  brandSub_ = new QLabel(QStringLiteral("ModelViewer"));
-  brandSub_->setFont(typo::font(typo::Small));
-  brandSub_->setProperty("role", "caption");
-  brand->addWidget(brandSub_);
 
   brandVersion_ = new QLabel(WMV_QT_VERSION);
   brandVersion_->setFont(typo::font(typo::Mono));

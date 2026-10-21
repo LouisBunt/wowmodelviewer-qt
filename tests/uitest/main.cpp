@@ -204,7 +204,7 @@ void testSheet()
     CHECK(sheet.contains(QLatin1String(needed)));
 
   // The branch indicator must NOT be styled: naming it hands the indicator to the stylesheet
-  // and MidnightStyle's chevrons never get drawn. This is a regression that already happened
+  // and MViewerStyle's chevrons never get drawn. This is a regression that already happened
   // once, and it is invisible in code review.
   CHECK(!sheet.contains(QLatin1String("QTreeView::branch {")));
 

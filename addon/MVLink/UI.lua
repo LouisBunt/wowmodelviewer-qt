@@ -3,10 +3,10 @@
 -- SPDX-License-Identifier: GPL-3.0-or-later
 --
 -- Rebuilt with the rest of the addon. What is gone on purpose: the PlayerModel preview
--- (ModelViewer IS the preview -- a second, worse one in-game was a source of errors and
+-- (MViewer IS the preview -- a second, worse one in-game was a source of errors and
 -- nothing else) and every settings toggle nobody read. What remains is a list of looks on
 -- the left and the code on the right, already highlighted, because the entire flow is
--- Strg+C -- ModelViewer picks the code up from the clipboard by itself.
+-- Strg+C -- MViewer picks the code up from the clipboard by itself.
 
 local ADDON, MVLink = ...
 
@@ -68,7 +68,7 @@ local function buildFrame()
 
   local sub = label(f, 11, 0.75, 0.73, 0.82)
   sub:SetPoint("LEFT", title, "RIGHT", 10, -1)
-  sub:SetText("Look kopieren — ModelViewer übernimmt ihn automatisch")
+  sub:SetText("Look kopieren — MViewer übernimmt ihn automatisch")
 
   local close = CreateFrame("Button", nil, f, "UIPanelCloseButton")
   close:SetPoint("TOPRIGHT", 2, 2)
@@ -133,7 +133,7 @@ local function buildFrame()
   hint:SetJustifyH("LEFT")
   hint:SetWordWrap(true)
   hint:SetText("Gesicht und Frisur kann ein Addon nicht auslesen — die bleiben in "
-               .. "ModelViewer, wie sie dort eingestellt sind. Diagnose: /mvlink dump")
+               .. "MViewer, wie sie dort eingestellt sind. Diagnose: /mvlink dump")
   return f
 end
 
@@ -266,7 +266,7 @@ function MVLink:InitUI()
   b:SetScript("OnEnter", function(self)
     GameTooltip:SetOwner(self, "ANCHOR_LEFT")
     GameTooltip:AddLine("MVLink", ACCENT[1], ACCENT[2], ACCENT[3])
-    GameTooltip:AddLine("Look für ModelViewer kopieren", 0.8, 0.8, 0.8)
+    GameTooltip:AddLine("Look für MViewer kopieren", 0.8, 0.8, 0.8)
     GameTooltip:Show()
   end)
   b:SetScript("OnLeave", function()

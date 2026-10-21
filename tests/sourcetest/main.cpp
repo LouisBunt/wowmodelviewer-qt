@@ -210,7 +210,16 @@ void testCache(const QString& root)
   CHECK(!err.isEmpty());
   CHECK(QFile::exists(foreign + "/important.txt"));
   // Picked as the cache location, it gets a subfolder instead of being taken over.
-  CHECK(gamesource::cacheDirFor(foreign) == QDir::cleanPath(foreign + "/ModelViewer-Cache"));
+  CHECK(gamesource::cacheDirFor(foreign) == QDir::cleanPath(foreign + "/MViewer-Cache"));
+
+  // A cache from before the rename carries only the old marker, and is still ours.
+  const QString older = root + "/old-cache";
+  touch(older + "/MODELVIEWER-CACHE.txt");
+  touch(older + "/wow/versions");
+  CHECK(gamesource::isOurCache(older));
+  CHECK(gamesource::cacheDirFor(older) == QDir::cleanPath(older));
+  CHECK(gamesource::clearCache(older, &err));
+  CHECK(!QDir(older).exists());
 
   // Inside a WoW installation, CascLib would find the installation's .build.info first.
   const QString wow = root + "/World of Warcraft";

@@ -3,6 +3,13 @@ build/
 build-setupui/
 build-tests/
 
+# The engine's build output (and the install step's copy of it), plus what the build fetches
+# rather than the repository carries: Autodesk's FBX SDK and the community listfile (~150 MB).
+engine/build*/
+engine/bin/
+engine/ThirdParty/fbx_x64/
+engine/bin_support/wow/listfile.csv
+
 # Local build logs and traces. The phase history lives in the commit messages.
 build-log.txt
 phase*-trace.txt
@@ -16,6 +23,8 @@ phase*-trace.txt
 # Editor / OS noise
 *.bak
 .vs/
+__pycache__/
+*.pyc
 
 # Release artefacts. stage.ps1 rebuilds the payload, ISCC rebuilds the setup.
 # The wildcards matter: a previous release moved aside as dist-alt-<date> fell straight out

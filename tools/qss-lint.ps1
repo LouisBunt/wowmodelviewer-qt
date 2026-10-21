@@ -22,7 +22,7 @@ param([switch] $Strict)
 $ErrorActionPreference = "Stop"
 $root = Split-Path (Split-Path $MyInvocation.MyCommand.Path -Parent) -Parent
 
-# The front-end's own sources. upstream/ is a different project with its own conventions.
+# The front-end's own sources. engine/ is not scanned: it has no interface and its own conventions.
 # Theme.* IS the design system; GameColours.h holds World of Warcraft's own item-quality
 # vocabulary, which the interface may not redefine. Both are exempt by design, not by
 # oversight.

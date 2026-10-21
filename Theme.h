@@ -144,7 +144,7 @@ enum Style {
   Strong,     // 13/500 — buttons, tabs, item names, active segments
   Title,      // 15/600 — panel heads, empty-state headline, dialog titles
   Mono,       // 12/400 — numbers, ids, paths (tabular figures)
-  Wordmark,   // 15 — MIDNIGHT, in the game's face when it is mounted, else Cinzel
+  Wordmark,   // 15 — MVIEWER, in the game's face when it is mounted, else Cinzel
   Display     // 28 — splash and about only
 };
 
@@ -194,6 +194,11 @@ void repolish(QWidget* w);
 // An icon from the bundled Lucide set (resources/icons/<name>.svg), recoloured for the three
 // states. Returns a null icon for an unknown name — visibly missing rather than crashing.
 QIcon icon(const QString& name, const QColor& colour = QColor(tok::fgSoft));
+
+// The program's mark, from resources/appicon*.png: one file per size it ships in, so a small
+// mark comes from a small file rather than from shrinking the 512 px one, whose letters then
+// all but vanish. The window icon, the title bar and the About box all take it from here.
+QIcon appIcon();
 
 }  // namespace Theme
 

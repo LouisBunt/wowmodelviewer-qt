@@ -1,4 +1,4 @@
-# Patch 1 — MVLink: Aussehen aus WoW an ModelViewer übergeben
+# Patch 1 — MVLink: Aussehen aus WoW an MViewer übergeben
 
 Konzeptstand: 09.08.2026 · Zielversion WoW Retail 12.x · MV 1.7.0
 
@@ -7,7 +7,7 @@ Konzeptstand: 09.08.2026 · Zielversion WoW Retail 12.x · MV 1.7.0
 ## Vision
 
 Ein WoW-Addon, das das aktuell getragene Aussehen und die gespeicherten
-Kleiderschrank-Sets als kurzen Code ausgibt, den ModelViewer: Midnight direkt
+Kleiderschrank-Sets als kurzen Code ausgibt, den MViewer direkt
 übernimmt — ohne Umweg über Wowhead.
 
 **Warum das den Unterschied macht:** Heute führt der Weg über die Wowhead-Anprobe.
@@ -84,14 +84,14 @@ in die LIESMICH.
 
 - **Knopf im Transmogrifikations-Fenster.** Dort, wo der Look entsteht. Angehängt an
   `WardrobeFrame`, nachgeladen über `ADDON_LOADED` von `Blizzard_Collections`.
-- **Fenster „An ModelViewer senden".** Oben eine Liste: *Aktuell getragen* plus jedes
+- **Fenster „An MViewer senden".** Oben eine Liste: *Aktuell getragen* plus jedes
   gespeicherte Outfit mit Namen. Darunter das Textfeld mit dem Code, bereits markiert,
   sodass Strg+C genügt. Eine Zeile darunter sagt, wie viele Teile erkannt wurden und
   weist auf die fehlenden Anpassungen hin.
 - **Slash-Befehl `/mvlink`** öffnet dasselbe Fenster, auch ohne Transmog-NPC.
 - **Minimap-Knopf** — optional, Phase 4.
 
-### In ModelViewer
+### In MViewer
 
 - Im Reiter *Import/Export* ein Feld **„Code aus WoW"** neben dem vorhandenen
   Wowhead-Feld. Derselbe Ablauf, andere Quelle.
@@ -144,7 +144,7 @@ Rassen-IDs sind auf beiden Seiten dieselben (`ChrRaces.ID`), da braucht es keine
 
 ```lua
 -- db/slots.lua -- die einzige Wahrheit über die Slot-Zuordnung.
--- WoW-Inventarplatz -> MV-CharSlots. Aus upstream/Source/games/wow/wow_enums.h;
+-- WoW-Inventarplatz -> MV-CharSlots. Aus engine/Source/games/wow/wow_enums.h;
 -- die Reihenfolge dort ist NICHT die Anzeigereihenfolge, also abschreiben statt raten.
 MVLink.SLOT_MAP = {
   [1]  = 0,   -- Head      -> CS_HEAD

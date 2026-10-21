@@ -1,0 +1,61 @@
+###################
+#   common part   #
+###################
+
+# define policies to avoid warnings
+include(${CMAKE_SOURCE_DIR}/cmake/policies.cmake)
+
+#############################
+#  platform specific part   #
+#############################
+if(WIN32)
+  include(${CMAKE_SOURCE_DIR}/cmake/windows.cmake)
+endif()
+
+######################################
+# macro to be reused across projects #
+######################################
+macro(use_glew)
+  # Static GLEW (libglew32.lib). The static-md headers come first so GLEW_STATIC mode is used
+  # consistently; the x64-windows include still provides png/jpeg/zlib, and ThirdParty the vendored
+  # glm. No glew DLL to ship.
+  add_definitions(-DGLEW_STATIC)
+  include_directories(${WMV_VCPKG_X64_STATIC}/include)
+  include_directories(${WMV_VCPKG_X64}/include)
+  include_directories(${CMAKE_SOURCE_DIR}/ThirdParty)
+  list(APPEND extralibs opengl32 ${WMV_VCPKG_X64_STATIC}/lib/libglew32.lib)
+endmacro()
+
+macro(use_cximage)
+  include_directories(${CMAKE_SOURCE_DIR}/ThirdParty/CxImage)
+  list(APPEND extralibs cximage)
+endmacro()
+
+macro(use_wow)
+  use_core() # if you use wow lib, you are underneath using core lib
+  use_casclib() # if you use wow lib, you are underneath using casc lib 
+  include_directories(${CMAKE_SOURCE_DIR}/Source/games/wow)
+  link_directories(${QT_LOCATION}/lib)
+  list(APPEND extralibs wow)
+endmacro()
+
+macro(use_core)
+  include_directories(${CMAKE_SOURCE_DIR}/Source/core)
+  link_directories(${QT_LOCATION}/lib)
+  list(APPEND extralibs core)
+endmacro()
+  
+macro(use_casclib)
+  include_directories(${CASCLIB_INSTALL_LOCATION}/include)
+  link_directories(${CASCLIB_INSTALL_LOCATION}/lib)
+  list(APPEND extralibs casc_static)
+endmacro()
+
+macro(use_stormlib)
+  include_directories(${CMAKE_SOURCE_DIR}/ThirdParty/stormlib/src)
+  list(APPEND extralibs storm)
+endmacro()
+
+macro(use_sqlite)
+  list(APPEND src sqlite3.c)
+endmacro()

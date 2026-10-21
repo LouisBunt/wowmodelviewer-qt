@@ -7,8 +7,8 @@
 #   .\installer\build-setup.ps1
 #   .\installer\build-setup.ps1 -SkipStage        # payload unchanged, UI/installer work
 #
-# Prerequisites: the application build (build\Release) and the upstream tree, as for
-# stage.ps1; CMake + MSVC for the UI; Inno Setup 6.
+# Prerequisites: the engine build (engine\build-x64) and the application build
+# (build\Release), as for stage.ps1; CMake + MSVC for the UI; Inno Setup 6.
 
 [CmdletBinding()]
 param(
@@ -63,10 +63,10 @@ $stageMb = [int][math]::Round(($files | Measure-Object Length -Sum).Sum / 1MB)
 Write-Host ("payload: {0} files, {1} MB" -f $totalFiles, $stageMb)
 
 if (-not (Test-Path $Iscc)) { throw "Inno Setup 6 not found at $Iscc -- pass -Iscc" }
-& $Iscc "/DTotalFiles=$totalFiles" "/DStageMB=$stageMb" (Join-Path $here "MVMidnight.iss")
+& $Iscc "/DTotalFiles=$totalFiles" "/DStageMB=$stageMb" (Join-Path $here "MViewer.iss")
 if ($LASTEXITCODE -ne 0) { throw "ISCC failed" }
 
-$out = Get-ChildItem (Join-Path $here "dist") -Filter "MV-Midnight-Setup-*.exe" |
+$out = Get-ChildItem (Join-Path $here "dist") -Filter "MViewer-Setup-*.exe" |
        Sort-Object LastWriteTime | Select-Object -Last 1
 Write-Host ""
 Write-Host ("setup: {0} ({1:N1} MB)" -f $out.FullName, ($out.Length / 1MB))

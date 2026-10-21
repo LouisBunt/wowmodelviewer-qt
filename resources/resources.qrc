@@ -2,6 +2,10 @@
   <qresource prefix="/">
     <file>splash.png</file>
     <file>appicon.png</file>
+    <file>appicon-16.png</file>
+    <file>appicon-24.png</file>
+    <file>appicon-32.png</file>
+    <file>appicon-48.png</file>
   </qresource>
   <qresource prefix="/fonts">
     <file alias="Inter-Regular.ttf">fonts/Inter-Regular.ttf</file>

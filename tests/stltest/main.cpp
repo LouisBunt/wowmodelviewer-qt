@@ -1,5 +1,5 @@
-// Tests for the STL exporter's geometry half, compiled straight from the upstream plugin
-// source (upstream/Source/plugins/exporters/stl/PrintMesh.cpp). Pure C++ and glm: no Qt, no
+// Tests for the STL exporter's geometry half, compiled straight from the engine's plugin
+// source (engine/Source/plugins/exporters/stl/PrintMesh.cpp). Pure C++ and glm: no Qt, no
 // game data, no window -- the same reason the exporter keeps that half free of WoWModel.
 //
 // What is proven here is what a unit or winding mistake would silently corrupt: the height in

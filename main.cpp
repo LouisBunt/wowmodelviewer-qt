@@ -1,12 +1,12 @@
 // Entry point. Links core.dll/wow.dll unchanged, initialises CASC the same way the
 // wx front-end does, then hands the mounted game data to MainWindow.
 //
-//   WoWModelViewer-Qt.exe [<wow-install-folder>] [<fileDataId>] [options]
-//   WoWModelViewer-Qt.exe [<fileDataId>] --online [<region>] [options]
+//   MViewer.exe [<wow-install-folder>] [<fileDataId>] [options]
+//   MViewer.exe [<fileDataId>] --online [<region>] [options]
 //
 // Example:
-//   WoWModelViewer-Qt.exe "C:\Program Files (x86)\World of Warcraft" 1000001
-//   WoWModelViewer-Qt.exe 1000001 --online eu --locale enUS
+//   MViewer.exe "C:\Program Files (x86)\World of Warcraft" 1000001
+//   MViewer.exe 1000001 --online eu --locale enUS
 //
 // Both arguments are optional: the data source -- an install folder, or Blizzard's CDN with a
 // local cache -- is remembered between runs, and the user is asked when there is none.
@@ -48,7 +48,7 @@
 #include "GLHost.h"
 #include "GameSource.h"
 #include "LoadingSplash.h"
-#include "MidnightStyle.h"
+#include "MViewerStyle.h"
 #include "Theme.h"
 #include "BlenderAddonInstaller.h"
 #include "CharacterPanel.h"
@@ -202,7 +202,7 @@ static void applyTheme(QApplication& app, double scale, bool scripted)
           .arg(typo::uiFamily()).arg(typo::monoFamily()).arg(typo::displayFamily())
           .arg(ui::scale()));
 
-  app.setStyle(new MidnightStyle(QStyleFactory::create("Fusion")));
+  app.setStyle(new MViewerStyle(QStyleFactory::create("Fusion")));
   app.setPalette(Theme::palette());
   app.setFont(typo::font(typo::Body));
   app.setStyleSheet(Theme::sheet());
@@ -437,7 +437,7 @@ int main(int argc, char** argv)
 
   // Every data path -- listfile.csv, games/wow/<ver>/database.xml, ./plugins, wowdb.sqlite,
   // userSettings -- is opened RELATIVE. Started from the Start menu that is the install
-  // folder and all is well, but the documented command line ("WoWModelViewer-Qt.exe <folder>
+  // folder and all is well, but the documented command line ("MViewer.exe <folder>
   // <id>" from a shell) left the working directory wherever the user happened to be: no file
   // tree, no item database, no exporters, and a fresh ~80 MB cache written into that folder.
   // Pinning it here fixes all of them at once.
@@ -466,6 +466,12 @@ int main(int argc, char** argv)
   // else and the plugin's own error text referred to a settings dialog that does not
   // exist. Same key and same file the wx build uses, so the two agree.
   {
+    // The exporters write the program's name and version into every file they make. Without
+    // this they wrote the engine's own, "WoW Model Viewer Midnight 0.11.0".
+    GLOBALSETTINGS.setAppName(QStringLiteral(WMV_APP_NAME).toStdWString());
+    const QStringList v = QStringLiteral(WMV_QT_VERSION).split('.');
+    GLOBALSETTINGS.setAppVersion(v.value(0).toInt(), v.value(1).toInt(), v.value(2).toInt());
+
     QSettings settings(QString::fromLatin1(gamesource::kSettingsFile), QSettings::IniFormat);
     const QString proxy = settings.value("Armory/ProxyURL", "").toString();
     if (!proxy.isEmpty()) {
@@ -511,7 +517,7 @@ int main(int argc, char** argv)
 
   // Window/taskbar icon for every top-level widget; the exe's Explorer icon comes
   // from resources/appicon.rc.
-  app.setWindowIcon(QIcon(":/appicon.png"));
+  app.setWindowIcon(Theme::appIcon());
   trace("QApplication constructed");
 
   LoadingSplash* splash = LoadingSplash::create();
@@ -815,11 +821,11 @@ int main(int argc, char** argv)
     else {
       return fatalStart(splash, win,
         QObject::tr("In den Programmordner kann nicht geschrieben werden.\n\n"
-                    "ModelViewer legt seinen Datenbank-Cache (rund 80 MB), die Einstellungen "
+                    "MViewer legt seinen Datenbank-Cache (rund 80 MB), die Einstellungen "
                     "und das Protokoll neben sich selbst ab und braucht dafür einen "
                     "beschreibbaren Ordner. In »C:\\Programme« geht das ohne Administrator "
                     "nicht.\n\nBitte in einen eigenen Ordner installieren, etwa "
-                    "»D:\\Programme\\ModelViewer Midnight« oder den vom Setup "
+                    "»D:\\Programme\\MViewer« oder den vom Setup "
                     "vorgeschlagenen Benutzerordner."),
         QCoreApplication::applicationDirPath());
     }
@@ -1123,7 +1129,7 @@ int main(int argc, char** argv)
   // The clipboard IS the MVLink transport. An addon cannot write a file except through
   // SavedVariables, and WoW flushes those only on /reload -- with the code that was loaded
   // BEFORE the reload. Every file-based route is therefore stale by design, and stale data
-  // is exactly what it delivered. Copying in-game is instant, so ModelViewer watches the
+  // is exactly what it delivered. Copying in-game is instant, so MViewer watches the
   // clipboard and applies any MVM1 code that shows up; the player copies, switches windows,
   // and is done.
   //
@@ -1150,7 +1156,7 @@ int main(int argc, char** argv)
       }
     };
     QObject::connect(cb, &QClipboard::dataChanged, win, tryClipboard);
-    // Once at startup too: the common order is copy in game first, launch ModelViewer
+    // Once at startup too: the common order is copy in game first, launch MViewer
     // second -- and dataChanged only fires for changes after this point.
     tryClipboard();
   }

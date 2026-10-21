@@ -46,8 +46,8 @@ QString BlenderAddonInstaller::addonSourceDir()
   if (QFileInfo(packaged + "/__init__.py").isFile())
     return packaged;
 
-  // Development tree: the add-on lives in the upstream submodule next to this repo.
-  const QString dev = QStringLiteral("upstream/blender_addon/") + kAddonName;
+  // Development tree: the add-on lives in engine/ of this repository.
+  const QString dev = QStringLiteral("engine/blender_addon/") + kAddonName;
   if (QFileInfo(dev + "/__init__.py").isFile())
     return QFileInfo(dev).absoluteFilePath();
 

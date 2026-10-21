@@ -1,6 +1,12 @@
-# ModelViewer: Midnight 1.5.0
+# MViewer 1.5.0
 
-ModelViewer braucht keine WoW-Installation mehr. Die Spieldaten können jetzt
+**ModelViewer: Midnight heißt jetzt MViewer** — Model-Viewer für World of Warcraft,
+mit eigenem MV-Symbol. Programm, Setup, Startmenü-Eintrag und die beiden Add-ons
+tragen den neuen Namen. Der Quellcode liegt jetzt vollständig in einem eigenen
+Repository: Die Engine, die aus WoW Model Viewer stammt, ist kein eingebundenes
+Fremdprojekt mehr, sondern Teil von MViewer.
+
+Und MViewer braucht keine WoW-Installation mehr. Die Spieldaten können jetzt
 direkt von Blizzards öffentlichen Download-Servern kommen — so wie im CDN-Modus
 von wow.export. Außerdem nimmt die Item-Suche jetzt mehrere Filter auf einmal.
 
@@ -9,7 +15,7 @@ Die Nummer springt von 1.1 auf 1.5. Mit den frühen Testfassungen „1.5-beta“
 
 ## Ohne WoW-Installation
 
-Findet ModelViewer beim ersten Start kein WoW am üblichen Ort, fragt es, woher
+Findet MViewer beim ersten Start kein WoW am üblichen Ort, fragt es, woher
 die Spieldaten kommen sollen:
 
 - **WoW-Ordner wählen** — die eigene Installation, wie bisher.
@@ -42,7 +48,7 @@ Der Cache liegt im Ordner `cdn-cache` neben dem Programm. Im Dialog lässt sich
 ein anderer Ort wählen; dort stehen auch die Größe des Caches und „Leeren“. Die
 Deinstallation entfernt `cdn-cache` neben dem Programm.
 
-Die Dateien bleiben Blizzards Eigentum: ModelViewer lädt sie bei Bedarf in den
+Die Dateien bleiben Blizzards Eigentum: MViewer lädt sie bei Bedarf in den
 Cache auf deinem Rechner und gibt sie nicht weiter. Welche Server das Programm
 dabei anspricht, steht in der LIESMICH unter „Datenuebertragung“.
 
@@ -51,7 +57,7 @@ lesen — beides braucht eine WoW-Installation. Codes aus dem Addon einfügen ge
 
 Auf der Befehlszeile, nur für diesen einen Lauf und ohne etwas zu speichern:
 
-    WoWModelViewer-Qt.exe 917116 --online eu --locale deDE
+    MViewer.exe 917116 --online eu --locale deDE
 
 ## Item-Suche: mehrere Filter auf einmal
 
@@ -82,9 +88,14 @@ Haken wieder heraus. Geschlossen zeigt sie ein oder zwei Namen oder die Anzahl
 
 ## Installation
 
-`MV-Midnight-Setup-1.5.0.exe` installiert über eine vorhandene 1.1.x oder 1.0.x
-hinweg; Looks, Einstellungen und Vorschaubilder bleiben erhalten. Wie zuvor pro
-Benutzer und ohne Adminrechte.
+`MViewer-Setup-1.5.0.exe` installiert über eine vorhandene 1.1.x oder 1.0.x
+hinweg, in deren Ordner; Looks, Einstellungen und Vorschaubilder bleiben erhalten.
+Das alte `WoWModelViewer-Qt.exe` und die Verknüpfungen „ModelViewer Midnight“
+werden dabei durch `MViewer.exe` und „MViewer“ ersetzt; eine Desktop-Verknüpfung
+bleibt, wenn es vorher eine gab. Wie zuvor pro Benutzer und ohne Adminrechte.
+
+Das Blender-Add-on heißt jetzt „MViewer FBX“. Wer es schon installiert hat,
+aktualisiert es mit dem Knopf im Reiter „Blender“; eingeschaltet bleibt es.
 
 Voraussetzungen: Windows 10/11 (64 Bit), OpenGL und entweder eine
 WoW-Retail-Installation oder eine Internetverbindung für den Online-Modus.

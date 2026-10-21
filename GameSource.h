@@ -71,7 +71,7 @@ QString localeLabel(const QString& code);
 
 // "<exe folder>/cdn-cache". Next to the executable like wowdb.sqlite, userSettings and the
 // log: that is where the setup puts everything the program writes (a per-user folder, see
-// MVMidnight.iss), the write probe in main() already vouches for it, and the uninstaller
+// MViewer.iss), the write probe in main() already vouches for it, and the uninstaller
 // removes it. NOT inside userSettings: that folder is what a bug report attaches, and half a
 // gigabyte of game files has no business in a zip for an issue tracker.
 QString defaultCacheDir();
@@ -107,8 +107,8 @@ void setPendingClear(const QString& dir);
 
 // --- the command line -----------------------------------------------------------------------
 //
-//   WoWModelViewer-Qt.exe [<WoW-Ordner>] [<FileDataID>] [--online [<region>]]
-//                         [--locale <xxYY>] [--cache <ordner>] [...]
+//   MViewer.exe [<WoW-Ordner>] [<FileDataID>] [--online [<region>]]
+//               [--locale <xxYY>] [--cache <ordner>] [...]
 //
 // Positional arguments are the ones before the first --flag. The first one is the model when
 // it is all digits and not an existing folder, so "917116 --export ..." takes the folder from
@@ -145,7 +145,7 @@ bool isOurCache(const QString& dir);
 QString cacheDirProblem(const QString& dir);
 
 // A folder the user picked for the cache: used as-is when it is empty or already a cache,
-// otherwise a subfolder "ModelViewer-Cache" inside it.
+// otherwise a subfolder "MViewer-Cache" inside it.
 QString cacheDirFor(const QString& picked);
 
 // The build the last complete online open used this cache for, kept in the cache itself

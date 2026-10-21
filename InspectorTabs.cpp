@@ -124,7 +124,7 @@ CharacterIoTab::CharacterIoTab(MenuController* menus, ExportController* exporter
   // says so on its own button. The old layout led with the file and called both routes
   // equivalent -- which handed people yesterday's look with a clear conscience.
   auto* mvTop = new QLabel(QString::fromUtf8(
-    "Im Spiel /mvlink öffnen und den Code kopieren — mehr nicht. ModelViewer erkennt "
+    "Im Spiel /mvlink öffnen und den Code kopieren — mehr nicht. MViewer erkennt "
     "ihn in der Zwischenablage und zieht den Look sofort an."));
   mvTop->setFont(typo::font(typo::Body));
   mvTop->setWordWrap(true);
@@ -213,7 +213,7 @@ CharacterIoTab::CharacterIoTab(MenuController* menus, ExportController* exporter
     else
       setStatus(QString::fromUtf8("Addon in %1 Blender-Version(en) installiert. Einmalig "
                                   "in Blender aktivieren: Edit → Preferences → Add-ons → "
-                                  "\"WoW Model Viewer FBX\".").arg(r.installedVersions),
+                                  "\"MViewer FBX\".").arg(r.installedVersions),
                 false);
   });
   col->addWidget(addonBtn);

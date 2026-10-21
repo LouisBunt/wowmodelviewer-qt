@@ -99,7 +99,7 @@ SourceDialog::SourceDialog(Mode mode, const GameSource& current, bool cacheInUse
   QString introText;
   if (mode == FirstRun) {
     introText = QString::fromUtf8(
-      "ModelViewer braucht die Modelle, Texturen und die Datenbank aus World of Warcraft. "
+      "MViewer braucht die Modelle, Texturen und die Datenbank aus World of Warcraft. "
       "Auf diesem Rechner wurde keine Installation gefunden — die Daten lassen sich aber "
       "auch direkt von Blizzard laden.");
     if (!current.folder.isEmpty())

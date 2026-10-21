@@ -23,7 +23,7 @@ $ErrorActionPreference = "Stop"
 $here = Split-Path $MyInvocation.MyCommand.Path -Parent
 $root = Split-Path $here -Parent
 if (-not $Stage) { $Stage = Join-Path $root "installer\stage" }
-$exe = Join-Path $Stage "WoWModelViewer-Qt.exe"
+$exe = Join-Path $Stage "MViewer.exe"
 $capture = Join-Path $root "capture.ps1"
 $trace = Join-Path $Stage "userSettings\qt-frontend-trace.txt"
 if (-not (Test-Path $exe)) { throw "not staged: $exe" }

@@ -1,4 +1,4 @@
-# ModelViewer: Midnight — 3D-Druck. Ideen ohne Annahme über den Drucker.
+# MViewer — 3D-Druck. Ideen ohne Annahme über den Drucker.
 
 Zweite Fassung. Die erste enthielt die Werte eines bestimmten Druckers als Prämisse — bei
 einer Software, die veröffentlicht wird, ist das ein Konstruktionsfehler. Diese Fassung zieht

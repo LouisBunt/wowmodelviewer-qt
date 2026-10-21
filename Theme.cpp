@@ -185,6 +185,15 @@ QIcon Theme::icon(const QString& name, const QColor& colour)
   return out;
 }
 
+QIcon Theme::appIcon()
+{
+  QIcon out;
+  for (int size : {16, 24, 32, 48})
+    out.addFile(QStringLiteral(":/appicon-%1.png").arg(size), QSize(size, size));
+  out.addFile(QStringLiteral(":/appicon.png"), QSize(512, 512));
+  return out;
+}
+
 // ---------------------------------------------------------------------------------------------
 // Palette
 // ---------------------------------------------------------------------------------------------
@@ -380,7 +389,7 @@ QToolButton[role="tab"]:hover   { color: @text; background: @ovHover; }
 QToolButton[role="tab"]:checked { color: @text; border-bottom-color: @accent; background: transparent; }
 
 /* ---- keyboard focus ------------------------------------------------------------------ */
-/* Only when the widget was reached with the keyboard: MidnightStyle sets kbfocus, so clicking
+/* Only when the widget was reached with the keyboard: MViewerStyle sets kbfocus, so clicking
    a button does not leave a ring behind on it. */
 *[kbfocus="true"] { border: 1px solid @accent; }
 
@@ -465,7 +474,7 @@ QAbstractItemView::item:hover    { background: @ovHover; color: @text; }
 QAbstractItemView::item:selected { background: @accentTint; color: @text; }
 /* The branch column is deliberately NOT styled: naming ::branch at all hands the whole
    indicator to QStyleSheetStyle, which then draws Qt's default arrows and ignores
-   MidnightStyle::drawPrimitive -- and the chevrons disappear. */
+   MViewerStyle::drawPrimitive -- and the chevrons disappear. */
 QHeaderView::section {
   background: @panel; color: @muted; border: none; border-bottom: 1px solid @hair;
   padding: 0 @spGap; font-size: @fsCaption; font-weight: 500; min-height: @hRow;

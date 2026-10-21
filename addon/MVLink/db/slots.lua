@@ -2,12 +2,12 @@
 --
 -- SPDX-License-Identifier: GPL-3.0-or-later
 --
--- WoW inventory slot -> ModelViewer CharSlots. Copied from
--- upstream/Source/games/wow/wow_enums.h, where the enum order is NOT the order the
+-- WoW inventory slot -> MViewer CharSlots. Copied from
+-- engine/Source/games/wow/wow_enums.h, where the enum order is NOT the order the
 -- equipment list shows -- CS_BOOTS comes third, not seventh. Guessing from the panel
 -- would put boots where the belt belongs, so this is transcribed, not derived.
 --
--- The receiving side (WowheadDressingRoom / MVLink decoder in ModelViewer) carries the
+-- The receiving side (WowheadDressingRoom / MVLink decoder in MViewer) carries the
 -- same table with the same comment. If one changes, both change.
 
 local ADDON, MVLink = ...
